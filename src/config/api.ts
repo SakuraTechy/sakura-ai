@@ -18,14 +18,12 @@ const getBackendPort = (): string => {
 
 // 获取后端主机
 const getBackendHost = (): string => {
-  // 生产环境使用当前域名
-  if (!import.meta.env.DEV) {
-    return window.location.hostname;
-  }
-  
-  // 开发环境使用 localhost
-  return '172.19.1.111';
+  // 🔥 统一使用 window.location.hostname
+  // 这样无论是本地访问(localhost)还是局域网访问(172.19.1.111)都能正常工作
+  // 因为前端代码在用户浏览器中执行，hostname 会自动匹配用户访问的地址
+  return window.location.hostname;
 };
+
 
 // 构建 API 基础 URL
 export const getApiBaseUrl = (path: string = '/api'): string => {

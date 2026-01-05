@@ -103,13 +103,15 @@ export class LLMConfigManager {
       }
 
       // 构建新配置
+      // 🔥 修复：优先使用 settings 中传入的值，其次使用模型默认值
       const oldConfig = this.currentConfig;
       const newConfig: LLMConfig = {
         apiKey: settings.apiKey,
-        baseUrl: modelInfo.customBaseUrl || 'https://openrouter.ai/api/v1',
-        model: modelInfo.openRouterModel,
+        baseUrl: settings.baseUrl || modelInfo.customBaseUrl || 'https://openrouter.ai/api/v1', // 🔥 优先使用 settings.baseUrl
+        model: settings.customModelName || modelInfo.openRouterModel, // 优先使用自定义模型名称
         temperature: settings.customConfig?.temperature ?? modelInfo.defaultConfig.temperature,
-        maxTokens: settings.customConfig?.maxTokens ?? modelInfo.defaultConfig.maxTokens
+        maxTokens: settings.customConfig?.maxTokens ?? modelInfo.defaultConfig.maxTokens,
+        apiFormat: modelInfo.apiFormat || 'openai' // 🔥 API 格式（默认 openai）
       };
 
       // 更新当前配置
@@ -127,8 +129,8 @@ export class LLMConfigManager {
       });
 
       console.log(`✅ LLM配置更新成功: ${modelInfo.name}`);
-      console.log(`   API端点: ${newConfig.baseUrl}`);
-      console.log(`   模型: ${newConfig.model}`);
+      console.log(`   API端点: ${newConfig.baseUrl} (来源: ${settings.baseUrl ? 'settings' : 'modelInfo'})`);
+      console.log(`   模型: ${newConfig.model} (来源: ${settings.customModelName ? 'customModelName' : 'openRouterModel'})`);
       console.log(`   温度: ${newConfig.temperature}`);
       console.log(`   最大令牌: ${newConfig.maxTokens}`);
       
@@ -149,17 +151,25 @@ export class LLMConfigManager {
 
     try {
       console.log(`🧪 [前端] 测试连接: ${this.currentModelInfo.name}`);
+      console.log(`📋 [前端] 当前配置模型: ${this.currentConfig.model}`);
 
       // 🔥 通过后端 API 代理测试连接，避免 CORS 问题
       const llmSettings = {
         selectedModelId: this.currentModelInfo.id,
         apiKey: this.currentConfig.apiKey,
         baseUrl: this.currentConfig.baseUrl,
+        customModelName: this.currentConfig.model, // 🔥 传递用户选择的模型名称
         customConfig: {
           temperature: this.currentConfig.temperature,
           maxTokens: this.currentConfig.maxTokens
         }
       };
+
+      console.log(`📤 [前端] 发送测试请求:`, {
+        selectedModelId: llmSettings.selectedModelId,
+        baseUrl: llmSettings.baseUrl,
+        customModelName: llmSettings.customModelName
+      });
 
       const response = await fetch('/api/config/test-connection', {
         method: 'POST',

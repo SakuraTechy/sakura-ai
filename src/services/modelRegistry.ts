@@ -6,6 +6,8 @@ export interface ModelDefinition {
   openRouterModel: string;
   customBaseUrl?: string;        // 自定义 API 端点（用于本地或自托管服务）
   requiresCustomAuth?: boolean;  // 是否需要自定义认证格式（非 OpenRouter 标准）
+  requiresManualInput?: boolean; // 是否只支持手动输入模式（不显示选择模式）
+  apiFormat?: 'openai' | 'ollama'; // API 格式：openai 使用 /chat/completions，ollama 使用 /api/generate
   defaultConfig: {
     temperature: number;
     maxTokens: number;
@@ -23,6 +25,22 @@ export class ModelRegistry {
 
   private constructor() {
     this.models = [
+      // ============ DeepSeek 系列 ============
+      {
+        id: 'deepseek-series',
+        name: 'DeepSeek 系列 (自动获取)',
+        provider: 'DeepSeek',
+        openRouterModel: 'deepseek-chat',
+        customBaseUrl: 'https://api.deepseek.com/v1',
+        requiresCustomAuth: false,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: 'DeepSeek系列模型，可自动获取所有可用模型版本，包括deepseek-chat、deepseek-coder等',
+        costLevel: 'medium'
+      },
       {
         id: 'deepseek-v3',
         name: 'DeepSeek-V3',
@@ -67,6 +85,22 @@ export class ModelRegistry {
         capabilities: ['text-generation', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier'],
         description: 'DeepSeek直接API，免费额度充足，中文友好，国内访问快速',
         costLevel: 'low'
+      },
+      // ============ 阿里云通义千问系列 ============
+      {
+        id: 'qwen-series',
+        name: '通义千问 系列 (自动获取)',
+        provider: '阿里云',
+        openRouterModel: 'qwen-turbo',
+        customBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        requiresCustomAuth: false,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'chinese-friendly', 'free-tier', 'fast-response', 'model-list'],
+        description: '阿里云通义千问系列模型，可自动获取所有可用模型版本，包括qwen-turbo、qwen-plus、qwen-max等',
+        costLevel: 'medium'
       },
       {
         id: 'qwen-turbo',
@@ -128,6 +162,22 @@ export class ModelRegistry {
         description: '阿里云通义千问3 Max模型，最强性能，支持多模态',
         costLevel: 'high'
       },
+      // ============ 月之暗面 Kimi 系列 ============
+      {
+        id: 'kimi-series',
+        name: 'Kimi 系列 (自动获取)',
+        provider: '月之暗面',
+        openRouterModel: 'moonshot-v1-8k',
+        customBaseUrl: 'https://api.moonshot.cn/v1',
+        requiresCustomAuth: false,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4000
+        },
+        capabilities: ['text-generation', 'long-context', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: 'Kimi系列模型，可自动获取所有可用模型版本，包括moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k等',
+        costLevel: 'medium'
+      },
       {
         id: 'kimi-chat-8k',
         name: 'Kimi Chat 8K',
@@ -172,6 +222,22 @@ export class ModelRegistry {
         capabilities: ['text-generation', 'long-context', 'multimodal', 'reasoning', 'code-analysis', 'agent-capability', 'chinese-friendly', 'free-tier'],
         description: '月之暗面Kimi K2大模型，最新一代混合专家模型，支持128K超长上下文，具备强大的代理智能和自主问题解决能力',
         costLevel: 'high'
+      },
+      // ============ 智谱AI GLM 系列 ============
+      {
+        id: 'glm-series',
+        name: 'GLM 系列 (自动获取)',
+        provider: '智谱AI',
+        openRouterModel: 'glm-4',
+        customBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        requiresCustomAuth: false,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: '智谱AI GLM系列模型，可自动获取所有可用模型版本，包括glm-4、glm-4-flash、glm-4v等',
+        costLevel: 'medium'
       },
       {
         id: 'glm-4',
@@ -233,6 +299,20 @@ export class ModelRegistry {
         description: '百度文心一言Turbo模型，快速响应，免费额度充足',
         costLevel: 'low'
       },
+      // ============ OpenRouter 系列 (包含OpenAI、Anthropic等) ============
+      {
+        id: 'openrouter-series',
+        name: 'OpenRouter 全部模型 (自动获取)',
+        provider: 'OpenRouter',
+        openRouterModel: 'openai/gpt-4o',
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
+        description: 'OpenRouter平台，可自动获取所有可用模型，包括OpenAI、Anthropic、Google、Meta等多家厂商模型',
+        costLevel: 'high'
+      },
       {
         id: 'gpt-4o',
         name: 'GPT-4o',
@@ -260,19 +340,35 @@ export class ModelRegistry {
         costLevel: 'medium'
       },
       {
-        id: 'gemini-2.5-flash-local',
-        name: 'Gemini 2.5 Flash (Local)',
-        provider: 'Google (Local)',
-        openRouterModel: 'gemini-2.5-flash',
-        customBaseUrl: 'http://localhost:3000/v1',
-        requiresCustomAuth: true,
+        id: 'gemini-3-pro',
+        name: 'Gemini 3 Pro',
+        provider: 'Google',
+        openRouterModel: 'google/gemini-3-pro',
+        customBaseUrl: 'https://openrouter.ai/api/v1',
+        requiresCustomAuth: false,
         defaultConfig: {
           temperature: 0.3,
-          maxTokens: 2000
+          maxTokens: 4096
         },
-        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding'],
-        description: '本地部署的 Gemini 2.5 Flash 模型，支持文本、图片、音频多模态输入',
-        costLevel: 'low'
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding', 'long-context'],
+        description: 'Google Gemini 3 Pro模型，支持多模态和超长上下文',
+        costLevel: 'high'
+      },
+      // ============ Zenmux 系列 (Google Gemini 等) ============
+      {
+        id: 'zenmux-series',
+        name: 'Zenmux 全部模型 (自动获取)',
+        provider: 'Zenmux',
+        openRouterModel: 'google/gemini-2.5-flash',
+        customBaseUrl: 'https://zenmux.ai/api/v1',
+        requiresCustomAuth: false,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
+        description: 'Zenmux平台，可自动获取所有可用模型，包括Google Gemini系列、Claude等多家厂商模型',
+        costLevel: 'medium'
       },
       {
         id: 'gemini-3-pro-preview',
@@ -303,7 +399,43 @@ export class ModelRegistry {
         capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding', 'long-context', 'free-tier'],
         description: 'Google Gemini 3 Pro 预览版（免费），通过 Zenmux 提供，支持多模态和超长上下文',
         costLevel: 'low'
-      }
+      },
+      // ============ 本地系列（Ollama） ============
+      {
+        id: 'local-series-ollama',
+        name: '本地大模型系列 (Ollama格式)',
+        provider: 'Local',
+        openRouterModel: 'deepseek-r1:8b',
+        customBaseUrl: 'http://localhost:11434', // Ollama 默认端口
+        requiresCustomAuth: true,
+        requiresManualInput: true, // 只支持手动输入模式
+        apiFormat: 'ollama', // 使用 Ollama 原生 API 格式 (/api/generate)
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding'],
+        description: '本地部署的大模型（Ollama），使用 /api/generate 端点，可指定具体的模型名称，免费畅通使用',
+        costLevel: 'high'
+      },
+      // ============ 本地系列（OpenAI兼容格式） ============
+      {
+        id: 'local-series-openai',
+        name: '本地大模型系列 (OpenAI格式)',
+        provider: 'Local',
+        openRouterModel: 'qwen3-vl-30b',
+        customBaseUrl: 'http://localhost:3000/v1',
+        requiresCustomAuth: true,
+        requiresManualInput: true, // 只支持手动输入模式
+        apiFormat: 'openai', // 使用 OpenAI 兼容 API 格式 (/chat/completions)
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding'],
+        description: '本地部署的大模型（OpenAI兼容格式），使用 /chat/completions 端点，可指定具体的模型名称，免费畅通使用',
+        costLevel: 'high'
+      },
     ];
   }
 

@@ -6,6 +6,7 @@ export interface LLMSettings {
   selectedModelId: string;
   apiKey: string;
   baseUrl?: string;  // API端点URL，根据模型信息自动确定
+  customModelName?: string;  // 自定义模型名称，允许用户覆盖默认的 openRouterModel
   customConfig?: {
     temperature?: number;
     maxTokens?: number;
@@ -59,6 +60,12 @@ export class SettingsService {
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data) {
+            console.log('📖 [前端] 从API获取LLM设置:', {
+              selectedModelId: result.data.selectedModelId,
+              baseUrl: result.data.baseUrl,
+              customModelName: result.data.customModelName,
+              hasApiKey: !!result.data.apiKey
+            });
             return result.data;
           }
         }

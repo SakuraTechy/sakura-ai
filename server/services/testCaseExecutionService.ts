@@ -411,23 +411,41 @@ export class TestCaseExecutionService {
       }
       
       // 🔥 关键修复：先确定要存入数据库的时间，再用这些时间计算 durationMs
-      // 优先级：日志时间（最准确）> actualStartedAt/actualEndedAt > 其他时间
+      // 🔥 优先级：日志时间（最准确，记录实际的第一条/最后一条操作日志）> actualStartedAt > startedAt
+      // 日志时间是最准确的，因为它记录了实际的操作时间
       const actualStartedAt = (testRun as any).actualStartedAt;
       const actualEndedAt = testRun.finishedAt;
       
       // 确定要存入数据库的开始时间和结束时间
-      // 🔥 优先使用日志时间（第一条和最后一条日志的时间最准确）
-      const dbStartedAt: Date | undefined = logStartTime 
+      // 🔥 关键修复：优先使用日志第一条记录的时间作为开始时间
+      // 日志时间是最准确的，因为它记录了实际的第一条操作日志
+      const dbStartedAt: Date | undefined = logStartTime
         ? logStartTime
         : (actualStartedAt 
           ? new Date(actualStartedAt)
           : (testRun.startedAt ? new Date(testRun.startedAt) : undefined));
       
+      // 🔥 关键修复：优先使用日志最后一条记录的时间作为结束时间
+      // 日志时间是最准确的，因为它记录了实际的最后一条操作日志
       const dbFinishedAt: Date | undefined = logEndTime
         ? logEndTime
         : (actualEndedAt
           ? new Date(actualEndedAt)
           : (testRun.endedAt ? new Date(testRun.endedAt) : undefined));
+      
+      // 🔥 调试日志：记录时间选择逻辑（用于排查测试计划执行时开始时间不正确的问题）
+      if ((testRun as any).planExecutionId) {
+        console.log(`📋 [${testRun.id}] syncFromTestRun - 测试计划执行时间选择:`, {
+          planExecutionId: (testRun as any).planExecutionId,
+          hasLogStartTime: !!logStartTime,
+          hasActualStartedAt: !!actualStartedAt,
+          hasStartedAt: !!testRun.startedAt,
+          logStartTime: logStartTime?.toISOString(),
+          actualStartedAt: actualStartedAt?.toISOString(),
+          startedAt: testRun.startedAt?.toISOString(),
+          selectedDbStartedAt: dbStartedAt?.toISOString(),
+        });
+      }
       
       // 🔥 核心：使用将要存入数据库的时间来计算 durationMs
       // 这样确保 duration_ms = finished_at - started_at 完全一致

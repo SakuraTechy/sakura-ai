@@ -77,8 +77,9 @@ const getRouteConfig = (pathname: string): { title: string; icon: React.ReactNod
     return { title: '编辑测试用例', icon: <Edit3 className="h-4 w-4" /> };
   }
 
+  // 🔥 测试执行详情页不创建新tab，复用 /test-runs 的tab
   if (pathname.match(/^\/test-runs\/.+\/detail$/)) {
-    return { title: '测试执行详情', icon: <FileText className="h-4 w-4" /> };
+    return null;
   }
 
   // 功能测试用例相关路由
@@ -236,6 +237,35 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
           setTabs(prev => [...prev, newParentTab]);
           setActiveTabId(newParentTab.id);
           // 注意：这里不改变路由，只是创建并激活列表页tab，路由仍然保持为当前路由
+          return;
+        }
+      }
+    }
+
+    // 🔥 特殊处理：测试执行详情页使用 /test-runs 的tab，不创建新tab
+    const isTestRunDetailRoute = currentPath.match(/^\/test-runs\/.+\/detail$/) !== null;
+
+    if (isTestRunDetailRoute) {
+      const parentPath = '/test-runs';
+      const parentTab = tabs.find(tab => tab.path === parentPath);
+      
+      if (parentTab) {
+        // 如果列表页tab存在，激活它，不创建新tab
+        setActiveTabId(parentTab.id);
+        return;
+      } else {
+        // 如果列表页tab不存在，创建列表页tab
+        const parentConfig = getRouteConfig(parentPath);
+        if (parentConfig && tabs.length < MAX_TABS) {
+          const newParentTab: Tab = {
+            path: parentPath,
+            title: parentConfig.title,
+            icon: parentConfig.icon,
+            id: generateTabId(parentPath),
+            closable: true,
+          };
+          setTabs(prev => [...prev, newParentTab]);
+          setActiveTabId(newParentTab.id);
           return;
         }
       }

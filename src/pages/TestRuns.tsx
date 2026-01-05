@@ -19,7 +19,9 @@ import {
   ChevronsLeft,
   ChevronRight as ChevronRightIcon,
   ChevronsRight,
-  Search
+  Search,
+  Filter,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
@@ -98,6 +100,47 @@ interface TestRunsFilterProps {
     environments: string[];
   }) => void; // 🔥 新增：筛选选项更新回调
 }
+
+// 🔥 ErrorFallback 组件移到外部，避免每次渲染时重新创建导致子组件重新挂载
+const ErrorFallback = ({ 
+  children, 
+  onRetry 
+}: { 
+  children: React.ReactNode; 
+  onRetry: () => void;
+}) => {
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    const errorHandler = (event: ErrorEvent) => {
+      console.error('捕获到全局错误:', event.error);
+      setHasError(true);
+    };
+    
+    window.addEventListener('error', errorHandler);
+    return () => window.removeEventListener('error', errorHandler);
+  }, []);
+  
+  if (hasError) {
+    return (
+      <div className="p-6 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-md">
+        <h3 className="text-lg font-semibold mb-2">出现错误</h3>
+        <p>加载测试运行数据时发生错误，请尝试刷新页面。</p>
+        <button 
+          onClick={() => {
+            setHasError(false);
+            onRetry();
+          }}
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+        >
+          重试加载
+        </button>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
 
 export function TestRuns({ 
   searchTerm = '', 
@@ -206,6 +249,49 @@ export function TestRuns({
   const [showStopAllModal, setShowStopAllModal] = useState(false);
   const [stoppingAll, setStoppingAll] = useState(false);
   
+  // 🔥 本地搜索和筛选状态（当组件独立使用时）
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
+  const [localStatusFilter, setLocalStatusFilter] = useState('');
+  const [localResultFilter, setLocalResultFilter] = useState('');
+  const [localSystemFilter, setLocalSystemFilter] = useState('');
+  const [localVersionFilter, setLocalVersionFilter] = useState('');
+  const [localModuleFilter, setLocalModuleFilter] = useState('');
+  const [localTagFilter, setLocalTagFilter] = useState('');
+  const [localPriorityFilter, setLocalPriorityFilter] = useState('');
+  const [localEnvironmentFilter, setLocalEnvironmentFilter] = useState('');
+  const [localExecutorFilter, setLocalExecutorFilter] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false); // 控制高级筛选显示/隐藏
+  
+  // 🔥 本地筛选选项（从数据中提取）
+  const [localFilterOptions, setLocalFilterOptions] = useState<{
+    systems: string[];
+    versions: string[];
+    modules: string[];
+    tags: string[];
+    environments: string[];
+    executors: string[];
+  }>({
+    systems: [],
+    versions: [],
+    modules: [],
+    tags: [],
+    environments: [],
+    executors: []
+  });
+  
+  // 🔥 判断是否使用本地筛选（当没有外部传入筛选参数时使用本地状态）
+  const isLocalMode = !hideHeader && !hideStats;
+  const effectiveSearchTerm = isLocalMode ? localSearchTerm : searchTerm;
+  const effectiveStatusFilter = isLocalMode ? localStatusFilter : statusFilter;
+  const effectiveResultFilter = isLocalMode ? localResultFilter : resultFilter;
+  const effectiveSystemFilter = isLocalMode ? localSystemFilter : systemFilter;
+  const effectiveVersionFilter = isLocalMode ? localVersionFilter : versionFilter;
+  const effectiveModuleFilter = isLocalMode ? localModuleFilter : moduleFilter;
+  const effectiveTagFilter = isLocalMode ? localTagFilter : tagFilter;
+  const effectivePriorityFilter = isLocalMode ? localPriorityFilter : priorityFilter;
+  const effectiveEnvironmentFilter = isLocalMode ? localEnvironmentFilter : environmentFilter;
+  const effectiveExecutorFilter = isLocalMode ? localExecutorFilter : executorFilter;
+
   // 🚀 组件挂载状态追踪
   const isMountedRef = React.useRef(true);
   
@@ -252,7 +338,7 @@ export function TestRuns({
       // 按 startedAt 降序排列，最新的测试显示在最前面
       const apiData = await testService.getAllTestRuns({
         sortBy: 'startedAt',
-        sortOrder: 'asc'
+        sortOrder: 'desc'
       });
       
       // 🔥 调试：查看第一个测试运行的数据结构
@@ -336,6 +422,21 @@ export function TestRuns({
         }
         
         // 补充可能缺失的字段，确保数据结构完整
+        // 处理 actualStartedAt 字段
+        let actualStartedAt: Date | undefined;
+        try {
+          const actualStartedAtField = run.actualStartedAt;
+          if (actualStartedAtField) {
+            actualStartedAt = actualStartedAtField instanceof Date ? actualStartedAtField : new Date(actualStartedAtField);
+            if (isNaN(actualStartedAt.getTime())) {
+              actualStartedAt = undefined;
+            }
+          }
+        } catch {
+          console.error('无效的 actualStartedAt:', run.actualStartedAt);
+          actualStartedAt = undefined;
+        }
+        
         const processedRun = {
           id: run.id || `unknown-${Date.now()}`,
           testCaseId: run.testCaseId || 0,
@@ -344,6 +445,7 @@ export function TestRuns({
           progress: run.progress || 0,
           // 🔥 修复：使用 startedAt 和 finishedAt 字段名，与组件保持一致
           startedAt: startTime,
+          actualStartedAt: actualStartedAt,
           finishedAt: endTime,
           startTime: startTime, // 兼容旧字段
           endTime: endTime, // 兼容旧字段
@@ -416,23 +518,34 @@ export function TestRuns({
       // console.log('📊 成功加载测试运行数据:', runs.length, '条记录（已按开始时间降序排列）');
       
       // 🔥 新增：从测试运行数据中提取筛选选项
+      const systems = Array.from(new Set(runs.map((run: any) => run.system).filter(Boolean))) as string[];
+      const versions = Array.from(new Set(runs.map((run: any) => run.projectVersion).filter(Boolean))) as string[];
+      const modules = Array.from(new Set(runs.map((run: any) => run.module).filter(Boolean))) as string[];
+      const tags = Array.from(new Set(runs.flatMap((run: any) => (Array.isArray(run.tags) ? run.tags : [])).filter(Boolean))) as string[];
+      const executors = Array.from(new Set(runs.map((run: any) => run.executor).filter(Boolean))) as string[];
+      const environments = Array.from(new Set(runs.map((run: any) => run.environment).filter(Boolean))) as string[];
+      
+      console.log(`📊 [TestRuns] 提取的筛选选项:`, {
+        systems: systems.length,
+        versions: versions.length,
+        modules: modules.length,
+        tags: tags.length,
+        executors: executors.length,
+        environments: environments.length
+      });
+      
+      // 🔥 更新本地筛选选项
+      setLocalFilterOptions({
+        systems: systems.sort(),
+        versions: versions.sort(),
+        modules: modules.sort(),
+        tags: tags.sort(),
+        environments: environments.sort(),
+        executors: executors.sort()
+      });
+      
+      // 🔥 同时通知外部（如果有回调）
       if (onFilterOptionsUpdate) {
-        const systems = Array.from(new Set(runs.map((run: any) => run.system).filter(Boolean))) as string[];
-        const versions = Array.from(new Set(runs.map((run: any) => run.projectVersion).filter(Boolean))) as string[];
-        const modules = Array.from(new Set(runs.map((run: any) => run.module).filter(Boolean))) as string[];
-        const tags = Array.from(new Set(runs.flatMap((run: any) => (Array.isArray(run.tags) ? run.tags : [])).filter(Boolean))) as string[];
-        const executors = Array.from(new Set(runs.map((run: any) => run.executor).filter(Boolean))) as string[];
-        const environments = Array.from(new Set(runs.map((run: any) => run.environment).filter(Boolean))) as string[];
-        
-        console.log(`📊 [TestRuns] 提取的筛选选项:`, {
-          systems: systems.length,
-          versions: versions.length,
-          modules: modules.length,
-          tags: tags.length,
-          executors: executors.length,
-          environments: environments.length
-        });
-        
         onFilterOptionsUpdate({
           systems: systems.sort(),
           versions: versions.sort(),
@@ -473,6 +586,10 @@ export function TestRuns({
       if (isMountedRef.current) {
         setLoading(false);
       }
+      // 🔥 标记首次加载完成，允许 WebSocket 创建新记录
+      initialLoadCompleteRef.current = true;
+      // 🔥 清空已创建记录集合（因为加载后会有完整数据）
+      createdRunIdsRef.current.clear();
     }
   }, [onFilterOptionsUpdate]); // 依赖onFilterOptionsUpdate
 
@@ -495,32 +612,74 @@ export function TestRuns({
             const hasSignificantChange = 
               currentRun.status !== updateData.status ||
               currentRun.progress !== updateData.progress ||
-              Math.abs(currentRun.completedSteps - (updateData.completedSteps || 0)) > 0;
+              Math.abs(currentRun.completedSteps - (updateData.completedSteps || 0)) > 0 ||
+              currentRun.name !== updateData.name; // 🔥 添加名称变化检测
             
             if (!hasSignificantChange) {
               return prevRuns; // 无重要变化，不更新
             }
             
-            // 更新现有测试运行
+            // 更新现有测试运行，保留已有的完整字段
             const updatedRuns = [...prevRuns];
             updatedRuns[runIndex] = {
               ...currentRun,
-              ...updateData,
+              // 🔥 只更新有值的字段，保留已有的完整信息
+              status: updateData.status || currentRun.status,
+              progress: updateData.progress ?? currentRun.progress,
+              name: updateData.name || currentRun.name,
+              completedSteps: updateData.completedSteps ?? currentRun.completedSteps,
+              totalSteps: updateData.totalSteps ?? currentRun.totalSteps,
+              passedSteps: updateData.passedSteps ?? currentRun.passedSteps,
+              failedSteps: updateData.failedSteps ?? currentRun.failedSteps,
+              duration: updateData.duration || currentRun.duration,
               startTime: updateData.startTime ? new Date(updateData.startTime) : currentRun.startTime,
               endTime: updateData.endTime ? new Date(updateData.endTime) : currentRun.endTime,
-              logs: updateData.logs || currentRun.logs
+              logs: updateData.logs || currentRun.logs,
+              error: updateData.error || currentRun.error
             };
             return updatedRuns;
           } else {
-            // 新测试运行
-            const newRun = {
+            // 🔥 新测试运行 - 需要检查是否应该创建
+            
+            // 🔥 防重复检查1：如果首次加载未完成，不创建新记录（等 loadTestRuns 完成后会有完整数据）
+            if (!initialLoadCompleteRef.current) {
+              console.log(`⏳ [TestRuns] 首次加载未完成，跳过创建新记录: ${runId?.substring(0, 8)}`);
+              return prevRuns;
+            }
+            
+            // 🔥 防重复检查2：如果该 runId 已经创建过，不重复创建
+            if (createdRunIdsRef.current.has(runId)) {
+              console.log(`⚠️ [TestRuns] 该记录已创建过，跳过: ${runId?.substring(0, 8)}`);
+              return prevRuns;
+            }
+            
+            // 🔥 防重复检查3：检查消息是否只是部分更新（只有少数字段），不应该创建新记录
+            // 如果消息只有 name 或只有状态更新，说明这是更新消息而不是创建消息
+            // 🔥 修复：允许 queued、running 状态创建新记录，也允许其他状态但包含完整数据的情况
+            const hasEnoughDataToCreate = updateData.testCaseId && 
+              (updateData.status === 'queued' || 
+               updateData.status === 'running' || 
+               (updateData.id && updateData.name && updateData.environment)); // 如果有完整数据，也允许创建
+            if (!hasEnoughDataToCreate) {
+              console.log(`⚠️ [TestRuns] 数据不足以创建新记录，跳过: ${runId?.substring(0, 8)}, status=${updateData.status}, testCaseId=${updateData.testCaseId}, hasId=${!!updateData.id}, hasName=${!!updateData.name}`);
+              return prevRuns;
+            }
+            
+            // 标记该 runId 已创建
+            createdRunIdsRef.current.add(runId);
+            console.log(`🆕 [TestRuns] 通过 WebSocket 创建新记录: ${runId?.substring(0, 8)}, testCaseId=${updateData.testCaseId}`);
+            
+            const startTime = updateData.startTime ? new Date(updateData.startTime) : new Date();
+            const newRun: TestRun = {
               id: runId,
               testCaseId: updateData.testCaseId || 0,
               name: updateData.name || '新测试',
               status: updateData.status || 'running',
               progress: updateData.progress || 0,
-              startTime: updateData.startTime ? new Date(updateData.startTime) : new Date(),
+              startTime: startTime,
+              startedAt: startTime, // 🔥 添加兼容字段
               endTime: updateData.endTime ? new Date(updateData.endTime) : undefined,
+              finishedAt: updateData.endTime ? new Date(updateData.endTime) : undefined, // 🔥 添加兼容字段
               duration: updateData.duration || '0s',
               totalSteps: updateData.totalSteps || 0,
               completedSteps: updateData.completedSteps || 0,
@@ -530,8 +689,45 @@ export function TestRuns({
               environment: updateData.environment || 'default',
               logs: updateData.logs || [],
               screenshots: updateData.screenshots || [],
-              error: updateData.error
+              error: updateData.error,
+              // 🔥 初始化测试用例相关字段（先设为空，稍后异步填充）
+              system: updateData.system || '',
+              module: updateData.module || '',
+              tags: updateData.tags || [],
+              priority: updateData.priority || 'medium',
+              projectVersion: updateData.projectVersion || ''
             };
+            
+            // 🔥 异步获取测试用例完整信息并更新（不阻塞UI）
+            if (updateData.testCaseId && !updateData.system) {
+              testService.getTestCaseById(updateData.testCaseId).then(testCase => {
+                if (testCase) {
+                  setTestRuns(currentRuns => {
+                    const idx = currentRuns.findIndex(r => r.id === runId);
+                    if (idx >= 0) {
+                      const updatedRuns = [...currentRuns];
+                      updatedRuns[idx] = {
+                        ...updatedRuns[idx],
+                        name: testCase.name || updatedRuns[idx].name, // 🔥 也更新名称
+                        system: testCase.system || '',
+                        module: testCase.module || '',
+                        tags: Array.isArray(testCase.tags) 
+                          ? testCase.tags 
+                          : (testCase.tags ? testCase.tags.split(',').map((t: string) => t.trim()) : []),
+                        priority: testCase.priority || 'medium',
+                        projectVersion: (testCase as any).project_version?.version_name || (testCase as any).projectVersion || ''
+                      };
+                      console.log(`✅ [TestRuns] 已补充测试运行 ${runId.substring(0, 8)} 的测试用例信息`);
+                      return updatedRuns;
+                    }
+                    return currentRuns;
+                  });
+                }
+              }).catch(err => {
+                console.warn(`⚠️ [TestRuns] 获取测试用例 ${updateData.testCaseId} 信息失败:`, err);
+              });
+            }
+            
             return [newRun, ...prevRuns];
           }
         });
@@ -608,6 +804,11 @@ export function TestRuns({
 
   // 🔥 核心修复2：使用独立的日志缓冲区，避免频繁更新 testRuns 对象引用
   const logsBufferRef = useRef<Map<string, any[]>>(new Map());
+  
+  // 🔥 新增：标记首次加载是否完成，防止 WebSocket 消息在加载前创建重复记录
+  const initialLoadCompleteRef = useRef<boolean>(false);
+  // 🔥 新增：记录已通过 WebSocket 创建的 runId，防止防抖批处理时重复创建
+  const createdRunIdsRef = useRef<Set<string>>(new Set());
 
   // 🔥 核心修复：使用 useCallback 而不是 useRef，确保函数能访问最新的 ref
   const handleBatchLogs = useCallback((message: any) => {
@@ -855,24 +1056,24 @@ export function TestRuns({
     return testRuns.filter(run => {
       // 搜索条件：匹配测试名称或测试用例ID（保持模糊搜索）
       let matchesSearch = false;
-      if (!searchTerm) {
+      if (!effectiveSearchTerm) {
         matchesSearch = true;
       } else {
-        const searchLower = searchTerm.toLowerCase();
+        const searchLower = effectiveSearchTerm.toLowerCase();
         // 匹配测试运行名称
         const matchesName = run.name.toLowerCase().includes(searchLower);
         // 🆕 匹配测试用例ID（模糊匹配，支持部分ID搜索）
-        const matchesId = run.testCaseId && String(run.testCaseId).includes(searchTerm);
+        const matchesId = run.testCaseId && String(run.testCaseId).includes(effectiveSearchTerm);
         
         matchesSearch = matchesName || matchesId;
       }
       
       // 状态筛选（精确匹配）
-      const matchesStatus = !statusFilter || run.status === statusFilter;
+      const matchesStatus = !effectiveStatusFilter || run.status === effectiveStatusFilter;
       
       // 🆕 执行结果筛选：根据 status 和 steps 计算实际执行结果（精确匹配）
       let matchesResult = true;
-      if (resultFilter) {
+      if (effectiveResultFilter) {
         // 计算实际执行结果（使用小写值以匹配筛选选项）
         let actualResult: string | null = null;
         if (run.status === 'completed') {
@@ -889,43 +1090,43 @@ export function TestRuns({
           actualResult = 'skip';
         }
         
-        matchesResult = actualResult === resultFilter;
+        matchesResult = actualResult === effectiveResultFilter;
       }
       
       // 执行者筛选（精确匹配）
-      const matchesExecutor = !executorFilter || 
-        run.executor.toLowerCase() === executorFilter.toLowerCase();
+      const matchesExecutor = !effectiveExecutorFilter || 
+        run.executor.toLowerCase() === effectiveExecutorFilter.toLowerCase();
       
       // 环境筛选（精确匹配）
-      const matchesEnvironment = !environmentFilter || 
-        run.environment.toLowerCase() === environmentFilter.toLowerCase();
+      const matchesEnvironment = !effectiveEnvironmentFilter || 
+        run.environment.toLowerCase() === effectiveEnvironmentFilter.toLowerCase();
       
       // 🔥 新增：项目筛选（精确匹配）
-      const matchesSystem = !systemFilter || 
-        (run.system && run.system.toLowerCase() === systemFilter.toLowerCase());
+      const matchesSystem = !effectiveSystemFilter || 
+        (run.system && run.system.toLowerCase() === effectiveSystemFilter.toLowerCase());
       
       // 🔥 新增：版本筛选（精确匹配）
-      const matchesVersion = !versionFilter || 
-        (run.projectVersion && run.projectVersion.toLowerCase() === versionFilter.toLowerCase());
+      const matchesVersion = !effectiveVersionFilter || 
+        (run.projectVersion && run.projectVersion.toLowerCase() === effectiveVersionFilter.toLowerCase());
       
       // 🔥 新增：模块筛选（精确匹配）
-      const matchesModule = !moduleFilter || 
-        (run.module && run.module.toLowerCase() === moduleFilter.toLowerCase());
+      const matchesModule = !effectiveModuleFilter || 
+        (run.module && run.module.toLowerCase() === effectiveModuleFilter.toLowerCase());
       
       // 🔥 新增：标签筛选（精确匹配）
-      const matchesTag = !tagFilter || 
+      const matchesTag = !effectiveTagFilter || 
         (run.tags && Array.isArray(run.tags) && run.tags.some(tag => 
-          tag.toLowerCase() === tagFilter.toLowerCase()
+          tag.toLowerCase() === effectiveTagFilter.toLowerCase()
         ));
       
       // 🔥 新增：优先级筛选（精确匹配）
-      const matchesPriority = !priorityFilter || run.priority === priorityFilter;
+      const matchesPriority = !effectivePriorityFilter || run.priority === effectivePriorityFilter;
       
       return matchesSearch && matchesStatus && matchesResult && matchesExecutor && matchesEnvironment &&
         matchesSystem && matchesVersion && matchesModule && matchesTag && matchesPriority;
     });
-  }, [testRuns, searchTerm, statusFilter, resultFilter, executorFilter, environmentFilter, 
-      systemFilter, versionFilter, moduleFilter, tagFilter, priorityFilter]);
+  }, [testRuns, effectiveSearchTerm, effectiveStatusFilter, effectiveResultFilter, effectiveExecutorFilter, effectiveEnvironmentFilter, 
+      effectiveSystemFilter, effectiveVersionFilter, effectiveModuleFilter, effectiveTagFilter, effectivePriorityFilter]);
 
   // 🔥 新增：计算分页后的数据
   const paginatedTestRuns = useMemo(() => {
@@ -1023,10 +1224,15 @@ export function TestRuns({
     }
   }, [paginatedTestRuns, selectedRunIds]);
 
-  // 修改为导航到详情页面
+  // 修改为导航到详情页面，带上返回参数
   const handleViewLogs = useCallback((run: TestRun) => {
-    navigate(`/test-runs/${run.id}/detail`);
-  }, []);
+    navigate(`/test-runs/${run.id}/detail`, {
+      state: { 
+        from: '/test-runs',
+        caseName: run.name 
+      }
+    });
+  }, [navigate]);
 
   // 🔥 修复灰屏问题：使用 useCallback 稳定 onFrameUpdate 函数引用
   // 避免 WebSocket 消息触发的重新渲染导致 LiveView 重新连接
@@ -1156,6 +1362,21 @@ export function TestRuns({
   const handlePageSizeChange = useCallback((newPageSize: number) => {
     setPageSize(newPageSize);
     setCurrentPage(1); // 重置到第一页
+  }, []);
+
+  // 🔥 新增：重置筛选条件
+  const handleResetFilters = useCallback(() => {
+    setLocalSearchTerm('');
+    setLocalStatusFilter('');
+    setLocalResultFilter('');
+    setLocalSystemFilter('');
+    setLocalVersionFilter('');
+    setLocalModuleFilter('');
+    setLocalTagFilter('');
+    setLocalPriorityFilter('');
+    setLocalEnvironmentFilter('');
+    setLocalExecutorFilter('');
+    setCurrentPage(1);
   }, []);
 
   // 🔥 新增：当数据变化时，如果当前页没有数据，自动跳转到第一页
@@ -1583,104 +1804,92 @@ export function TestRuns({
     });
   }, [selectedRun?.id, filteredLogs.length, activeTab, autoScrollLogs]);
 
-  // 添加错误边界处理
-  const ErrorFallback = ({ children }: { children: React.ReactNode }) => {
-    const [hasError, setHasError] = useState(false);
-    
-    useEffect(() => {
-      const errorHandler = (event: ErrorEvent) => {
-        console.error('捕获到全局错误:', event.error);
-        setHasError(true);
-      };
-      
-      window.addEventListener('error', errorHandler);
-      return () => window.removeEventListener('error', errorHandler);
-    }, []);
-    
-    if (hasError) {
-      return (
-        <div className="p-6 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-md">
-          <h3 className="text-lg font-semibold mb-2">出现错误</h3>
-          <p>加载测试运行数据时发生错误，请尝试刷新页面。</p>
-          <button 
-            onClick={() => {
-              setHasError(false);
-              loadTestRuns();
-            }}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-          >
-            重试加载
-          </button>
-        </div>
-      );
-    }
-    
-    return <>{children}</>;
-  };
   
   return (
-    <ErrorFallback>
+    <ErrorFallback onRetry={loadTestRuns}>
       <div className="space-y-6">
-        {/* Header - 仅在非隐藏模式下显示 */}
+        {/* Header - 仅在非隐藏模式下显示 - 参考截图布局 */}
         {!hideHeader && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">测试执行结果</h2>
-              <p className="text-gray-600">查看测试运行状态和断言结果</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              {/* 🔥 全局停止按钮 */}
-              <motion.button
-                whileHover={{ scale: stats.running + stats.queued > 0 ? 1.02 : 1 }}
-                whileTap={{ scale: stats.running + stats.queued > 0 ? 0.98 : 1 }}
-                onClick={handleStopAllTests}
-                disabled={stoppingAll || stats.running + stats.queued === 0}
+          <div className="flex items-center justify-between">
+            {/* 左侧：视图切换器 */}
+            <div className="inline-flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
+              <button
+                onClick={() => setViewMode('table')}
                 className={clsx(
-                  "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium",
-                  stoppingAll
-                    ? "bg-orange-100 text-orange-700 cursor-not-allowed"
-                    : stats.running + stats.queued > 0
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  viewMode === 'table'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 )}
-                title={
-                  stoppingAll
-                    ? "正在停止所有测试..."
-                    : stats.running + stats.queued > 0
-                    ? `停止所有运行中的测试 (${stats.running + stats.queued}个)`
-                    : "当前没有正在运行的测试"
-                }
+                title="表格视图"
               >
-                {stoppingAll ? (
-                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <StopCircle className="h-5 w-5 mr-2" />
+                <Table2 className="w-4 h-4" />
+                <span className="hidden sm:inline">表格视图</span>
+              </button>
+              <button
+                onClick={() => setViewMode('detailed')}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  viewMode === 'detailed'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 )}
-                {stoppingAll
-                  ? '停止中...'
-                  : stats.running + stats.queued > 0
-                  ? `停止所有 (${stats.running + stats.queued})`
-                  : '停止所有'
-                }
-              </motion.button>
-
-              {/* 🔥 手动刷新按钮 - WebSocket失败时的备用方案 */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={loadTestRuns}
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                title="手动刷新测试数据（通常由WebSocket自动更新）"
+                title="详细表格"
               >
-                <RefreshCw className={clsx("h-5 w-5 mr-2", loading && "animate-spin")} />
-                刷新数据
-              </motion.button>
+                <Table2 className="w-4 h-4" />
+                <span className="hidden sm:inline">详细表格</span>
+              </button>
+              <button
+                onClick={() => setViewMode('card')}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  viewMode === 'card'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+                title="卡片视图"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">卡片视图</span>
+              </button>
             </div>
+
+            {/* 右侧：停止所有按钮 */}
+            <motion.button
+              whileHover={{ scale: stats.running + stats.queued > 0 ? 1.02 : 1 }}
+              whileTap={{ scale: stats.running + stats.queued > 0 ? 0.98 : 1 }}
+              onClick={handleStopAllTests}
+              disabled={stoppingAll || stats.running + stats.queued === 0}
+              className={clsx(
+                "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium",
+                stoppingAll
+                  ? "bg-orange-100 text-orange-700 cursor-not-allowed"
+                  : stats.running + stats.queued > 0
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-gray-200 text-gray-500 cursor-not-allowed"
+              )}
+              title={
+                stoppingAll
+                  ? "正在停止所有测试..."
+                  : stats.running + stats.queued > 0
+                  ? `停止所有运行中的测试 (${stats.running + stats.queued}个)`
+                  : "当前没有正在运行的测试"
+              }
+            >
+              {stoppingAll ? (
+                <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+              ) : (
+                <StopCircle className="h-5 w-5 mr-2" />
+              )}
+              {stoppingAll
+                ? '停止中...'
+                : '停止所有'
+              }
+            </motion.button>
           </div>
         )}
 
-        {/* 🔥 真实统计数据 */}
+        {/* 🔥 统计数据卡片 */}
         {!hideStats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
@@ -1711,6 +1920,215 @@ export function TestRuns({
               </div>
               <div className="text-2xl font-bold text-gray-900 mt-2">{stats.failed}</div>
             </div>
+          </div>
+        )}
+
+        {/* 🔥 搜索栏和筛选器 - 参考截图布局 */}
+        {!hideHeader && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            {/* 第一行：搜索框和主要筛选器 */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* 搜索输入框 */}
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索测试用例ID或名称..."
+                  value={localSearchTerm}
+                  onChange={(e) => setLocalSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg 
+                       focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 
+                       transition-all duration-200"
+                />
+              </div>
+
+              {/* 项目筛选 */}
+              <select
+                value={localSystemFilter}
+                onChange={(e) => {
+                  setLocalSystemFilter(e.target.value);
+                  setLocalVersionFilter(''); // 重置版本筛选
+                }}
+                className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">所有项目</option>
+                {localFilterOptions.systems.map(sys => (
+                  <option key={sys} value={sys}>{sys}</option>
+                ))}
+              </select>
+
+              {/* 版本筛选 - 依赖于项目选择 */}
+              <select
+                value={localVersionFilter}
+                onChange={(e) => setLocalVersionFilter(e.target.value)}
+                disabled={!localSystemFilter || localFilterOptions.versions.length === 0}
+                className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{!localSystemFilter ? '请先选择项目' : '所有版本'}</option>
+                {localFilterOptions.versions.map(version => (
+                  <option key={version} value={version}>{version}</option>
+                ))}
+              </select>
+
+              {/* 模块筛选 */}
+              <select
+                value={localModuleFilter}
+                onChange={(e) => setLocalModuleFilter(e.target.value)}
+                className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">所有模块</option>
+                {localFilterOptions.modules.map(module => (
+                  <option key={module} value={module}>{module}</option>
+                ))}
+              </select>
+
+              {/* 状态筛选 */}
+              <select
+                value={localStatusFilter}
+                onChange={(e) => setLocalStatusFilter(e.target.value)}
+                className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">所有状态</option>
+                <option value="running">执行中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+                <option value="queued">队列中</option>
+                <option value="cancelled">已取消</option>
+              </select>
+
+              {/* 结果筛选 */}
+              <select
+                value={localResultFilter}
+                onChange={(e) => setLocalResultFilter(e.target.value)}
+                className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">所有结果</option>
+                <option value="pass">✅ 通过</option>
+                <option value="fail">❌ 失败</option>
+                <option value="skip">⏭️ 跳过</option>
+              </select>
+
+              {/* 筛选按钮 - 点击展开/收起高级筛选 */}
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={clsx(
+                  'inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  showAdvancedFilters
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                )}
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                筛选
+              </button>
+
+              {/* 重置按钮 */}
+              <button
+                onClick={handleResetFilters}
+                className="inline-flex items-center px-4 py-2.5 text-gray-600 hover:text-gray-900
+                     border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+              >
+                <X className="w-4 h-4 mr-2" />
+                重置
+              </button>
+
+              {/* 刷新按钮 */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={loadTestRuns}
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2.5 bg-blue-600 text-white rounded-lg 
+                     hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm font-medium"
+                title="刷新数据"
+              >
+                <RefreshCw className={clsx("w-4 h-4 mr-2", loading && "animate-spin")} />
+                刷新
+              </motion.button>
+            </div>
+
+            {/* 第二行：标签、优先级、环境、执行者筛选 - 默认隐藏，点击筛选按钮展开 */}
+            <AnimatePresence>
+              {showAdvancedFilters && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-2 mt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* 标签筛选 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">标签</label>
+                      <select
+                        value={localTagFilter}
+                        onChange={(e) => setLocalTagFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                             focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="">所有标签</option>
+                        {localFilterOptions.tags.map(tag => (
+                          <option key={tag} value={tag}>{tag}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 优先级筛选 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">优先级</label>
+                      <select
+                        value={localPriorityFilter}
+                        onChange={(e) => setLocalPriorityFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                             focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="">所有优先级</option>
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                      </select>
+                    </div>
+
+                    {/* 环境筛选 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">环境</label>
+                      <select
+                        value={localEnvironmentFilter}
+                        onChange={(e) => setLocalEnvironmentFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                             focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="">所有环境</option>
+                        {localFilterOptions.environments.map(env => (
+                          <option key={env} value={env}>{env}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 执行者筛选 */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">执行者</label>
+                      <select
+                        value={localExecutorFilter}
+                        onChange={(e) => setLocalExecutorFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                             focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="">所有执行者</option>
+                        {localFilterOptions.executors.map(executor => (
+                          <option key={executor} value={executor}>{executor}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -1751,54 +2169,9 @@ export function TestRuns({
         {/* 测试运行列表 */}
         {filteredTestRuns.length > 0 && !loading && (
           <div className="space-y-4">
-            {/* 🔥 视图切换和操作栏 */}
-            {!hideViewSwitcher && (
-              <div className="flex items-center justify-between">
-                {/* 视图切换器 */}
-                <div className="inline-flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={clsx(
-                    'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                    viewMode === 'table'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                  title="表格视图"
-                >
-                  <Table2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">表格视图</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('detailed')}
-                  className={clsx(
-                    'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                    viewMode === 'detailed'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                  title="详细表格"
-                >
-                  <Table2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">详细表格</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('card')}
-                  className={clsx(
-                    'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                    viewMode === 'card'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                  title="卡片视图"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">卡片视图</span>
-                </button>
-              </div>
-
-              {/* 批量删除按钮 - 仅在有选中项时显示 */}
-              {selectedRunIds.size > 0 && (
+            {/* 🔥 批量操作栏 - 仅在有选中项时显示 */}
+            {selectedRunIds.size > 0 && (
+              <div className="flex items-center justify-end">
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1812,13 +2185,27 @@ export function TestRuns({
                   <Trash2 className="w-4 h-4 mr-2" />
                   批量删除 ({selectedRunIds.size})
                 </motion.button>
-              )}
               </div>
             )}
 
             {/* 🔥 根据视图模式渲染不同的组件 */}
-            {viewMode === 'detailed' ? (
-              // 详细表格视图（功能用例样式）
+            {viewMode === 'table' ? (
+              // 表格视图
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <TestRunsTable
+                  testRuns={paginatedTestRuns}
+                  selectedRunIds={selectedRunIds}
+                  stoppingTests={stoppingTests}
+                  onStopTest={handleStopTest}
+                  onViewLogs={handleViewLogs}
+                  onSelectRun={handleSelectRun}
+                  onSelectAll={handleSelectAll}
+                  selectAll={selectAll}
+                />
+                <PaginationComponent total={filteredTestRuns.length} />
+              </div>
+            ) : viewMode === 'detailed' ? (
+              // 详细表格视图
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <TestRunsDetailedTable
                   testRuns={paginatedTestRuns}
@@ -1836,21 +2223,6 @@ export function TestRuns({
                   onPageSizeChange={handlePageSizeChange}
                   loading={loading}
                 />
-              </div>
-            ) : viewMode === 'table' ? (
-              // 简单表格视图
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <TestRunsTable
-                  testRuns={paginatedTestRuns}
-                  selectedRunIds={selectedRunIds}
-                  stoppingTests={stoppingTests}
-                  onStopTest={handleStopTest}
-                  onViewLogs={handleViewLogs}
-                  onSelectRun={handleSelectRun}
-                  onSelectAll={handleSelectAll}
-                  selectAll={selectAll}
-                />
-                <PaginationComponent total={filteredTestRuns.length} />
               </div>
             ) : (
               // 卡片视图（原有样式）

@@ -328,6 +328,22 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
             console.warn(`⚠️ [${runId}] 无法计算执行时长: durationMs=${dbRun.durationMs}, startedAt=${dbRun.startedAt}, finishedAt=${dbRun.finishedAt}`);
           }
           
+          // 🔥 修复：从日志中提取开始时间（如果数据库中没有startedAt）
+          let actualStartedAt = dbRun.startedAt;
+          if (!actualStartedAt && logs && logs.length > 0) {
+            // 从日志中提取最早的时间戳作为开始时间
+            const sortedLogs = [...logs].sort((a: any, b: any) => {
+              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
+            if (sortedLogs.length > 0) {
+              const firstLog = sortedLogs[0];
+              actualStartedAt = firstLog.timestamp instanceof Date ? firstLog.timestamp : new Date(firstLog.timestamp);
+              console.log(`📊 [${runId}] 从日志提取开始时间: ${actualStartedAt.toISOString()}`);
+            }
+          }
+          
           // 转换数据库记录到前端格式
           testRun = {
             id: dbRun.id,
@@ -336,6 +352,8 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
             status: dbRun.status,
             // 🔥 优化：统一使用 startedAt 和 finishedAt 字段
             startedAt: dbRun.startedAt || dbRun.queuedAt,
+            // 🔥 修复：包含 actualStartedAt 字段，优先使用数据库中的 startedAt，如果没有则使用从日志提取的时间
+            actualStartedAt: actualStartedAt || dbRun.startedAt || dbRun.queuedAt,
             finishedAt: dbRun.finishedAt,
             duration: duration, // 🔥 使用从数据库 durationMs 计算的准确值
             progress: dbRun.progress || 0,
@@ -389,6 +407,22 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
           }
         }
         
+        // 🔥 修复：从日志中提取开始时间（如果内存中没有actualStartedAt）
+        let actualStartedAt = memoryRun.actualStartedAt;
+        if (!actualStartedAt && memoryRun.logs && memoryRun.logs.length > 0) {
+          // 从日志中提取最早的时间戳作为开始时间
+          const sortedLogs = [...memoryRun.logs].sort((a: any, b: any) => {
+            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+            return timeA - timeB;
+          });
+          if (sortedLogs.length > 0) {
+            const firstLog = sortedLogs[0];
+            actualStartedAt = firstLog.timestamp instanceof Date ? firstLog.timestamp : new Date(firstLog.timestamp);
+            console.log(`📊 [${runId}] 从内存日志提取开始时间: ${actualStartedAt.toISOString()}`);
+          }
+        }
+        
         testRun = {
           ...memoryRun,
           name: testCaseName || memoryRun.name,
@@ -399,7 +433,11 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
           failedSteps: memoryRun.failedSteps ?? 0,
           duration: duration, // 🔥 使用同步后的 duration
           logs: memoryRun.logs || [],
-          screenshots: memoryRun.screenshots || []
+          screenshots: memoryRun.screenshots || [],
+          // 🔥 修复：确保包含 actualStartedAt 字段，优先使用内存中的值，如果没有则使用从日志提取的时间
+          actualStartedAt: actualStartedAt || memoryRun.actualStartedAt || memoryRun.startedAt,
+          // 🔥 修复：确保 startedAt 字段存在（兼容旧代码）
+          startedAt: memoryRun.startedAt || actualStartedAt || memoryRun.actualStartedAt
         } as any;
       }
 

@@ -15,6 +15,7 @@ import type {
   TestPlanCaseResult,
 } from '../../src/types/testPlan';
 import { TestExecutionService } from './testExecution';
+import { broadcastTestPlanExecutionUpdate } from './websocket';
 
 const prisma = new PrismaClient();
 
@@ -539,7 +540,7 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
   // 🔥 步骤1：从测试计划执行记录的execution_results中获取（批量执行的数据源）
   let step1Count = 0;
   for (const execution of plan.plan_executions) {
-    const executionResults = (execution.execution_results as TestPlanCaseResult[]) || [];
+    const executionResults = (execution.execution_results as unknown as TestPlanCaseResult[]) || [];
     
     console.log(`📊 [testPlanService] 处理执行记录 ${execution.id}，包含 ${executionResults.length} 个用例结果`);
     
@@ -547,8 +548,9 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
       const caseId = result.case_id;
       const existing = caseExecutionMap.get(caseId);
       
-      // 获取执行时间，优先使用result.executed_at，否则使用execution.started_at
-      const executedAt = result.executed_at || execution.started_at.toISOString();
+      // 🔥 修复：获取执行时间，优先使用result.finished_at（用例完成时间），
+      // 如果没有finished_at则使用result.executed_at，最后才使用execution.started_at
+      const executedAt = result.finished_at || result.executed_at || execution.started_at.toISOString();
       
       // 如果还没有记录，或者当前执行记录更新，则更新
       if (!existing || executedAt > existing.executed_at) {
@@ -648,13 +650,13 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
       
       const existing = caseExecutionMap.get(caseId);
       
-      // 必须有started_at才能继续
-      if (!execution.started_at) {
-        console.warn(`⚠️ [步骤2] 用例 ${caseId} 跳过：execution.started_at为空`);
+      // 🔥 修复：优先使用finished_at（用例完成时间），如果没有则使用started_at
+      // 必须有至少一个时间字段才能继续
+      const executedAt = execution.finished_at?.toISOString() || execution.started_at?.toISOString();
+      if (!executedAt) {
+        console.warn(`⚠️ [步骤2] 用例 ${caseId} 跳过：execution.started_at和finished_at均为空`);
         continue;
       }
-      
-      const executedAt = execution.started_at.toISOString();
       
       // 决策逻辑：如果没有记录，或者test_case_executions的记录更新，则使用它
       const shouldUpdate = !existing || executedAt > existing.executed_at;
@@ -833,28 +835,51 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
   );
 
   // 转换执行记录数据
-  const executions: TestPlanExecution[] = plan.plan_executions.map((e) => ({
-    id: e.id,
-    plan_id: e.plan_id,
-    plan_name: e.plan_name,
-    executor_id: e.executor_id,
-    executor_name: e.executor_name,
-    execution_type: e.execution_type as any,
-    status: e.status as any,
-    progress: e.progress,
-    total_cases: e.total_cases,
-    completed_cases: e.completed_cases,
-    passed_cases: e.passed_cases,
-    failed_cases: e.failed_cases,
-    blocked_cases: e.blocked_cases,
-    skipped_cases: e.skipped_cases,
-    started_at: e.started_at.toISOString(),
-    finished_at: e.finished_at?.toISOString(),
-    duration_ms: e.duration_ms || undefined,
-    execution_results: e.execution_results as any,
-    error_message: e.error_message || undefined,
-    metadata: e.metadata as any,
-  }));
+  const executions: TestPlanExecution[] = plan.plan_executions.map((e) => {
+    // 🔥 修复：finished_at应该始终从execution_results中获取最后一条用例的finished_at
+    // 而不是使用数据库中的finished_at字段，以确保时间戳的准确性
+    let finishedAt: string | undefined = undefined;
+    const executionResults = (e.execution_results as unknown as TestPlanCaseResult[]) || [];
+    // 找出所有有finished_at的结果，按时间降序排序，取最晚的一个
+    const finishedResults = executionResults
+      .filter(r => r.finished_at)
+      .sort((a, b) => {
+        const timeA = new Date(a.finished_at!).getTime();
+        const timeB = new Date(b.finished_at!).getTime();
+        return timeB - timeA; // 降序，最晚的在前面
+      });
+    if (finishedResults.length > 0) {
+      finishedAt = finishedResults[0].finished_at!;
+      console.log(`📊 [testPlanService] 执行记录 ${e.id} 的finished_at从execution_results获取: ${finishedAt}`);
+    } else {
+      // 如果没有execution_results或没有finished_at，回退到数据库中的值
+      finishedAt = e.finished_at?.toISOString();
+      console.log(`📊 [testPlanService] 执行记录 ${e.id} 的finished_at从数据库字段获取: ${finishedAt}`);
+    }
+    
+    return {
+      id: e.id,
+      plan_id: e.plan_id,
+      plan_name: e.plan_name,
+      executor_id: e.executor_id,
+      executor_name: e.executor_name,
+      execution_type: e.execution_type as any,
+      status: e.status as any,
+      progress: e.progress,
+      total_cases: e.total_cases,
+      completed_cases: e.completed_cases,
+      passed_cases: e.passed_cases,
+      failed_cases: e.failed_cases,
+      blocked_cases: e.blocked_cases,
+      skipped_cases: e.skipped_cases,
+      started_at: e.started_at.toISOString(),
+      finished_at: finishedAt,
+      duration_ms: e.duration_ms || undefined,
+      execution_results: e.execution_results as any,
+      error_message: e.error_message || undefined,
+      metadata: e.metadata as any,
+    };
+  });
 
   // 计算统计信息
   const statistics: TestPlanStatistics = {
@@ -1113,7 +1138,7 @@ export async function startTestPlanExecution(
 
   const cases = await prisma.test_plan_cases.findMany({
     where,
-    orderBy: { sort_order: 'asc' },
+    orderBy: { case_id: 'asc' },
   });
 
   if (cases.length === 0) {
@@ -1162,14 +1187,38 @@ export async function startTestPlanExecution(
       enableVideo
     });
     
+    // 🔥 修复：在开始执行前，初始化所有用例到execution_results
+    // 第一个用例状态为running，其他为queued
+    const initialResults: TestPlanCaseResult[] = cases.map((testCase, index) => ({
+      case_id: testCase.case_id,
+      case_name: testCase.case_name,
+      case_type: 'ui_auto',
+      execution_status: index === 0 ? 'running' : 'queued',
+      result: '' as const,
+      duration_ms: 0,
+      executor_id: executor_id,
+      executor_name: executor.account_name || executor.username,
+    }));
+
+    // 🔥 调试日志：打印初始化顺序
+    console.log(`📋 [TestPlan] 初始化用例顺序:`, initialResults.map((r, idx) => ({
+      index: idx,
+      case_id: r.case_id,
+      case_name: r.case_name,
+      execution_status: r.execution_status
+    })));
+
+    // 初始化execution_results
+    await updateTestPlanExecution(execution.id, {
+      status: 'running',
+      execution_results: initialResults,
+    });
+
+    console.log(`📋 [TestPlan] 初始化 ${initialResults.length} 个用例到execution_results，第一个状态为running，其他为queued`);
+
     // 异步执行，不等待结果
     (async () => {
       try {
-        // 更新状态为执行中
-        await updateTestPlanExecution(execution.id, {
-          status: 'running',
-        });
-
         let completedCount = 0;
         let passedCount = 0;
         let failedCount = 0;
@@ -1190,7 +1239,8 @@ export async function startTestPlanExecution(
                 userId: String(executor_id),
                 executionEngine: executionEngine as 'mcp' | 'playwright',
                 enableTrace: enableTrace,
-                enableVideo: enableVideo
+                enableVideo: enableVideo,
+                planExecutionId: execution.id // 🔥 传递执行记录ID，用于同步execution_results
               }
             );
 
@@ -1366,7 +1416,10 @@ export async function updateTestPlanExecution(
   if (update.failed_cases !== undefined) data.failed_cases = update.failed_cases;
   if (update.blocked_cases !== undefined) data.blocked_cases = update.blocked_cases;
   if (update.skipped_cases !== undefined) data.skipped_cases = update.skipped_cases;
-  if (update.execution_results !== undefined) data.execution_results = update.execution_results;
+  if (update.execution_results !== undefined) {
+    // 🔥 修复：确保 execution_results 按 case_id 正序排序
+    data.execution_results = [...update.execution_results].sort((a, b) => a.case_id - b.case_id);
+  }
   if (update.error_message !== undefined) data.error_message = update.error_message; // null 也会被设置
   if (update.started_at !== undefined) data.started_at = update.started_at; // 支持更新开始时间
   if (update.finished_at !== undefined) data.finished_at = update.finished_at; // null 也会被设置
@@ -1377,7 +1430,8 @@ export async function updateTestPlanExecution(
 
   // 🔥 新增：根据 execution_results 自动计算并更新时间和耗时
   if (update.execution_results && update.execution_results.length > 0) {
-    const results = update.execution_results;
+    // 🔥 修复：确保 execution_results 按 case_id 正序排序
+    const results = [...update.execution_results].sort((a, b) => a.case_id - b.case_id);
     
     // 获取所有有效的开始时间，找出最早的
     const startTimes = results
@@ -1425,12 +1479,52 @@ export async function updateTestPlanExecution(
       data.duration_ms = totalDurationMs;
       console.log(`📊 [updateTestPlanExecution] 更新 duration_ms: ${totalDurationMs}ms`);
     }
+    
+    // 🔥 修复：根据 execution_results 自动计算进度
+    // 进度公式：进度 = (已完成用例数 + 0.5 * 正在执行用例数) / 总用例数 * 100
+    // 这样当第一个用例开始执行时，进度会立即从0%变为约25%（2条用例的情况）
+    if (update.progress === undefined) {
+      // 只有未传入progress时才自动计算
+      const totalCases = update.total_cases !== undefined ? update.total_cases : results.length;
+      const completedCases = results.filter(r => 
+        r.execution_status === 'completed' || 
+        r.execution_status === 'failed' || 
+        r.execution_status === 'cancelled' || 
+        r.execution_status === 'error' ||
+        (r.result && (r.result === 'pass' || r.result === 'fail' || r.result === 'block' || r.result === 'skip'))
+      ).length;
+      const runningCases = results.filter(r => r.execution_status === 'running').length;
+      
+      if (totalCases > 0) {
+        const calculatedProgress = Math.round(((completedCases + 0.5 * runningCases) / totalCases) * 100);
+        data.progress = calculatedProgress;
+        console.log(`📊 [updateTestPlanExecution] 自动计算进度: ${calculatedProgress}% (已完成: ${completedCases}, 执行中: ${runningCases}, 总计: ${totalCases})`);
+      }
+    }
   }
 
   const execution = await prisma.test_plan_executions.update({
     where: { id: executionId },
     data,
   });
+
+  // 🔥 修复：发送 WebSocket 广播，通知前端执行状态变化
+  try {
+    broadcastTestPlanExecutionUpdate(executionId, {
+      status: execution.status,
+      progress: execution.progress,
+      total_cases: execution.total_cases,
+      completed_cases: execution.completed_cases,
+      passed_cases: execution.passed_cases,
+      failed_cases: execution.failed_cases,
+      blocked_cases: execution.blocked_cases,
+      skipped_cases: execution.skipped_cases,
+      execution_results: execution.execution_results,
+    });
+  } catch (wsError) {
+    console.warn(`⚠️ [updateTestPlanExecution] WebSocket 广播失败:`, wsError);
+    // 不抛出错误，避免影响主流程
+  }
 
   // 🔥 如果执行状态变化（running/completed/failed/cancelled），自动更新测试计划状态
   if (update.status === 'running' || update.status === 'completed' || update.status === 'failed' || update.status === 'cancelled') {
@@ -1494,6 +1588,231 @@ export async function deleteTestPlanExecution(executionId: string): Promise<void
   await prisma.test_plan_executions.delete({
     where: { id: executionId },
   });
+}
+
+/**
+ * 🔥 重新执行测试计划执行记录（UI自动化）
+ * 重置结果并重新触发执行任务
+ */
+export async function reExecuteTestPlanExecution(
+  executionId: string,
+  executionConfig: {
+    environment?: string;
+    executionEngine?: 'mcp' | 'playwright';
+    enableTrace?: boolean;
+    enableVideo?: boolean;
+  },
+  testExecutionService?: TestExecutionService
+): Promise<void> {
+  console.log(`🔄 [TestPlan] 重新执行测试计划执行记录, executionId: ${executionId}`);
+  
+  // 获取执行记录
+  const execution = await prisma.test_plan_executions.findUnique({
+    where: { id: executionId },
+  });
+  
+  if (!execution) {
+    throw new Error('执行记录不存在');
+  }
+  
+  if (execution.execution_type !== 'ui_auto') {
+    throw new Error('只支持UI自动化执行记录的重新执行');
+  }
+  
+  // 从 execution_results 中获取用例列表
+  const executionResults = (execution.execution_results as TestPlanCaseResult[]) || [];
+  if (executionResults.length === 0) {
+    throw new Error('执行记录中没有用例');
+  }
+  
+  // 获取用例信息（从 test_plan_cases 表）
+  const caseIds = executionResults.map(r => r.case_id);
+  const cases = await prisma.test_plan_cases.findMany({
+    where: {
+      plan_id: execution.plan_id,
+      case_id: { in: caseIds },
+      case_type: 'ui_auto',
+    },
+    orderBy: { case_id: 'asc' },
+  });
+  
+  if (cases.length === 0) {
+    throw new Error('没有找到要执行的用例');
+  }
+  
+  // 获取执行配置
+  const execConfig = executionConfig || {};
+  const environment = execConfig.environment || 'staging';
+  const executionEngine = execConfig.executionEngine || 'mcp';
+  const enableTrace = execConfig.enableTrace !== undefined ? execConfig.enableTrace : false;
+  const enableVideo = execConfig.enableVideo !== undefined ? execConfig.enableVideo : false;
+  
+  console.log(`📋 [TestPlan] 重新执行配置:`, {
+    environment,
+    executionEngine,
+    enableTrace,
+    enableVideo
+  });
+  
+  // 重置执行结果为 queued 状态（已经在前端重置，这里确保状态正确）
+  // 如果提供了 testExecutionService，异步执行用例
+  if (testExecutionService) {
+    console.log(`🚀 [TestPlan] 开始异步重新执行UI自动化测试计划, 执行记录ID: ${execution.id}`);
+    
+    // 🔥 修复：在开始执行前，初始化所有用例到execution_results
+    // 第一个用例状态为running，其他为queued
+    const initialResults: TestPlanCaseResult[] = cases.map((testCase, index) => ({
+      case_id: testCase.case_id,
+      case_name: testCase.case_name,
+      case_type: 'ui_auto',
+      execution_status: index === 0 ? 'running' : 'queued',
+      result: '' as const,
+      duration_ms: 0,
+      executor_id: execution.executor_id,
+      executor_name: execution.executor_name,
+    }));
+
+    // 初始化execution_results
+    await updateTestPlanExecution(execution.id, {
+      status: 'running',
+      execution_results: initialResults,
+    });
+
+    console.log(`📋 [TestPlan] 重新执行：初始化 ${initialResults.length} 个用例到execution_results，第一个状态为running，其他为queued`);
+    
+    // 异步执行，不等待结果（复用 startTestPlanExecution 中的执行逻辑）
+    (async () => {
+      try {
+        let completedCount = 0;
+        let passedCount = 0;
+        let failedCount = 0;
+        let blockedCount = 0;
+        const results: TestPlanCaseResult[] = [];
+
+        // 逐个执行用例
+        for (const testCase of cases) {
+          try {
+            console.log(`🎬 [TestPlan] 执行用例: ${testCase.case_name} (ID: ${testCase.case_id})`);
+            
+            // 🔥 使用 executionConfig 中的配置执行用例
+            const runId = await testExecutionService.runTest(
+              testCase.case_id,
+              environment,
+              'standard',
+              {
+                userId: String(execution.executor_id),
+                executionEngine: executionEngine as 'mcp' | 'playwright',
+                enableTrace: enableTrace,
+                enableVideo: enableVideo,
+                planExecutionId: execution.id // 🔥 传递执行记录ID，用于队列分组
+              }
+            );
+
+            console.log(`✅ [TestPlan] 用例 ${testCase.case_name} 开始执行, runId: ${runId}`);
+            
+            // 🔥 等待执行完成并获取真实结果
+            const execResult = await waitForTestCompletion(runId);
+            
+            completedCount++;
+            
+            // 🔥 根据真实结果更新计数
+            if (execResult.result === 'pass') {
+              passedCount++;
+            } else if (execResult.result === 'fail') {
+              failedCount++;
+            } else if (execResult.result === 'block') {
+              blockedCount++;
+            }
+            
+            console.log(`✅ [TestPlan] 用例 ${testCase.case_name} 执行完成, 结果: ${execResult.result}, 耗时: ${execResult.duration_ms}ms`);
+            
+            // 🔥 修复：添加步骤统计数据，与功能测试保持一致
+            results.push({
+              case_id: testCase.case_id,
+              case_name: testCase.case_name,
+              case_type: 'ui_auto',
+              result: execResult.result,
+              duration_ms: execResult.duration_ms,
+              executed_at: new Date().toISOString(),
+              execution_id: runId, // 🔥 保存 runId 用于跳转到详细日志
+              // 🔥 新增：步骤统计数据
+              totalSteps: execResult.totalSteps,
+              passedSteps: execResult.passedSteps,
+              failedSteps: execResult.failedSteps,
+              blockedSteps: execResult.blockedSteps,
+              completedSteps: execResult.completedSteps,
+              started_at: execResult.started_at,
+              finished_at: execResult.finished_at,
+              executor_name: execResult.executor_name,
+              executor_id: execResult.executor_id,
+              // 🔥 新增：执行状态
+              execution_status: execResult.execution_status,
+            });
+
+            // 更新进度
+            const progress = Math.round((completedCount / cases.length) * 100);
+            await updateTestPlanExecution(execution.id, {
+              progress,
+              completed_cases: completedCount,
+              passed_cases: passedCount,
+              failed_cases: failedCount,
+              blocked_cases: blockedCount,
+              execution_results: results,
+            });
+          } catch (error) {
+            console.error(`❌ [TestPlan] 执行用例失败:`, error);
+            completedCount++;
+            failedCount++;
+            
+            results.push({
+              case_id: testCase.case_id,
+              case_name: testCase.case_name,
+              case_type: 'ui_auto',
+              result: 'fail',
+              error_message: error instanceof Error ? error.message : '执行失败',
+              duration_ms: 0,
+              executed_at: new Date().toISOString(),
+            });
+
+            // 更新进度
+            const progress = Math.round((completedCount / cases.length) * 100);
+            await updateTestPlanExecution(execution.id, {
+              progress,
+              completed_cases: completedCount,
+              passed_cases: passedCount,
+              failed_cases: failedCount,
+              blocked_cases: blockedCount,
+              execution_results: results,
+            });
+          }
+        }
+
+        // 执行完成，更新最终状态
+        const totalDuration = results.reduce((sum, r) => sum + (r.duration_ms || 0), 0);
+        await updateTestPlanExecution(execution.id, {
+          status: 'completed',
+          progress: 100,
+          finished_at: new Date(),
+          duration_ms: totalDuration,
+          execution_results: results,
+        });
+
+        // 🔥 更新测试计划状态
+        await updateTestPlanStatusFromLatestExecution(execution.plan_id);
+
+        console.log(`✅ [TestPlan] 测试计划重新执行完成, 执行记录ID: ${execution.id}`);
+      } catch (error) {
+        console.error(`❌ [TestPlan] 测试计划重新执行失败:`, error);
+        await updateTestPlanExecution(execution.id, {
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : '执行失败',
+          finished_at: new Date(),
+        });
+      }
+    })();
+  }
+  
+  console.log(`✅ [TestPlan] 重新执行请求已提交, executionId: ${executionId}`);
 }
 
 /**
@@ -1745,6 +2064,7 @@ export default {
   updateTestPlanCaseStatus,
   getTestPlanExecutionDetail,
   deleteTestPlanExecution,
+  reExecuteTestPlanExecution,
   updateTestPlanStatusFromLatestExecution,
 };
 

@@ -24,8 +24,9 @@ export type TestCaseType = 'functional' | 'ui_auto';
 
 /**
  * 执行结果
+ * 空字符串 '' 表示未执行
  */
-export type ExecutionResult = 'pass' | 'fail' | 'block' | 'skip';
+export type ExecutionResult = 'pass' | 'fail' | 'block' | 'skip' | '';
 
 /**
  * 执行状态
@@ -68,6 +69,7 @@ export interface TestPlan {
   latest_execution_passed_cases?: number; // 通过用例数（来自最新执行记录）
   latest_execution_failed_cases?: number; // 失败用例数（来自最新执行记录）
   latest_execution_blocked_cases?: number; // 阻塞用例数（来自最新执行记录）
+  latest_execution_skipped_cases?: number; // 跳过用例数（来自最新执行记录）
   latest_execution_status?: ExecutionStatus; // 最新执行状态
 }
 
@@ -206,8 +208,8 @@ export interface TestPlanCaseResult {
   failedSteps?: number;
   blockedSteps?: number;
   
-  // 🔥 新增：执行状态
-  execution_status?: 'running' | 'completed' | 'failed' | 'cancelled' | 'error' | 'queued';
+  // 🔥 新增：执行状态（pending 表示待执行）
+  execution_status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'error' | 'queued';
 }
 
 /**

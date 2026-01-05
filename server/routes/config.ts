@@ -183,6 +183,218 @@ router.post('/import', async (req, res) => {
   }
 });
 
+// 🔥 新增：获取厂商可用模型列表
+router.get('/available-models', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { modelId, apiKey, baseUrl: customBaseUrl } = req.query as { modelId: string; apiKey: string; baseUrl?: string };
+    
+    if (!modelId || !apiKey) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少必要参数: modelId 和 apiKey'
+      });
+    }
+
+    // 获取模型信息
+    const modelInfo = modelRegistry.getModelById(modelId);
+    if (!modelInfo) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的模型ID'
+      });
+    }
+
+    // 🔥 优先使用用户自定义的 baseUrl，否则使用模型默认配置
+    const baseUrl = customBaseUrl || modelInfo.customBaseUrl || 'https://openrouter.ai/api/v1';
+    console.log(`🔗 [后端] 使用API地址: ${baseUrl} (自定义: ${!!customBaseUrl})`);
+    
+    // 🔥 根据厂商确定正确的models端点
+    let modelsEndpoint = baseUrl + '/models';
+    
+    // DeepSeek使用预定义列表（其API不公开模型列表端点）
+    if (baseUrl.includes('api.deepseek.com')) {
+      console.log(`📋 [后端] DeepSeek使用预定义模型列表`);
+      const deepseekModels = [
+        { id: 'deepseek-v3', name: 'DeepSeek-V3', owned_by: 'DeepSeek' },
+        { id: 'deepseek-r1', name: 'DeepSeek-R1', owned_by: 'DeepSeek' },
+        { id: 'deepseek-chat', name: 'DeepSeek Chat', owned_by: 'DeepSeek' },
+        { id: 'deepseek-coder', name: 'DeepSeek Coder', owned_by: 'DeepSeek' },
+        { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)', owned_by: 'DeepSeek' },
+      ];
+      return res.json({
+        success: true,
+        data: {
+          models: deepseekModels,
+          provider: modelInfo.provider,
+          baseUrl,
+          count: deepseekModels.length
+        },
+        responseTime: Date.now() - startTime
+      });
+    }
+
+    // 月之暗面Kimi使用预定义列表（其API不公开模型列表端点）
+    if (baseUrl.includes('api.moonshot.cn')) {
+      console.log(`📋 [后端] 月之暗面使用预定义模型列表`);
+      const kimiModels = [
+        { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K', owned_by: '月之暗面' },
+        { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K', owned_by: '月之暗面' },
+        { id: 'moonshot-v1-128k', name: 'Moonshot V1 128K', owned_by: '月之暗面' },
+        { id: 'moonshot-v1-auto', name: 'Moonshot V1 Auto (自动选择)', owned_by: '月之暗面' },
+        { id: 'kimi-latest', name: 'Kimi Latest', owned_by: '月之暗面' },
+        { id: 'kimi-k2-0711-preview', name: 'Kimi K2 Preview', owned_by: '月之暗面' },
+      ];
+      return res.json({
+        success: true,
+        data: {
+          models: kimiModels,
+          provider: modelInfo.provider,
+          baseUrl,
+          count: kimiModels.length
+        },
+        responseTime: Date.now() - startTime
+      });
+    }
+
+    // 智谱AI使用不同的端点格式
+    if (baseUrl.includes('open.bigmodel.cn')) {
+      // 智谱AI的模型列表端点：直接返回预定义列表，因为其API不支持标准的/models端点
+      console.log(`📋 [后端] 智谱AI使用预定义模型列表`);
+      const zhipuModels = [
+        { id: 'glm-4', name: 'GLM-4', owned_by: '智谱AI' },
+        { id: 'glm-4-plus', name: 'GLM-4 Plus', owned_by: '智谱AI' },
+        { id: 'glm-4-air', name: 'GLM-4 Air', owned_by: '智谱AI' },
+        { id: 'glm-4-airx', name: 'GLM-4 AirX', owned_by: '智谱AI' },
+        { id: 'glm-4-long', name: 'GLM-4 Long', owned_by: '智谱AI' },
+        { id: 'glm-4-flash', name: 'GLM-4 Flash', owned_by: '智谱AI' },
+        { id: 'glm-4-flashx', name: 'GLM-4 FlashX', owned_by: '智谱AI' },
+        { id: 'glm-4v', name: 'GLM-4V (视觉)', owned_by: '智谱AI' },
+        { id: 'glm-4v-plus', name: 'GLM-4V Plus (视觉)', owned_by: '智谱AI' },
+        { id: 'glm-z1-air', name: 'GLM-Z1 Air (推理)', owned_by: '智谱AI' },
+        { id: 'glm-z1-airx', name: 'GLM-Z1 AirX (推理)', owned_by: '智谱AI' },
+        { id: 'glm-z1-flash', name: 'GLM-Z1 Flash (推理)', owned_by: '智谱AI' },
+        { id: 'codegeex-4', name: 'CodeGeeX-4 (代码)', owned_by: '智谱AI' },
+        { id: 'charglm-4', name: 'CharGLM-4 (角色扮演)', owned_by: '智谱AI' },
+        { id: 'emohaa', name: 'Emohaa (情感)', owned_by: '智谱AI' },
+      ];
+      return res.json({
+        success: true,
+        data: {
+          models: zhipuModels,
+          provider: modelInfo.provider,
+          baseUrl,
+          count: zhipuModels.length
+        },
+        responseTime: Date.now() - startTime
+      });
+    }
+    
+    console.log(`📋 [后端] 获取可用模型列表: ${modelInfo.name}`);
+    console.log(`📍 API端点: ${modelsEndpoint}`);
+
+    // 配置代理
+    const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+    const fetchOptions: any = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    // 只对 OpenRouter API 添加额外的识别头
+    if (!modelInfo.customBaseUrl) {
+      fetchOptions.headers['HTTP-Referer'] = 'https://Sakura AI-ai.com';
+      fetchOptions.headers['X-Title'] = 'Sakura AI AI Testing Platform';
+    }
+
+    if (proxyUrl) {
+      fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
+    }
+
+    // 发送请求获取模型列表
+    const response = await fetch(modelsEndpoint, fetchOptions);
+    const responseTime = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [后端] 获取模型列表失败: ${response.status}`);
+      console.error(`❌ 错误详情: ${errorText}`);
+      
+      return res.status(400).json({
+        success: false,
+        error: `获取模型列表失败 (${response.status})`,
+        responseTime
+      });
+    }
+
+    const data = await response.json();
+    
+    // 解析模型列表 (OpenAI 兼容格式)
+    let models: Array<{ id: string; name: string; owned_by?: string }> = [];
+    
+    if (data.data && Array.isArray(data.data)) {
+      // 标准 OpenAI 格式
+      models = data.data.map((m: any) => ({
+        id: m.id,
+        name: m.id, // 默认使用id作为名称
+        owned_by: m.owned_by || modelInfo.provider
+      }));
+    } else if (Array.isArray(data)) {
+      // 直接数组格式
+      models = data.map((m: any) => ({
+        id: typeof m === 'string' ? m : m.id,
+        name: typeof m === 'string' ? m : (m.name || m.id),
+        owned_by: modelInfo.provider
+      }));
+    }
+
+    // 🔥 根据厂商过滤模型列表，只显示该厂商自己的模型
+    const providerFilters: Record<string, (id: string) => boolean> = {
+      '阿里云': (id) => id.toLowerCase().startsWith('qwen') || id.toLowerCase().includes('qwen'),
+      'DeepSeek': (id) => id.toLowerCase().startsWith('deepseek') || id.toLowerCase().includes('deepseek'),
+      '月之暗面': (id) => id.toLowerCase().startsWith('moonshot') || id.toLowerCase().includes('kimi'),
+      '智谱AI': (id) => id.toLowerCase().startsWith('glm') || id.toLowerCase().includes('glm'),
+      'OpenRouter': () => true, // OpenRouter显示所有模型
+      'Zenmux': () => true, // Zenmux显示所有模型
+    };
+
+    const filterFn = providerFilters[modelInfo.provider];
+    if (filterFn) {
+      const originalCount = models.length;
+      models = models.filter(m => filterFn(m.id));
+      console.log(`🔍 [后端] 过滤 ${modelInfo.provider} 模型: ${originalCount} -> ${models.length}`);
+    }
+
+    // 按模型ID排序
+    models.sort((a, b) => a.id.localeCompare(b.id));
+
+    console.log(`✅ [后端] 获取到 ${models.length} 个可用模型 (${responseTime}ms)`);
+
+    res.json({
+      success: true,
+      data: {
+        models,
+        provider: modelInfo.provider,
+        baseUrl,
+        count: models.length
+      },
+      responseTime
+    });
+  } catch (error: any) {
+    const responseTime = Date.now() - startTime;
+    console.error('❌ [后端] 获取模型列表失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || '获取模型列表失败',
+      responseTime
+    });
+  }
+});
+
 // 测试配置连接
 router.post('/test-connection', async (req, res) => {
   const startTime = Date.now();
@@ -217,7 +429,11 @@ router.post('/test-connection', async (req, res) => {
     }
 
     const baseUrl = llmSettings.baseUrl || modelInfo.customBaseUrl || 'https://openrouter.ai/api/v1';
-    const model = llmSettings.selectedModelId || modelInfo.openRouterModel;
+    // 🔥 修复：优先使用用户选择的 customModelName，其次使用模型默认的 openRouterModel
+    const model = llmSettings.customModelName || modelInfo.openRouterModel;
+    // 🔥 检测 API 格式：ollama 或 openai（默认）
+    const apiFormat = modelInfo.apiFormat || 'openai';
+    const isOllamaFormat = apiFormat === 'ollama';
 
     // 🔥 获取模型的最大 tokens 限制
     const getMaxTokensLimit = (baseUrl: string): number => {
@@ -233,22 +449,39 @@ router.post('/test-connection', async (req, res) => {
     const maxTokensLimit = getMaxTokensLimit(baseUrl);
     const finalMaxTokens = Math.min(10, maxTokensLimit); // 测试只需要很少的tokens
 
-    console.log(`🧪 [后端] 测试连接: ${modelInfo.name}`);
-    console.log(`📍 API端点: ${baseUrl}/chat/completions`);
-    console.log(`🔑 API Key状态: ${llmSettings.apiKey ? '已设置' : '❌ 未设置'}`);
+    // 🔥 根据 API 格式确定端点和请求体
+    let apiEndpoint: string;
+    let requestBody: any;
 
-    // 构建测试请求
-    const requestBody = {
-      model: modelInfo.openRouterModel,
-      messages: [
-        {
-          role: 'user',
-          content: "Hello, this is a connection test. Please respond with 'OK'."
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: finalMaxTokens
-    };
+    if (isOllamaFormat) {
+      // Ollama 原生 API 格式
+      apiEndpoint = baseUrl + '/api/generate';
+      requestBody = {
+        model: model,
+        prompt: "Hello, this is a connection test. Please respond with 'OK'.",
+        stream: false
+      };
+    } else {
+      // OpenAI 兼容 API 格式
+      apiEndpoint = baseUrl + '/chat/completions';
+      requestBody = {
+        model: model,
+        messages: [
+          {
+            role: 'user',
+            content: "Hello, this is a connection test. Please respond with 'OK'."
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: finalMaxTokens
+      };
+    }
+
+    console.log(`🧪 [后端] 测试连接: ${modelInfo.name}`);
+    console.log(`📍 API端点: ${apiEndpoint}`);
+    console.log(`🔧 API格式: ${apiFormat}`);
+    console.log(`🤖 测试模型: ${model} (customModelName: ${llmSettings.customModelName || '未设置'}, 默认: ${modelInfo.openRouterModel})`);
+    console.log(`🔑 API Key状态: ${llmSettings.apiKey ? '已设置' : '❌ 未设置'}`);
 
     // 配置代理（如果环境变量中有配置）
     const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
@@ -256,14 +489,21 @@ router.post('/test-connection', async (req, res) => {
     const fetchOptions: any = {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${llmSettings.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
     };
 
+    // 🔥 Ollama 本地服务通常不需要认证，但如果设置了 apiKey 就添加
+    if (llmSettings.apiKey && !isOllamaFormat) {
+      fetchOptions.headers['Authorization'] = `Bearer ${llmSettings.apiKey}`;
+    } else if (llmSettings.apiKey && isOllamaFormat) {
+      // Ollama 也可能需要认证（如果配置了）
+      fetchOptions.headers['Authorization'] = `Bearer ${llmSettings.apiKey}`;
+    }
+
     // 只对 OpenRouter API 添加额外的识别头
-    if (!modelInfo.customBaseUrl) {
+    if (!modelInfo.customBaseUrl && !isOllamaFormat) {
       fetchOptions.headers['HTTP-Referer'] = 'https://Sakura AI-ai.com';
       fetchOptions.headers['X-Title'] = 'Sakura AI AI Testing Platform';
     }
@@ -275,14 +515,14 @@ router.post('/test-connection', async (req, res) => {
     }
 
     // 发送测试请求
-    const response = await fetch(baseUrl + '/chat/completions', fetchOptions);
+    const response = await fetch(apiEndpoint, fetchOptions);
     const responseTime = Date.now() - startTime;
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ [后端] AI API错误详情: ${errorText}`);
       console.error(`❌ 请求模型: ${model}`);
-      console.error(`❌ 请求URL: ${baseUrl}/chat/completions`);
+      console.error(`❌ 请求URL: ${apiEndpoint}`);
 
       let errorMessage = `API调用失败 (${response.status})`;
       
@@ -295,6 +535,10 @@ router.post('/test-connection', async (req, res) => {
         errorMessage = '服务器内部错误，请稍后重试';
       } else if (response.status === 403) {
         errorMessage = '访问被拒绝，请检查API密钥权限';
+      } else if (response.status === 404) {
+        errorMessage = isOllamaFormat 
+          ? 'Ollama 服务未找到，请确认 Ollama 正在运行且端口正确'
+          : 'API端点不存在，请检查 baseUrl 配置';
       } else {
         try {
           const errorData = JSON.parse(errorText);
@@ -313,20 +557,34 @@ router.post('/test-connection', async (req, res) => {
 
     const data = await response.json();
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      return res.status(400).json({
-        success: false,
-        error: 'API返回格式异常，请检查模型配置',
-        responseTime
-      });
+    // 🔥 根据 API 格式验证响应
+    if (isOllamaFormat) {
+      // Ollama 格式响应：{ response: string, model: string, ... }
+      if (!data.response) {
+        return res.status(400).json({
+          success: false,
+          error: 'Ollama API返回格式异常，请检查模型配置',
+          responseTime
+        });
+      }
+    } else {
+      // OpenAI 格式响应：{ choices: [{ message: { content: string } }] }
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        return res.status(400).json({
+          success: false,
+          error: 'API返回格式异常，请检查模型配置',
+          responseTime
+        });
+      }
     }
 
-    console.log(`✅ [后端] 连接测试成功: ${modelInfo.name} (${responseTime}ms)`);
+    console.log(`✅ [后端] 连接测试成功: ${modelInfo.name} - 模型: ${model} (${responseTime}ms)`);
 
     res.json({
       success: true,
       message: '连接测试成功',
       responseTime,
+      testedModel: model, // 🔥 返回实际测试的模型名称
       modelInfo: {
         name: modelInfo.name,
         provider: modelInfo.provider,

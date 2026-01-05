@@ -322,38 +322,71 @@ ${this.buildPageSummary(axureData)}
   private async callAI(systemPrompt: string, userPrompt: string, maxTokens: number): Promise<string> {
     const config = await this.getCurrentConfig();
 
+    // 🔥 检测 API 格式
+    const apiFormat = config.apiFormat || 'openai';
+    const isOllamaFormat = apiFormat === 'ollama';
+
     console.log(`   🚀 调用AI模型: ${config.model}`);
+    console.log(`   🔧 API格式: ${apiFormat}`);
 
     try {
-      const requestBody = {
-        model: config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2, // 预分析需要更稳定的输出
-        max_tokens: maxTokens
-      };
+      // 🔥 根据 API 格式构建不同的请求体和端点
+      let apiEndpoint: string;
+      let requestBody: any;
+
+      if (isOllamaFormat) {
+        // Ollama 原生 API 格式
+        apiEndpoint = config.baseUrl + '/api/generate';
+        requestBody = {
+          model: config.model,
+          prompt: `${systemPrompt}\n\n${userPrompt}`,
+          stream: false,
+          options: {
+            temperature: 0.2,
+            num_predict: maxTokens
+          }
+        };
+      } else {
+        // OpenAI 兼容 API 格式
+        apiEndpoint = config.baseUrl + '/chat/completions';
+        requestBody = {
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2, // 预分析需要更稳定的输出
+          max_tokens: maxTokens
+        };
+      }
 
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 
       const fetchOptions: any = {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'HTTP-Referer': 'https://Sakura AI-ai.com',
-          'X-Title': 'Sakura AI AI Testing Platform',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       };
+
+      // 🔥 添加认证头
+      if (config.apiKey) {
+        fetchOptions.headers['Authorization'] = `Bearer ${config.apiKey}`;
+      }
+
+      // OpenAI/OpenRouter 额外头部
+      if (!isOllamaFormat) {
+        fetchOptions.headers['HTTP-Referer'] = 'https://Sakura AI-ai.com';
+        fetchOptions.headers['X-Title'] = 'Sakura AI AI Testing Platform';
+      }
 
       if (proxyUrl) {
         console.log(`   🌐 使用代理: ${proxyUrl}`);
         fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
       }
 
-      const response = await fetch(config.baseUrl + '/chat/completions', fetchOptions);
+      const response = await fetch(apiEndpoint, fetchOptions);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -363,11 +396,20 @@ ${this.buildPageSummary(axureData)}
 
       const data = await response.json();
 
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('AI API返回格式异常');
+      // 🔥 根据 API 格式解析响应
+      let content: string;
+      if (isOllamaFormat) {
+        if (!data.response) {
+          throw new Error('Ollama API返回格式异常');
+        }
+        content = data.response;
+      } else {
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          throw new Error('AI API返回格式异常');
+        }
+        content = data.choices[0].message.content;
       }
 
-      const content = data.choices[0].message.content;
       console.log(`   ✅ AI响应成功 (${content.length}字符)`);
 
       return content;

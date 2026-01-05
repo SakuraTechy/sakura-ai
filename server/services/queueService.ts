@@ -21,6 +21,7 @@ interface QueueTask {
 export class QueueService extends EventEmitter {
   private globalQueue: PQueue;
   private userQueues: Map<string, PQueue>;
+  private planQueues: Map<string, PQueue>; // 🔥 新增：测试计划队列，确保同一计划的用例串行执行
   private activeTasks: Map<string, QueueTask>;
   private waitingTasks: Map<string, QueueTask>;
   private cancelSet: Set<string>;  // 🔥 修正：添加取消标记集合
@@ -35,6 +36,7 @@ export class QueueService extends EventEmitter {
       throwOnTimeout: true  // 🔥 修正：启用超时抛出
     });
     this.userQueues = new Map();
+    this.planQueues = new Map(); // 🔥 新增：初始化测试计划队列
     this.activeTasks = new Map();
     this.waitingTasks = new Map();
     this.cancelSet = new Set();
@@ -44,11 +46,18 @@ export class QueueService extends EventEmitter {
   async enqueue(task: QueueTask, executor: (task: QueueTask) => Promise<void>): Promise<void> {
     const userQueue = this.getUserQueue(task.userId);
     
+    // 🔥 新增：检查是否有 planExecutionId，如果有则使用测试计划队列（串行执行）
+    const planExecutionId = task.payload?.options?.planExecutionId;
+    const planQueue = planExecutionId ? this.getPlanQueue(planExecutionId) : null;
+    
     this.waitingTasks.set(task.id, task);
     this.emit('task_queued', task);
     
     return this.globalQueue.add(async () => {
-      return userQueue.add(async () => {
+      // 🔥 如果有测试计划队列，使用测试计划队列（串行执行），否则使用用户队列
+      const targetQueue = planQueue || userQueue;
+      
+      return targetQueue.add(async () => {
         // 检查是否已被取消
         if (this.cancelSet.has(task.id)) {
           throw new Error('Task cancelled');
@@ -128,6 +137,16 @@ export class QueueService extends EventEmitter {
       this.userQueues.set(userId, new PQueue({ concurrency: this.config.perUserLimit }));
     }
     return this.userQueues.get(userId)!;
+  }
+
+  // 🔥 新增：获取测试计划队列（串行执行，concurrency=1）
+  private getPlanQueue(planExecutionId: string): PQueue {
+    if (!this.planQueues.has(planExecutionId)) {
+      // 🔥 测试计划队列使用串行执行（concurrency=1），确保同一计划的用例不会并发执行
+      this.planQueues.set(planExecutionId, new PQueue({ concurrency: 1 }));
+      console.log(`📋 [QueueService] 创建测试计划队列: ${planExecutionId.substring(0, 8)}... (串行执行)`);
+    }
+    return this.planQueues.get(planExecutionId)!;
   }
 
   // 🔥 修正：使用历史数据计算等待时间

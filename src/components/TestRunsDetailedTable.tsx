@@ -517,14 +517,49 @@ export function TestRunsDetailedTable({
       //   return aTime - bTime;
       // },
       // defaultSortOrder: 'descend',
-      render: (startTime: Date) => (
-        <div className="flex items-center gap-1 text-sm text-gray-600">
-          {/* <Clock className="w-3.5 h-3.5 text-gray-400" /> */}
-          <span className="truncate">
-            {safeFormat(startTime, 'yyyy-MM-dd HH:mm:ss')}
-          </span>
-        </div>
-      ),
+      render: (startTime: Date, record: TableRowData) => {
+        // 🔥 修复：优先使用 actualStartedAt（用例实际开始执行时间），其次是 startedAt，最后才是 startTime
+        // 如果都没有，尝试从日志中提取开始时间
+        let displayTime: Date | null = null;
+        
+        // 优先使用 actualStartedAt
+        if ((record as any).actualStartedAt) {
+          displayTime = (record as any).actualStartedAt instanceof Date 
+            ? (record as any).actualStartedAt 
+            : new Date((record as any).actualStartedAt);
+        }
+        // 其次使用 startedAt
+        else if ((record as any).startedAt) {
+          displayTime = (record as any).startedAt instanceof Date 
+            ? (record as any).startedAt 
+            : new Date((record as any).startedAt);
+        }
+        // 最后使用 startTime
+        else if (startTime) {
+          displayTime = startTime instanceof Date ? startTime : new Date(startTime);
+        }
+        // 如果都没有，尝试从日志中提取
+        else if (record.logs && record.logs.length > 0) {
+          const sortedLogs = [...record.logs].sort((a, b) => {
+            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+            return timeA - timeB;
+          });
+          if (sortedLogs.length > 0) {
+            const firstLog = sortedLogs[0];
+            displayTime = firstLog.timestamp instanceof Date ? firstLog.timestamp : new Date(firstLog.timestamp);
+          }
+        }
+        
+        return (
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            {/* <Clock className="w-3.5 h-3.5 text-gray-400" /> */}
+            <span className="truncate">
+              {safeFormat(displayTime, 'yyyy-MM-dd HH:mm:ss')}
+            </span>
+          </div>
+        );
+      },
     },
     {
       title: '结束时间',

@@ -32,7 +32,7 @@ import cors from 'cors';
 import path from 'path';
 import { TestExecutionService } from './services/testExecution.js';
 import { SuiteExecutionService } from './services/suiteExecution.js';
-import { WebSocketManager } from './services/websocket.js';
+import { WebSocketManager, setGlobalWsManager } from './services/websocket.js';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { testRoutes } from './routes/test.js';
@@ -156,6 +156,9 @@ const server = createServer(app);
 // 初始化WebSocket服务器
 const wss = new WebSocketServer({ server });
 const wsManager = new WebSocketManager(wss);
+
+// 🔥 设置全局 WebSocketManager，让其他模块（如 testPlanService）可以使用
+setGlobalWsManager(wsManager);
 
 // 🔥 全局服务变量声明（将在startServer中初始化）
 let mcpClient: PlaywrightMcpClient;

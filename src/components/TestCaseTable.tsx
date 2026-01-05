@@ -364,7 +364,6 @@ export function TestCaseTable({
               <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '80px', minWidth: '80px' }}>
                 执行结果
               </th>
-              
               <th
                 className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 // onClick={() => handleSort('status')}
@@ -584,7 +583,7 @@ export function TestCaseTable({
                   {/* Success Rate */}
                   <td className="px-3 py-3 text-center">
                     {testCase.lastRun && testCase.lastRun !== '' && testCase.success_rate !== undefined && testCase.success_rate !== null ? (
-                      <span className="text-sm text-gray-900 font-medium">
+                      <span className="text-sm text-gray-800 font-medium">
                         {testCase.success_rate}%
                       </span>
                     ) : (
@@ -599,10 +598,12 @@ export function TestCaseTable({
                           'inline-flex px-2 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap',
                           (testCase as any).executionResult === 'pass' && 'bg-green-100 text-green-800 border-green-200',
                           (testCase as any).executionResult === 'fail' && 'bg-red-100 text-red-800 border-red-200',
+                          (testCase as any).executionResult === 'block' && 'bg-orange-100 text-orange-800 border-orange-200',
                           (testCase as any).executionResult === 'skip' && 'bg-gray-100 text-gray-800 border-gray-200'
                         )}>
                           {(testCase as any).executionResult === 'pass' && '通过'}
                           {(testCase as any).executionResult === 'fail' && '不通过'}
+                          {(testCase as any).executionResult === 'block' && '阻塞'}
                           {(testCase as any).executionResult === 'skip' && '跳过'}
                         </span>
                       ) : (
@@ -610,8 +611,6 @@ export function TestCaseTable({
                       )}
                     </div>
                   </td>
-                  
-                  
                   {/* Status */}
                   <td className="px-3 py-3 text-center">
                     <div className="flex items-center justify-center">
@@ -632,7 +631,7 @@ export function TestCaseTable({
                   </td>
                   {/* Created Time */}
                   <td className="px-3 py-3">
-                    <div className="flex items-center text-xs text-gray-500 ">
+                    <div className="flex items-center text-sm text-gray-600 ">
                       <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
                       <span className="truncate" title={formatDateTime(testCase.created)}>
                         {formatDateTime(testCase.created)}
@@ -642,7 +641,7 @@ export function TestCaseTable({
                   
                   {/* Updated Time */}
                   <td className="px-3 py-3">
-                    <div className="flex items-center text-xs text-gray-500">
+                    <div className="flex items-center text-sm text-gray-600">
                       <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
                       <span className="truncate" title={formatDateTime(testCase.updated)}>
                         {formatDateTime(testCase.updated)}
@@ -652,7 +651,7 @@ export function TestCaseTable({
 
                   {/* Last Run */}
                   <td className="px-3 py-3">
-                    <div className="flex items-center text-xs text-gray-500">
+                    <div className="flex items-center text-sm text-gray-600">
                       <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
                       <span className="truncate" title={testCase.lastRun || '-'}>
                         {testCase.lastRun || '-'}

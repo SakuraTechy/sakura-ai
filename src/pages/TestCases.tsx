@@ -1736,7 +1736,12 @@ export function TestCases() {
         // showToast.info(`✅ 测试开始执行: ${pendingTestCase.name}\n运行ID: ${response.runId}\n引擎: ${executionConfig.executionEngine === 'playwright' ? 'Playwright Test Runner' : 'MCP 客户端'}`);
         showToast.info(`✅ 开始执行: ${pendingTestCase.name}`);
         console.log('测试运行ID:', response.runId);
-        navigate(`/test-runs/${response.runId}/detail`);
+        navigate(`/test-runs/${response.runId}/detail`, {
+          state: { 
+            from: '/test-cases',
+            caseName: pendingTestCase.name 
+          }
+        });
       } catch (error: any) {
         setRunningTestId(null);
         throw new Error(error.message || '启动测试失败');
@@ -1955,11 +1960,24 @@ export function TestCases() {
     };
   };
 
+  const getStatusConfig = (executionResult: string | null | undefined): { color: string, text: string, icon: string } => {
+    switch (executionResult) {
+      case 'pass':
+        return { color: 'bg-green-100 text-green-800', text: '✓ 通过', icon: '✓' };
+      case 'fail':
+        return { color: 'bg-red-100 text-red-800', text: '✗ 失败', icon: '✗' };
+      case 'block':
+        return { color: 'bg-yellow-100 text-yellow-800', text: '⚠ 阻塞', icon: '⚠' };
+      default:
+        return { color: 'bg-gray-100 text-gray-800', text: '未知', icon: '' };
+    }
+  }
+
   return (
     <div className="space-y-6">
 
       {/* 🔥 新增：Tab切换 */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+      {/* <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="flex border-b border-gray-200">
           <button
             onClick={() => {
@@ -1978,11 +1996,11 @@ export function TestCases() {
           >
             <FileText className="h-5 w-5 mr-2" />
             测试用例
-            {/* <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+            <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
               {testCases.length}
-            </span> */}
+            </span>
           </button>
-          {/* <button
+          <button
             onClick={() => {
               if (showCreateModal) {
                 showToast.warning('请先关闭当前表单再切换');
@@ -2002,7 +2020,7 @@ export function TestCases() {
             <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
               {testSuites.length}
             </span>
-          </button> */}
+          </button>
           <button
             onClick={() => {
               if (showCreateModal) {
@@ -2020,351 +2038,12 @@ export function TestCases() {
           >
             <Activity className="h-5 w-5 mr-2" />
             测试执行
-            {/* <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+            <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
               {(testRunsStats?.running || 0) + (testRunsStats?.queued || 0) + (testRunsStats?.completed || 0) + (testRunsStats?.failed || 0)}
-            </span> */}
+            </span>
           </button>
         </div>
-      </div>
-
-      {/* 🔥 测试执行标签页：视图切换器 + 操作按钮 + 统计数据 + 搜索栏 */}
-      {activeTab === 'runs' && (
-        <>
-          {/* 视图切换器和操作按钮在同一行 */}
-          <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            {/* 视图切换器 */}
-            <div className="inline-flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
-              <button
-                onClick={() => setTestRunsViewMode('table')}
-                className={clsx(
-                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                  testRunsViewMode === 'table'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                )}
-                title="表格视图"
-              >
-                <Table2 className="w-4 h-4" />
-                <span className="hidden sm:inline">表格视图</span>
-              </button>
-              <button
-                onClick={() => setTestRunsViewMode('detailed')}
-                className={clsx(
-                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                  testRunsViewMode === 'detailed'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                )}
-                title="详细表格"
-              >
-                <Table2 className="w-4 h-4" />
-                <span className="hidden sm:inline">详细表格</span>
-              </button>
-              <button
-                onClick={() => setTestRunsViewMode('card')}
-                className={clsx(
-                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
-                  testRunsViewMode === 'card'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                )}
-                title="卡片视图"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                <span className="hidden sm:inline">卡片视图</span>
-              </button>
-            </div>
-            
-            {/* 操作按钮组 */}
-            <div className="flex gap-3">
-              <motion.button
-                whileHover={{ scale: ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0 ? 1.02 : 1 }}
-                whileTap={{ scale: ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0 ? 0.98 : 1 }}
-                onClick={() => testRunsStopAllRef.current?.()}
-                disabled={!testRunsStopAllRef.current || testRunsStoppingAll || ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0) === 0)}
-                className={clsx(
-                  "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium shadow-sm",
-                  testRunsStoppingAll
-                    ? "bg-orange-100 text-orange-700 cursor-not-allowed"
-                    : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                )}
-                title={
-                  testRunsStoppingAll
-                    ? "正在停止所有测试..."
-                    : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
-                    ? `停止所有运行中的测试 (${(testRunsStats?.running || 0) + (testRunsStats?.queued || 0)}个)`
-                    : "当前没有正在运行的测试"
-                }
-              >
-                {testRunsStoppingAll ? (
-                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <StopCircle className="h-5 w-5 mr-2" />
-                )}
-                {testRunsStoppingAll
-                  ? '停止中...'
-                  : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
-                  ? `停止所有 (${(testRunsStats?.running || 0) + (testRunsStats?.queued || 0)})`
-                  : '停止所有'
-                }
-              </motion.button>
-            </div>
-          </div>
-
-          {/* 统计数据栏 */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center">
-                <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse mr-2"></div>
-                <div className="text-sm font-medium text-gray-600">执行中</div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.running || 0}</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center">
-                <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2"></div>
-                <div className="text-sm font-medium text-gray-600">队列中</div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.queued || 0}</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center">
-                <div className="h-3 w-3 bg-green-500 rounded-full mr-2"></div>
-                <div className="text-sm font-medium text-gray-600">已完成</div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.completed || 0}</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center">
-                <div className="h-3 w-3 bg-red-500 rounded-full mr-2"></div>
-                <div className="text-sm font-medium text-gray-600">失败</div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.failed || 0}</div>
-            </div>
-          </div>
-
-          {/* 搜索栏 - 参考FilterBar设计 */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <div className="flex items-center gap-3">
-            {/* Main Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="搜索测试用例ID或名称..."
-                value={runsSearchTerm}
-                onChange={(e) => setRunsSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    // 可以在这里触发搜索
-                  }
-                }}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg 
-                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 
-                     transition-all duration-200"
-              />
-            </div>
-
-            {/* Quick Filters */}
-            <select
-              value={runsSystemFilter}
-              onChange={(e) => setRunsSystemFilter(e.target.value)}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">所有项目</option>
-              {systemOptions.map(sys => (
-                <option key={sys.id} value={sys.name}>{sys.name}</option>
-              ))}
-            </select>
-
-            {/* 版本筛选 - 依赖于项目选择 */}
-            <select
-              value={runsVersionFilter}
-              onChange={(e) => setRunsVersionFilter(e.target.value)}
-              disabled={!runsSystemFilter || runsFilterOptions.versions.length === 0}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="">{!runsSystemFilter ? '请先选择项目' : '所有版本'}</option>
-              {runsFilterOptions.versions.map(version => (
-                <option key={version} value={version}>{version}</option>
-              ))}
-            </select>
-
-            <select
-              value={runsModuleFilter}
-              onChange={(e) => setRunsModuleFilter(e.target.value)}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">所有模块</option>
-              {runsFilterOptions.modules.map(module => (
-                <option key={module} value={module}>{module}</option>
-              ))}
-            </select>
-
-            <select
-              value={runsStatusFilter}
-              onChange={(e) => setRunsStatusFilter(e.target.value)}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">所有状态</option>
-              <option value="running">执行中</option>
-              <option value="completed">已完成</option>
-              <option value="failed">失败</option>
-              <option value="queued">队列中</option>
-              <option value="cancelled">已取消</option>
-            </select>
-
-            {/* 🆕 执行结果筛选 */}
-            <select
-              value={runsResultFilter}
-              onChange={(e) => setRunsResultFilter(e.target.value)}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">所有结果</option>
-              <option value="pass">✅ 通过</option>
-              <option value="fail">❌ 失败</option>
-              <option value="block">🚫 阻塞</option>
-              <option value="skip">⏭️ 跳过</option>
-            </select>
-            {/* 🆕 优先级筛选（从高级筛选面板移到主搜索栏） */}
-            {/* <select
-              value={runsPriorityFilter}
-              onChange={(e) => setRunsPriorityFilter(e.target.value)}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">所有优先级</option>
-              <option value="high">高</option>
-              <option value="medium">中</option>
-              <option value="low">低</option>
-            </select> */}
-            {/* Actions */}
-            <button
-              onClick={() => setRunsShowAdvanced(!runsShowAdvanced)}
-              className={clsx(
-                'inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                runsShowAdvanced
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              )}
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              筛选
-            </button>
-
-            <button
-              onClick={() => {
-                setRunsSearchTerm('');
-                setRunsStatusFilter('');
-                setRunsResultFilter('');  // 🆕 重置执行结果筛选
-                setRunsExecutorFilter('');
-                setRunsEnvironmentFilter('');
-                setRunsSystemFilter('');
-                setRunsVersionFilter('');
-                setRunsModuleFilter('');
-                setRunsTagFilter('');
-                setRunsPriorityFilter('');
-              }}
-              className="inline-flex items-center px-4 py-2.5 text-gray-600 hover:text-gray-900
-                   border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
-            >
-              <X className="w-4 h-4 mr-2" />
-              重置
-            </button>
-
-            {/* 🔥 刷新数据按钮 - 放在重置按钮后面 */}
-            {testRunsRefreshRef.current && (
-              <button
-                type="button"
-                onClick={() => testRunsRefreshRef.current?.()}
-                className="inline-flex items-center px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                刷新
-              </button>
-            )}
-          </div>
-
-          {/* Advanced Filters */}
-          <AnimatePresence>
-            {runsShowAdvanced && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="pt-2 mt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-gray-500">标签</label>
-                    <select
-                      value={runsTagFilter}
-                      onChange={(e) => setRunsTagFilter(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="">所有标签</option>
-                      {runsFilterOptions.tags.map(tag => (
-                        <option key={tag} value={tag}>{tag}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-gray-500">优先级</label>
-                    <select
-                      value={runsPriorityFilter}
-                      onChange={(e) => setRunsPriorityFilter(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="">所有优先级</option>
-                      <option value="high">高</option>
-                      <option value="medium">中</option>
-                      <option value="low">低</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-gray-500">环境</label>
-                    <select
-                      value={runsEnvironmentFilter}
-                      onChange={(e) => setRunsEnvironmentFilter(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="">所有环境</option>
-                      {runsFilterOptions.environments.map(env => (
-                        <option key={env} value={env}>{env}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-gray-500">执行者</label>
-                    <select
-                      value={runsExecutorFilter}
-                      onChange={(e) => setRunsExecutorFilter(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
-                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="">所有执行者</option>
-                      {runsFilterOptions.executors.map(executor => (
-                        <option key={executor} value={executor}>{executor}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          </div>
-        </>
-      )}
+      </div> */}
 
       {/* 🔥 测试用例标签页：顶部行（视图切换器 + 操作按钮） */}
       {activeTab === 'cases' && (
@@ -2384,7 +2063,7 @@ export function TestCases() {
               <Table2 className="w-4 h-4" />
               <span className="hidden sm:inline">表格视图</span>
             </button>
-            <button
+            {/* <button
               onClick={() => setTestCasesViewMode('detailed')}
               className={clsx(
                 'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
@@ -2396,7 +2075,7 @@ export function TestCases() {
             >
               <Table2 className="w-4 h-4" />
               <span className="hidden sm:inline">详细表格</span>
-            </button>
+            </button> */}
             <button
               onClick={() => setTestCasesViewMode('card')}
               className={clsx(
@@ -2858,6 +2537,345 @@ export function TestCases() {
         </div>
       )}
 
+      {/* 🔥 测试执行标签页：视图切换器 + 操作按钮 + 统计数据 + 搜索栏 */}
+      {activeTab === 'runs' && (
+        <>
+          {/* 视图切换器和操作按钮在同一行 */}
+          <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* 视图切换器 */}
+            <div className="inline-flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
+              <button
+                onClick={() => setTestRunsViewMode('table')}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  testRunsViewMode === 'table'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+                title="表格视图"
+              >
+                <Table2 className="w-4 h-4" />
+                <span className="hidden sm:inline">表格视图</span>
+              </button>
+              <button
+                onClick={() => setTestRunsViewMode('detailed')}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  testRunsViewMode === 'detailed'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+                title="详细表格"
+              >
+                <Table2 className="w-4 h-4" />
+                <span className="hidden sm:inline">详细表格</span>
+              </button>
+              <button
+                onClick={() => setTestRunsViewMode('card')}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+                  testRunsViewMode === 'card'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+                title="卡片视图"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">卡片视图</span>
+              </button>
+            </div>
+            
+            {/* 操作按钮组 */}
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0 ? 1.02 : 1 }}
+                whileTap={{ scale: ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0 ? 0.98 : 1 }}
+                onClick={() => testRunsStopAllRef.current?.()}
+                disabled={!testRunsStopAllRef.current || testRunsStoppingAll || ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0) === 0)}
+                className={clsx(
+                  "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium shadow-sm",
+                  testRunsStoppingAll
+                    ? "bg-orange-100 text-orange-700 cursor-not-allowed"
+                    : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                )}
+                title={
+                  testRunsStoppingAll
+                    ? "正在停止所有测试..."
+                    : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
+                    ? `停止所有运行中的测试 (${(testRunsStats?.running || 0) + (testRunsStats?.queued || 0)}个)`
+                    : "当前没有正在运行的测试"
+                }
+              >
+                {testRunsStoppingAll ? (
+                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <StopCircle className="h-5 w-5 mr-2" />
+                )}
+                {testRunsStoppingAll
+                  ? '停止中...'
+                  : ((testRunsStats?.running || 0) + (testRunsStats?.queued || 0)) > 0
+                  ? `停止所有 (${(testRunsStats?.running || 0) + (testRunsStats?.queued || 0)})`
+                  : '停止所有'
+                }
+              </motion.button>
+            </div>
+          </div>
+
+          {/* 统计数据栏 */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse mr-2"></div>
+                <div className="text-sm font-medium text-gray-600">执行中</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.running || 0}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2"></div>
+                <div className="text-sm font-medium text-gray-600">队列中</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.queued || 0}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <div className="h-3 w-3 bg-green-500 rounded-full mr-2"></div>
+                <div className="text-sm font-medium text-gray-600">已完成</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.completed || 0}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <div className="h-3 w-3 bg-red-500 rounded-full mr-2"></div>
+                <div className="text-sm font-medium text-gray-600">失败</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-2">{testRunsStats?.failed || 0}</div>
+            </div>
+          </div>
+
+          {/* 搜索栏 - 参考FilterBar设计 */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <div className="flex items-center gap-3">
+            {/* Main Search */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜索测试用例ID或名称..."
+                value={runsSearchTerm}
+                onChange={(e) => setRunsSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // 可以在这里触发搜索
+                  }
+                }}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg 
+                     focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 
+                     transition-all duration-200"
+              />
+            </div>
+
+            {/* Quick Filters */}
+            <select
+              value={runsSystemFilter}
+              onChange={(e) => setRunsSystemFilter(e.target.value)}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">所有项目</option>
+              {systemOptions.map(sys => (
+                <option key={sys.id} value={sys.name}>{sys.name}</option>
+              ))}
+            </select>
+
+            {/* 版本筛选 - 依赖于项目选择 */}
+            <select
+              value={runsVersionFilter}
+              onChange={(e) => setRunsVersionFilter(e.target.value)}
+              disabled={!runsSystemFilter || runsFilterOptions.versions.length === 0}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">{!runsSystemFilter ? '请先选择项目' : '所有版本'}</option>
+              {runsFilterOptions.versions.map(version => (
+                <option key={version} value={version}>{version}</option>
+              ))}
+            </select>
+
+            <select
+              value={runsModuleFilter}
+              onChange={(e) => setRunsModuleFilter(e.target.value)}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">所有模块</option>
+              {runsFilterOptions.modules.map(module => (
+                <option key={module} value={module}>{module}</option>
+              ))}
+            </select>
+
+            <select
+              value={runsStatusFilter}
+              onChange={(e) => setRunsStatusFilter(e.target.value)}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">所有状态</option>
+              <option value="running">执行中</option>
+              <option value="completed">已完成</option>
+              <option value="failed">失败</option>
+              <option value="queued">队列中</option>
+              <option value="cancelled">已取消</option>
+            </select>
+
+            {/* 🆕 执行结果筛选 */}
+            <select
+              value={runsResultFilter}
+              onChange={(e) => setRunsResultFilter(e.target.value)}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">所有结果</option>
+              <option value="pass">✅ 通过</option>
+              <option value="fail">❌ 失败</option>
+              <option value="block">🚫 阻塞</option>
+              <option value="skip">⏭️ 跳过</option>
+            </select>
+            {/* 🆕 优先级筛选（从高级筛选面板移到主搜索栏） */}
+            {/* <select
+              value={runsPriorityFilter}
+              onChange={(e) => setRunsPriorityFilter(e.target.value)}
+              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                   focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">所有优先级</option>
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select> */}
+            {/* Actions */}
+            <button
+              onClick={() => setRunsShowAdvanced(!runsShowAdvanced)}
+              className={clsx(
+                'inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                runsShowAdvanced
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              )}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              筛选
+            </button>
+
+            <button
+              onClick={() => {
+                setRunsSearchTerm('');
+                setRunsStatusFilter('');
+                setRunsResultFilter('');  // 🆕 重置执行结果筛选
+                setRunsExecutorFilter('');
+                setRunsEnvironmentFilter('');
+                setRunsSystemFilter('');
+                setRunsVersionFilter('');
+                setRunsModuleFilter('');
+                setRunsTagFilter('');
+                setRunsPriorityFilter('');
+              }}
+              className="inline-flex items-center px-4 py-2.5 text-gray-600 hover:text-gray-900
+                   border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <X className="w-4 h-4 mr-2" />
+              重置
+            </button>
+
+            {/* 🔥 刷新数据按钮 - 放在重置按钮后面 */}
+            {testRunsRefreshRef.current && (
+              <button
+                type="button"
+                onClick={() => testRunsRefreshRef.current?.()}
+                className="inline-flex items-center px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                刷新
+              </button>
+            )}
+          </div>
+
+          {/* Advanced Filters */}
+          <AnimatePresence>
+            {runsShowAdvanced && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-2 mt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500">标签</label>
+                    <select
+                      value={runsTagFilter}
+                      onChange={(e) => setRunsTagFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">所有标签</option>
+                      {runsFilterOptions.tags.map(tag => (
+                        <option key={tag} value={tag}>{tag}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500">优先级</label>
+                    <select
+                      value={runsPriorityFilter}
+                      onChange={(e) => setRunsPriorityFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">所有优先级</option>
+                      <option value="high">高</option>
+                      <option value="medium">中</option>
+                      <option value="low">低</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500">环境</label>
+                    <select
+                      value={runsEnvironmentFilter}
+                      onChange={(e) => setRunsEnvironmentFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">所有环境</option>
+                      {runsFilterOptions.environments.map(env => (
+                        <option key={env} value={env}>{env}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500">执行者</label>
+                    <select
+                      value={runsExecutorFilter}
+                      onChange={(e) => setRunsExecutorFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm
+                           focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">所有执行者</option>
+                      {runsFilterOptions.executors.map(executor => (
+                        <option key={executor} value={executor}>{executor}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          </div>
+        </>
+      )}
+
       {/* 🔥 Tab内容区域 */}
       {activeTab === 'cases' ? (
         <>
@@ -3005,10 +3023,15 @@ export function TestCases() {
 
                           {/* 系统/模块 */}
                           {(testCase.system || testCase.module) && (
-                            <div className="flex items-center gap-2 mb-3 text-sm">
+                            <div className="flex items-center justify-between gap-2 mb-3 text-sm">
                               {testCase.system && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                   {testCase.system}
+                                </span>
+                              )}
+                              {testCase.projectVersion && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  {testCase.projectVersion}
                                 </span>
                               )}
                               {testCase.module && (
@@ -3016,11 +3039,32 @@ export function TestCases() {
                                   {testCase.module}
                                 </span>
                               )}
+                              {testCase.tags && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  {testCase.tags}
+                                </span>
+                              )}
+                              {testCase.status && (
+                                <span className={clsx(
+                                  'inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
+                                  getPriorityColor(testCase.priority)
+                                )}>
+                                  {testCase.priority === 'high' ? '高' : testCase.priority === 'medium' ? '中' : '低'}
+                                </span>
+                              )}
+                              {testCase.status && (
+                                <span className={clsx(
+                                  'inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
+                                  getStatusColor(testCase.status)
+                                )}>
+                                  {testCase.status === 'active' ? '启用' : testCase.status === 'draft' ? '草稿' : '禁用'}
+                                </span>
+                              )}
                             </div>
                           )}
 
                           {/* 标签 */}
-                          {testCase.tags && testCase.tags.length > 0 && (
+                          {/* {testCase.tags && testCase.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mb-3">
                               {testCase.tags.slice(0, 3).map((tag, tagIndex) => (
                                 <span
@@ -3037,23 +3081,31 @@ export function TestCases() {
                                 </span>
                               )}
                             </div>
-                          )}
+                          )} */}
 
                           {/* 状态和优先级 */}
-                          <div className="flex items-center justify-between mb-4">
+                          {/* <div className="flex items-center justify-between mb-4">
                             <span className={clsx(
                               'inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
                               getPriorityColor(testCase.priority)
                             )}>
                               {testCase.priority === 'high' ? '高' : testCase.priority === 'medium' ? '中' : '低'}
                             </span>
+                            {(testCase as any).executionResult && (
+                              <span className={clsx(
+                                'inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
+                                getStatusConfig((testCase as any).executionResult)?.color
+                              )}>
+                                {getStatusConfig((testCase as any).executionResult).text}
+                              </span>
+                            )}
                             <span className={clsx(
                               'inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
                               getStatusColor(testCase.status)
                             )}>
                               {testCase.status === 'active' ? '启用' : testCase.status === 'draft' ? '草稿' : '禁用'}
                             </span>
-                          </div>
+                          </div> */}
 
                           {/* 成功率（如果有） */}
                           {testCase.success_rate !== undefined && testCase.success_rate !== null && (
@@ -3349,8 +3401,6 @@ export function TestCases() {
           )}
         </>
       ) : null}
-
-
 
       {/* Create/Edit Modal */}
       <Modal
@@ -3912,7 +3962,6 @@ export function TestCases() {
           </div>
         )}
       </Modal>
-
       
       {/* 🔥 执行配置对话框 */}
       <Modal
@@ -4149,7 +4198,6 @@ export function TestCases() {
         ]}
         useSet={false}
       />
-
     </div>
   );
 }

@@ -414,6 +414,97 @@ export class AITestParser {
   }
 
   /**
+   * 获取详细的模型配置信息（异步版本，用于详细日志）
+   */
+  public async getDetailedModelInfoAsync(): Promise<{
+    modelName: string;
+    modelId: string;
+    provider: string;
+    mode: string;
+    baseUrl: string;
+    apiModel: string;
+    apiKeyStatus: string;
+    temperature: number;
+    maxTokens: number;
+    costLevel: string;
+    capabilities: string[];
+    apiFormat: 'openai' | 'ollama';
+    isInitialized: boolean;
+  }> {
+    // 确保配置管理器已初始化
+    if (this.useConfigManager) {
+      try {
+        if (!this.configManager.isReady()) {
+          console.log('⏳ 配置管理器未就绪，开始初始化...');
+          try {
+            await Promise.race([
+              this.initializeConfigManager(),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('配置管理器初始化超时')), 5000)
+              )
+            ]);
+          } catch (error) {
+            console.warn('⚠️ 配置管理器初始化失败，使用回退方案:', error);
+          }
+        }
+
+        if (this.configManager.isReady()) {
+          const summary = this.configManager.getConfigSummary();
+          const config = this.configManager.getCurrentConfig();
+          
+          if (summary && summary.modelName && summary.modelName !== '未初始化') {
+            return {
+              modelName: summary.modelName,
+              modelId: summary.modelId,
+              provider: summary.provider,
+              mode: '配置管理器模式',
+              baseUrl: config.baseUrl,
+              apiModel: config.model,
+              apiKeyStatus: config.apiKey ? `已设置 (${config.apiKey.slice(0, 8)}...)` : '未设置',
+              temperature: summary.temperature,
+              maxTokens: summary.maxTokens,
+              costLevel: summary.costLevel,
+              capabilities: summary.capabilities,
+              apiFormat: config.apiFormat || 'openai',
+              isInitialized: summary.isInitialized
+            };
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ 获取配置管理器详细信息失败:', error);
+      }
+    }
+
+    // 回退方案：从实际配置中获取模型信息
+    const config = this.legacyConfig || {
+      model: process.env.DEFAULT_MODEL || 'openai/gpt-4o',
+      baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY || '',
+      temperature: parseFloat(process.env.DEFAULT_TEMPERATURE || '0.3'),
+      maxTokens: parseInt(process.env.DEFAULT_MAX_TOKENS || '4000'),
+      apiFormat: 'openai' as const
+    };
+    
+    const provider = this.parseProviderFromModel(config.model);
+    
+    return {
+      modelName: config.model,
+      modelId: config.model,
+      provider: provider,
+      mode: this.useConfigManager ? '配置管理器模式（未就绪）' : '传统模式',
+      baseUrl: config.baseUrl,
+      apiModel: config.model,
+      apiKeyStatus: config.apiKey ? `已设置 (${config.apiKey.slice(0, 8)}...)` : '未设置',
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      costLevel: '未知',
+      capabilities: [],
+      apiFormat: config.apiFormat || 'openai',
+      isInitialized: false
+    };
+  }
+
+  /**
    * 基于MCP快照和用例描述，AI解析为可执行的步骤
    */
   async parseTestDescription(description: string, testName: string, runId: string, snapshot: any | null): Promise<AIParseResult> {
@@ -753,16 +844,30 @@ export class AITestParser {
       }
       
       if (cachedCommand) {
-        this.cacheStats.operationHits++;
-        console.log(`⚡ 使用缓存的操作解析结果，跳过AI调用`);
-        if (logCallback) {
-          logCallback(`⚡ 使用缓存的解析结果 (命中${this.cacheStats.operationHits}次)`, 'info');
+        // 🔥 修复：验证缓存的命令是否有效，过滤掉error类型的无效缓存
+        const invalidCommands = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
+        if (invalidCommands.includes(cachedCommand.name?.toLowerCase() || '')) {
+          console.log(`⚠️ 检测到无效的缓存命令 (name=${cachedCommand.name})，跳过缓存，重新AI解析`);
+          if (logCallback) {
+            logCallback(`⚠️ 缓存命令无效，重新AI解析`, 'warning');
+          }
+          // 从缓存中删除无效条目
+          this.operationCache.delete(cacheKey);
+          if (this.enablePersistence) {
+            this.deleteOperationCacheFromDatabase(cacheKey).catch(() => {});
+          }
+        } else {
+          this.cacheStats.operationHits++;
+          console.log(`⚡ 使用缓存的操作解析结果，跳过AI调用`);
+          if (logCallback) {
+            logCallback(`⚡ 使用缓存的解析结果 (命中${this.cacheStats.operationHits}次)`, 'info');
+          }
+          // 异步更新命中统计
+          if (this.enablePersistence) {
+            this.updateOperationHitCount(cacheKey).catch(() => {});
+          }
+          return cachedCommand;
         }
-        // 异步更新命中统计
-        if (this.enablePersistence) {
-          this.updateOperationHitCount(cacheKey).catch(() => {});
-        }
-        return cachedCommand;
       }
       
       this.cacheStats.operationMisses++;
@@ -781,8 +886,14 @@ export class AITestParser {
 
       console.log(`✅ AI操作解析成功: ${mcpCommand.name}`);
       
-      // 🔥 将结果存入缓存（L1内存 + L2数据库）
-      await this.setOperationCache(cacheKey, mcpCommand, stepDescription, pageElementsStr);
+      // 🔥 修复：验证命令有效性，只缓存有效命令
+      const invalidCommands = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
+      if (!invalidCommands.includes(mcpCommand.name?.toLowerCase() || '')) {
+        // 🔥 将结果存入缓存（L1内存 + L2数据库）
+        await this.setOperationCache(cacheKey, mcpCommand, stepDescription, pageElementsStr);
+      } else {
+        console.log(`⚠️ 检测到无效的AI解析结果 (name=${mcpCommand.name})，跳过缓存`);
+      }
       
       return mcpCommand;
 
@@ -1688,27 +1799,55 @@ ${elementsContext}
     const currentConfig = await this.getCurrentConfig();
     const modelInfo = this.getCurrentModelInfo();
 
+    // 🔥 检测 API 格式
+    const apiFormat = currentConfig.apiFormat || 'openai';
+    const isOllamaFormat = apiFormat === 'ollama';
+
     console.log(`🚀 调用AI模型: ${modelInfo.modelName} (${mode}模式)`);
     console.log(`   模型标识: ${currentConfig.model}`);
+    console.log(`   API格式: ${apiFormat}`);
     console.log(`   温度: ${currentConfig.temperature}, 最大令牌: ${currentConfig.maxTokens}`);
     console.log(`   运行模式: ${modelInfo.mode}`);
 
     try {
-      const requestBody = {
-        model: currentConfig.model,
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPromptByMode(mode)
-          },
-          {
-            role: 'user',
-            content: userPrompt  // 🔥 具体任务和上下文
+      // 🔥 根据 API 格式构建不同的请求体和端点
+      let apiEndpoint: string;
+      let requestBody: any;
+      
+      const systemPrompt = this.getSystemPromptByMode(mode);
+
+      if (isOllamaFormat) {
+        // Ollama 原生 API 格式
+        apiEndpoint = currentConfig.baseUrl + '/api/generate';
+        // Ollama 不支持 messages 格式，需要将 system prompt 和 user prompt 合并
+        requestBody = {
+          model: currentConfig.model,
+          prompt: `${systemPrompt}\n\n${userPrompt}`,
+          stream: false,
+          options: {
+            temperature: currentConfig.temperature,
+            num_predict: currentConfig.maxTokens
           }
-        ],
-        temperature: currentConfig.temperature,
-        max_tokens: currentConfig.maxTokens
-      };
+        };
+      } else {
+        // OpenAI 兼容 API 格式
+        apiEndpoint = currentConfig.baseUrl + '/chat/completions';
+        requestBody = {
+          model: currentConfig.model,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: userPrompt  // 🔥 具体任务和上下文
+            }
+          ],
+          temperature: currentConfig.temperature,
+          max_tokens: currentConfig.maxTokens
+        };
+      }
 
       // 配置代理（如果环境变量中有配置）
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
@@ -1716,20 +1855,28 @@ ${elementsContext}
       const fetchOptions: any = {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${currentConfig.apiKey}`,
-          'HTTP-Referer': 'https://Sakura AI-ai.com',
-          'X-Title': 'Sakura AI AI Testing Platform',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       };
+
+      // 🔥 添加认证头（Ollama 本地通常不需要，但保留支持）
+      if (currentConfig.apiKey) {
+        fetchOptions.headers['Authorization'] = `Bearer ${currentConfig.apiKey}`;
+      }
+
+      // OpenAI/OpenRouter 额外头部
+      if (!isOllamaFormat) {
+        fetchOptions.headers['HTTP-Referer'] = 'https://Sakura AI-ai.com';
+        fetchOptions.headers['X-Title'] = 'Sakura AI AI Testing Platform';
+      }
 
       // 如果配置了代理，使用 undici 的 ProxyAgent
       if (proxyUrl) {
         fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
       }
 
-      const response = await fetch(currentConfig.baseUrl + '/chat/completions', fetchOptions);
+      const response = await fetch(apiEndpoint, fetchOptions);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1738,11 +1885,21 @@ ${elementsContext}
 
       const data = await response.json();
 
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error(`AI API返回格式异常: ${JSON.stringify(data)}`);
+      // 🔥 根据 API 格式解析响应
+      let content: string;
+      if (isOllamaFormat) {
+        // Ollama 格式响应：{ response: string, ... }
+        if (!data.response) {
+          throw new Error(`Ollama API返回格式异常: ${JSON.stringify(data)}`);
+        }
+        content = data.response;
+      } else {
+        // OpenAI 格式响应：{ choices: [{ message: { content: string } }] }
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          throw new Error(`AI API返回格式异常: ${JSON.stringify(data)}`);
+        }
+        content = data.choices[0].message.content;
       }
-
-      const content = data.choices[0].message.content;
 
       if (!content || content.trim() === '') {
         throw new Error('AI返回空响应');
@@ -2498,6 +2655,20 @@ ${this.formatTestStepsForAI(testCase.steps)}
       });
     } catch {
       // 忽略更新错误
+    }
+  }
+
+  /**
+   * 🔥 新增：从数据库删除无效的操作缓存
+   */
+  private async deleteOperationCacheFromDatabase(cacheKey: string): Promise<void> {
+    try {
+      await this.prisma.ai_operation_cache.delete({
+        where: { cache_key: cacheKey }
+      });
+      console.log(`🗑️ 已从数据库删除无效缓存: ${cacheKey.substring(0, 50)}...`);
+    } catch {
+      // 忽略删除错误（可能缓存不存在）
     }
   }
 

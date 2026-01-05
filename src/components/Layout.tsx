@@ -52,8 +52,8 @@ const navigationItems: NavigationItem[] = [
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '功能用例', href: '/functional-test-cases', icon: ClipboardList },
   { name: 'UI自动化', href: '/test-cases', icon: FileCode },
-  { name: '测试计划', href: '/test-plans', icon: Target },
   { name: '测试执行', href: '/test-runs', icon: Play },
+  { name: '测试计划', href: '/test-plans', icon: Target },
   { name: '测试报告', href: '/reports', icon: BarChart3 },
   { name: '测试工厂', href: '/test-factory', icon: Factory },
   { name: 'AI 助手', href: '/llm-assistant', icon: Bot },
@@ -450,7 +450,7 @@ export function Layout({ children }: LayoutProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  {currentPage?.name || 'AI 智能生成器'}
+                  {currentPage?.name || '测试执行详情'}
                 </motion.h1>
               </div>
             </div>
@@ -511,7 +511,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page content */}
         <motion.main
-          className="flex-1 p-8"
+          className="flex-1 pl-6 pr-6 pt-6 pb-0"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}

@@ -852,7 +852,12 @@ export function FunctionalTestCases() {
                 console.log('✅ [UI自动化测试] 测试运行ID:', response.runId);
                 console.log(`💡 [UI自动化测试] 提示: 临时测试用例ID ${temporaryTestCaseId} 已创建，执行完成后可在测试用例列表中查看或删除`);
                 
-                navigate(`/test-runs/${response.runId}/detail`);
+                navigate(`/test-runs/${response.runId}/detail`, {
+                  state: { 
+                    from: '/functional-test-cases',
+                    caseName: pendingTestCase.name 
+                  }
+                });
             } catch (error: any) {
                 setRunningTestId(null);
                 throw new Error(error.message || '启动测试失败');

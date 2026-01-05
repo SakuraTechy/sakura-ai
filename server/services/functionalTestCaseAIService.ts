@@ -291,6 +291,10 @@ export class FunctionalTestCaseAIService {
     const config = await this.getCurrentConfig();
     const startTime = Date.now();
 
+    // 🔥 检测 API 格式
+    const apiFormat = config.apiFormat || 'openai';
+    const isOllamaFormat = apiFormat === 'ollama';
+
     // 🔥 获取该模型的最大 tokens 限制
     const maxTokensLimit = this.getMaxTokensLimit(config.model, config.baseUrl);
     
@@ -302,14 +306,19 @@ export class FunctionalTestCaseAIService {
     }
 
     // 🔥 获取提供商名称（动态，不写死）
-    const providerName = this.getProviderName(config.baseUrl, config.model);
-    const apiEndpoint = `${config.baseUrl}/chat/completions`;
+    const providerName = isOllamaFormat ? 'Ollama (本地)' : this.getProviderName(config.baseUrl, config.model);
+    
+    // 🔥 根据 API 格式确定端点
+    const apiEndpoint = isOllamaFormat 
+      ? `${config.baseUrl}/api/generate`
+      : `${config.baseUrl}/chat/completions`;
 
     console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`🚀 [AI调用] 开始调用AI模型`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`   模型标识: ${config.model}`);
     console.log(`   提供商: ${providerName}`);
+    console.log(`   API格式: ${apiFormat}`);
     console.log(`   API端点: ${apiEndpoint}`);
     console.log(`   API Key状态: ${config.apiKey ? '已设置 (长度: ' + config.apiKey.length + ')' : '❌ 未设置'}`);
     console.log(`   参数配置:`);
@@ -321,47 +330,79 @@ export class FunctionalTestCaseAIService {
     console.log(`     - 总计: ${systemPrompt.length + userPrompt.length} 字符`);
 
     try {
-      const requestBody = {
-        model: config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: config.temperature,
-        max_tokens: finalMaxTokens
-      };
+      // 🔥 根据 API 格式构建不同的请求体
+      let requestBody: any;
+      
+      if (isOllamaFormat) {
+        // Ollama 原生 API 格式
+        requestBody = {
+          model: config.model,
+          prompt: `${systemPrompt}\n\n${userPrompt}`,
+          stream: false,
+          options: {
+            temperature: config.temperature,
+            num_predict: finalMaxTokens
+          }
+        };
+      } else {
+        // OpenAI 兼容 API 格式
+        requestBody = {
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: config.temperature,
+          max_tokens: finalMaxTokens
+        };
+      }
 
       // 🔥 打印请求详情（隐藏敏感信息）
       console.log(`\n📤 [请求] 准备发送请求到 ${providerName}...`);
 
       // 🔥 打印请求头信息（隐藏敏感信息）
       const headersForLog: Record<string, string> = {
-        'Authorization': `Bearer ${config.apiKey.substring(0, 10)}...`,
-        'HTTP-Referer': 'https://Sakura AI-ai.com',
-        'X-Title': 'Sakura AI AI Testing Platform',
         'Content-Type': 'application/json'
       };
+      if (config.apiKey && !isOllamaFormat) {
+        headersForLog['Authorization'] = `Bearer ${config.apiKey.substring(0, 10)}...`;
+        headersForLog['HTTP-Referer'] = 'https://Sakura AI-ai.com';
+        headersForLog['X-Title'] = 'Sakura AI AI Testing Platform';
+      }
       console.log(`   请求头:`, headersForLog);
 
-      const requestBodyForLog = {
-        ...requestBody,
-        messages: requestBody.messages.map((msg: any) => ({
-          role: msg.role,
-          content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : '')
-        }))
-      };
+      const requestBodyForLog = isOllamaFormat 
+        ? {
+            ...requestBody,
+            prompt: requestBody.prompt.substring(0, 100) + (requestBody.prompt.length > 100 ? '...' : '')
+          }
+        : {
+            ...requestBody,
+            messages: requestBody.messages.map((msg: any) => ({
+              role: msg.role,
+              content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : '')
+            }))
+          };
       console.log(`   请求体预览:`, JSON.stringify(requestBodyForLog, null, 2));
 
       const fetchOptions: any = {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'HTTP-Referer': 'https://Sakura AI-ai.com',
-          'X-Title': 'Sakura AI AI Testing Platform',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       };
+
+      // 🔥 添加认证头
+      if (config.apiKey) {
+        fetchOptions.headers['Authorization'] = `Bearer ${config.apiKey}`;
+      }
+
+      // OpenAI/OpenRouter 额外头部
+      if (!isOllamaFormat) {
+        fetchOptions.headers['HTTP-Referer'] = 'https://Sakura AI-ai.com';
+        fetchOptions.headers['X-Title'] = 'Sakura AI AI Testing Platform';
+      }
 
       // 配置代理（如果环境变量中有配置）
       const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
@@ -408,7 +449,9 @@ export class FunctionalTestCaseAIService {
         } else if (response.status === 402) {
           errorMessage = `❌ 配额不足 (402): ${providerName}账户余额不足，请充值`;
         } else if (response.status === 404) {
-          errorMessage = `❌ 模型不存在 (404): 模型 "${config.model}" 在${providerName}上不可用`;
+          errorMessage = isOllamaFormat
+            ? `❌ Ollama 服务未找到 (404): 请确认 Ollama 正在运行且端口正确`
+            : `❌ 模型不存在 (404): 模型 "${config.model}" 在${providerName}上不可用`;
         } else if (response.status >= 500) {
           errorMessage = `❌ 服务器错误 (${response.status}): ${providerName}服务异常，请稍后重试`;
         } else {
@@ -421,36 +464,56 @@ export class FunctionalTestCaseAIService {
       console.log(`   响应体:`, JSON.stringify(data, null, 2));
       const totalDuration = Date.now() - startTime;
 
-      // 🔥 打印响应结果详情
-      console.log(`\n✅ [成功] ${providerName} 响应解析完成`);
-      console.log(`   响应ID: ${data.id || 'N/A'}`);
-      console.log(`   模型: ${data.model || config.model}`);
-      console.log(`   创建时间: ${data.created ? this.formatTime(data.created * 1000) : 'N/A'}`);
-      if (data.usage) {
-        console.log(`   使用统计:`);
-        console.log(`     - Prompt Tokens: ${data.usage.prompt_tokens || 0}`);
-        console.log(`     - Completion Tokens: ${data.usage.completion_tokens || 0}`);
-        console.log(`     - Total Tokens: ${data.usage.total_tokens || 0}`);
-      }
-      if (data.choices && data.choices[0]) {
-        const choice = data.choices[0];
-        console.log(`   响应内容:`);
-        console.log(`     - Finish Reason: ${choice.finish_reason || 'N/A'}`);
-        console.log(`     - 内容长度: ${choice.message?.content?.length || 0} 字符`);
-        if (choice.message?.content) {
-          const preview = choice.message.content.substring(0, 200);
-          console.log(`     - 内容预览: ${preview}${choice.message.content.length > 200 ? '...' : ''}`);
+      // 🔥 根据 API 格式解析响应
+      let content: string;
+      
+      if (isOllamaFormat) {
+        // Ollama 格式响应
+        console.log(`\n✅ [成功] ${providerName} 响应解析完成`);
+        console.log(`   模型: ${data.model || config.model}`);
+        if (data.eval_count) {
+          console.log(`   Token统计: ${data.eval_count} tokens`);
         }
-      }
-      console.log(`   总耗时: ${totalDuration}ms (请求: ${requestDuration}ms, 解析: ${totalDuration - requestDuration}ms)`);
-      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+        console.log(`   总耗时: ${totalDuration}ms`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        console.error(`❌ API返回数据格式异常:`, JSON.stringify(data, null, 2));
-        throw new Error(`AI API返回格式异常: 缺少 choices 或 message 字段`);
+        if (!data.response) {
+          console.error(`❌ Ollama API返回数据格式异常:`, JSON.stringify(data, null, 2));
+          throw new Error(`Ollama API返回格式异常: 缺少 response 字段`);
+        }
+        content = data.response;
+      } else {
+        // OpenAI 格式响应
+        console.log(`\n✅ [成功] ${providerName} 响应解析完成`);
+        console.log(`   响应ID: ${data.id || 'N/A'}`);
+        console.log(`   模型: ${data.model || config.model}`);
+        console.log(`   创建时间: ${data.created ? this.formatTime(data.created * 1000) : 'N/A'}`);
+        if (data.usage) {
+          console.log(`   使用统计:`);
+          console.log(`     - Prompt Tokens: ${data.usage.prompt_tokens || 0}`);
+          console.log(`     - Completion Tokens: ${data.usage.completion_tokens || 0}`);
+          console.log(`     - Total Tokens: ${data.usage.total_tokens || 0}`);
+        }
+        if (data.choices && data.choices[0]) {
+          const choice = data.choices[0];
+          console.log(`   响应内容:`);
+          console.log(`     - Finish Reason: ${choice.finish_reason || 'N/A'}`);
+          console.log(`     - 内容长度: ${choice.message?.content?.length || 0} 字符`);
+          if (choice.message?.content) {
+            const preview = choice.message.content.substring(0, 200);
+            console.log(`     - 内容预览: ${preview}${choice.message.content.length > 200 ? '...' : ''}`);
+          }
+        }
+        console.log(`   总耗时: ${totalDuration}ms (请求: ${requestDuration}ms, 解析: ${totalDuration - requestDuration}ms)`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          console.error(`❌ API返回数据格式异常:`, JSON.stringify(data, null, 2));
+          throw new Error(`AI API返回格式异常: 缺少 choices 或 message 字段`);
+        }
+        content = data.choices[0].message.content;
       }
 
-      const content = data.choices[0].message.content;
       return content;
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
@@ -464,6 +527,9 @@ export class FunctionalTestCaseAIService {
         console.error(`      1. 网络连接问题（请检查网络设置）`);
         console.error(`      2. API端点不可达（请检查防火墙/代理设置）`);
         console.error(`      3. DNS解析失败（请检查DNS配置）`);
+        if (isOllamaFormat) {
+          console.error(`      4. Ollama 服务未启动（请运行 ollama serve）`);
+        }
         console.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
         throw new Error(`❌ 网络连接失败: 无法访问 ${providerName} API。请检查网络连接。`);
       }

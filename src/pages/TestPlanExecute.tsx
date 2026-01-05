@@ -62,7 +62,11 @@ export function TestPlanExecute() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const executionType = searchParams.get('type') as 'functional' | 'ui_auto' || 'functional';
+  // 🔥 修复：使用状态保存执行类型，允许动态更新
+  const typeParam = searchParams.get('type');
+  const [executionType, setExecutionType] = useState<'functional' | 'ui_auto'>(
+    (typeParam === 'ui_auto' ? 'ui_auto' : typeParam === 'functional' ? 'functional' : 'functional')
+  );
   const executionMode = searchParams.get('mode') as 'single' | 'batch' | 'all' || 'all'; // 默认为 all
   const continueFromExecutionId = searchParams.get('continueFrom'); // 🔥 继续/重新执行的执行ID
   const continueMode = searchParams.get('continueMode') as 'continue' | 'reexecute' | null; // 🔥 继续执行模式：continue=保留历史，reexecute=完全重置
@@ -176,43 +180,51 @@ export function TestPlanExecute() {
         const blockedCount = Array.from(caseStates.values()).filter(s => s.finalResult === 'block').length;
         const skippedCount = Array.from(caseStates.values()).filter(s => s.finalResult === 'skip').length;
         
-        // 构建已执行的用例结果
+        // 🔥 修复：构建所有用例结果，保留未执行用例的 pending 状态
         const executionResults = planCases
-          .filter(pc => {
-            const state = caseStates.get(pc.case_id);
-            return state && state.completed === true;
-          })
           .map((pc) => {
             const state = caseStates.get(pc.case_id);
-            if (!state) return null;
             
-            return {
-              case_id: pc.case_id,
-              case_name: pc.case_name,
-              case_type: pc.case_type,
-              result: state.finalResult,
-              // 🔥 修复：使用 executionDetails 中的时间，而不是当前时间
-              executed_at: state.executionDetails?.finished_at || new Date().toISOString(),
-              executor_name: user?.accountName || user?.username,
-              execution_id: state.executionDetails?.execution_id,
-              duration_ms: state.executionDetails?.duration_ms,
-              actualResult: state.executionDetails?.actualResult,
-              comments: state.executionDetails?.comments,
-              totalSteps: state.executionDetails?.totalSteps,
-              completedSteps: state.executionDetails?.completedSteps,
-              passedSteps: state.executionDetails?.passedSteps,
-              failedSteps: state.executionDetails?.failedSteps,
-              blockedSteps: state.executionDetails?.blockedSteps,
-              screenshots: state.executionDetails?.screenshots,
-              execution_status: 'completed' as const,
-              // 🔥 修复：添加缺失的时间字段
-              started_at: state.executionDetails?.started_at,
-              finished_at: state.executionDetails?.finished_at,
-              // 🔥 保存步骤执行结果，以便继续执行时恢复
-              stepResults: state.executionDetails?.stepResults,
-            };
-          })
-          .filter(Boolean);
+            if (state && state.completed) {
+              // 已完成的用例
+              return {
+                case_id: pc.case_id,
+                case_name: pc.case_name,
+                case_type: pc.case_type,
+                result: state.finalResult,
+                // 🔥 修复：使用 executionDetails 中的时间，而不是当前时间
+                executed_at: state.executionDetails?.finished_at || new Date().toISOString(),
+                executor_name: user?.accountName || user?.username,
+                execution_id: state.executionDetails?.execution_id,
+                duration_ms: state.executionDetails?.duration_ms,
+                actualResult: state.executionDetails?.actualResult,
+                comments: state.executionDetails?.comments,
+                totalSteps: state.executionDetails?.totalSteps,
+                completedSteps: state.executionDetails?.completedSteps,
+                passedSteps: state.executionDetails?.passedSteps,
+                failedSteps: state.executionDetails?.failedSteps,
+                blockedSteps: state.executionDetails?.blockedSteps,
+                screenshots: state.executionDetails?.screenshots,
+                execution_status: 'completed' as const,
+                // 🔥 修复：添加缺失的时间字段
+                started_at: state.executionDetails?.started_at,
+                finished_at: state.executionDetails?.finished_at,
+                // 🔥 保存步骤执行结果，以便继续执行时恢复
+                stepResults: state.executionDetails?.stepResults,
+              };
+            } else {
+              // 🔥 修复：未执行的用例，保持 pending 状态
+              return {
+                case_id: pc.case_id,
+                case_name: pc.case_name,
+                case_type: pc.case_type,
+                result: '' as const, // 空字符串表示未执行
+                execution_status: 'pending' as const,
+                executed_at: null,
+                duration_ms: 0,
+              };
+            }
+          });
 
         await testPlanService.updateTestPlanExecution(executionId, {
           status: 'cancelled',
@@ -274,6 +286,29 @@ export function TestPlanExecute() {
       // 获取测试计划详情
       const planDetail = await testPlanService.getTestPlanDetail(parseInt(id));
       
+      // 🔥 修复：如果没有指定执行类型，根据计划类型和用例情况智能判断
+      let actualExecutionType: 'functional' | 'ui_auto' = executionType;
+      const typeParam = searchParams.get('type');
+      
+      if (!typeParam) {
+        // 没有指定类型参数时，智能判断
+        const hasFunctional = planDetail.cases.some(c => c.case_type === 'functional');
+        const hasUiAuto = planDetail.cases.some(c => c.case_type === 'ui_auto');
+        
+        if (planDetail.plan.plan_type === 'ui_auto' || (!hasFunctional && hasUiAuto)) {
+          actualExecutionType = 'ui_auto';
+        } else if (planDetail.plan.plan_type === 'functional' || (hasFunctional && !hasUiAuto)) {
+          actualExecutionType = 'functional';
+        }
+        
+        // 更新执行类型状态
+        if (actualExecutionType !== executionType) {
+          setExecutionType(actualExecutionType);
+        }
+        
+        console.log(`📋 [TestPlanExecute] 智能判断执行类型: ${actualExecutionType}, 计划类型: ${planDetail.plan.plan_type}`);
+      }
+      
       // 获取 URL 参数中的 caseIds（单个用例执行）
       const caseIdsParam = searchParams.get('caseIds');
       let filteredCases: TestPlanCase[];
@@ -282,18 +317,19 @@ export function TestPlanExecute() {
         // 如果指定了 caseIds，只执行指定的用例
         const caseIds = caseIdsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
         filteredCases = planDetail.cases.filter(
-          (c) => c.case_type === executionType && caseIds.includes(c.case_id)
+          (c) => c.case_type === actualExecutionType && caseIds.includes(c.case_id)
         );
       } else {
         // 否则执行所有指定类型的用例
         filteredCases = planDetail.cases.filter(
-          (c) => c.case_type === executionType
+          (c) => c.case_type === actualExecutionType
         );
       }
 
       if (filteredCases.length === 0) {
-        showToast.error('没有找到要执行的用例');
-        navigateBackToPlan();
+        // 🔥 修复：如果智能判断后仍找不到用例，跳转到详情页让用户手动选择
+        showToast.error('没有找到要执行的用例，请在详情页手动选择执行');
+        navigate(`/test-plans/${id}`, { state: { activeTab: 'cases' } });
         return;
       }
 
@@ -830,36 +866,9 @@ export function TestPlanExecute() {
     }
 
     try {
-      // 保存执行结果，获取execution_id
-      const saveResult = await functionalTestCaseService.saveExecutionResult(currentCase.case_id, {
-        testCaseName: currentCase.case_name,
-        finalResult: result.finalResult as 'pass' | 'fail' | 'block',
-        actualResult: result.actualResult,
-        comments: result.comments || undefined,
-        durationMs: result.executionTime * 1000,
-        stepResults: result.stepResults.map((step) => ({
-          stepIndex: step.stepIndex + 1,
-          action: '',
-          expected: '',
-          result: step.status,
-          note: step.note,
-        })),
-        totalSteps: result.stepResults.length,
-        completedSteps: result.stepResults.filter(r => r.status !== null).length,
-        passedSteps: result.stepResults.filter(r => r.status === 'pass').length,
-        failedSteps: result.stepResults.filter(r => r.status === 'fail').length,
-        blockedSteps: result.stepResults.filter(r => r.status === 'block').length,
-        screenshots: result.screenshots.map(s => ({
-          fileName: s.name,
-          fileSize: s.file.size,
-          mimeType: s.file.type,
-          base64Data: s.preview.split(',')[1],
-          uploadedAt: new Date().toISOString(),
-        })),
-      }) as { success: boolean; data?: { executionId: string } };
-
-      // 提取execution_id
-      const execution_id = saveResult?.data?.executionId;
+      // 🔥 修复：测试计划执行功能用例时，不再调用功能用例模块的保存接口
+      // 执行结果只保存在测试计划自己的 execution_results 中，与功能用例模块完全独立
+      // 这样可以避免测试计划的执行记录污染功能用例模块的执行历史
 
       // 🔥 标记已提交结果
       hasSubmittedResultsRef.current = true;
@@ -885,9 +894,8 @@ export function TestPlanExecute() {
         caseType: currentCase.case_type,
         finalResult: result.finalResult as ExecutionResult,
         completed: true,
-        // 🔥 保存详细执行信息
+        // 🔥 保存详细执行信息（不再需要 execution_id，因为不再写入功能用例模块的表）
         executionDetails: {
-          execution_id: execution_id,
           duration_ms: actualDurationMs, // 使用真实耗时
           actualResult: result.actualResult,
           comments: result.comments || undefined,
@@ -919,7 +927,6 @@ export function TestPlanExecute() {
         completed: newState.completed,
         有executionDetails: !!newState.executionDetails,
         executionDetails: newState.executionDetails ? {
-          有execution_id: !!newState.executionDetails.execution_id,
           有actualResult: !!newState.executionDetails.actualResult,
           有screenshots: !!newState.executionDetails.screenshots && newState.executionDetails.screenshots.length > 0,
           步骤统计: {
@@ -950,7 +957,6 @@ export function TestPlanExecute() {
         currentCaseIndex,
         completedCount,
         planCases数量: planCases.length,
-        execution_id,
         allCompletedCases数量: allCompletedCases.size,
         allCompletedCases内容: Array.from(allCompletedCases.entries()).map(([caseId, state]) => ({
           caseId,
@@ -960,36 +966,29 @@ export function TestPlanExecute() {
         })),
       });
       
+      // 🔥 修复：构建 executionResults 时保留所有用例记录，只更新已完成用例的状态
+      // 这样可以确保未执行的用例仍然保持 pending 状态，而不是被丢弃
       const executionResults = planCases
-        .filter(pc => {
-          const state = allCompletedCases.get(pc.case_id);
-          // 🔥 修复：只包含 completed: true 的用例
-          return state && state.completed === true;
-        })
         .map((pc) => {
           const state = allCompletedCases.get(pc.case_id);
-          if (!state) {
-            console.warn(`⚠️ [构建executionResults] case_id ${pc.case_id} 没有 state`);
-            return null;
-          }
           
           console.log(`🔍 [构建executionResults] case_id ${pc.case_id}:`, {
-            completed: state.completed,
-            finalResult: state.finalResult,
-            有executionDetails: !!state.executionDetails,
+            completed: state?.completed,
+            finalResult: state?.finalResult,
+            有executionDetails: !!state?.executionDetails,
           });
           
           // 🔥 判断是否是当前刚提交的用例
           if (pc.case_id === currentCase.case_id) {
             console.log(`✅ [构建executionResults] case_id ${pc.case_id} - 当前用例分支`);
             // 当前用例，使用刚提交的 result 数据
+            // 🔥 修复：不再需要 execution_id，因为测试计划不再写入功能用例模块的表
             return {
               case_id: pc.case_id,
               case_name: pc.case_name,
               case_type: pc.case_type,
               result: result.finalResult as ExecutionResult,
               duration_ms: actualDurationMs, // 使用真实耗时
-              execution_id: execution_id,
               executed_at: finishedAt.toISOString(),
               executor_name: user?.accountName || user?.username,
               // 🔥 增加详细信息字段
@@ -1014,9 +1013,10 @@ export function TestPlanExecute() {
               // 🔥 保存步骤执行结果，以便继续执行时恢复
               stepResults: result.stepResults,
             };
-          } else if (state.executionDetails) {
+          } else if (state && state.completed && state.executionDetails) {
             console.log(`📂 [构建executionResults] case_id ${pc.case_id} - 之前执行用例分支（有executionDetails）`);
             // 🔥 之前执行的用例，从 state.executionDetails 中读取完整的详细信息
+            // 🔥 修复：不再需要 execution_id
             return {
               case_id: pc.case_id,
               case_name: pc.case_name,
@@ -1024,8 +1024,6 @@ export function TestPlanExecute() {
               result: state.finalResult,
               executed_at: state.executionDetails.finished_at || new Date().toISOString(),
               executor_name: user?.accountName || user?.username,
-              // 从 executionDetails 中读取详细信息
-              execution_id: state.executionDetails.execution_id,
               duration_ms: state.executionDetails.duration_ms,
               actualResult: state.executionDetails.actualResult,
               comments: state.executionDetails.comments,
@@ -1042,8 +1040,8 @@ export function TestPlanExecute() {
               // 🔥 保存步骤执行结果，以便继续执行时恢复
               stepResults: state.executionDetails.stepResults,
             };
-          } else {
-            console.log(`⚠️ [构建executionResults] case_id ${pc.case_id} - else分支（无executionDetails），state:`, {
+          } else if (state && state.completed) {
+            console.log(`⚠️ [构建executionResults] case_id ${pc.case_id} - 已完成但无executionDetails分支，state:`, {
               finalResult: state.finalResult,
               completed: state.completed,
               有executionDetails: !!state.executionDetails,
@@ -1063,9 +1061,20 @@ export function TestPlanExecute() {
               finished_at: now,
               duration_ms: 0,
             };
+          } else {
+            // 🔥 修复：未执行的用例，保持 pending 状态
+            console.log(`⏳ [构建executionResults] case_id ${pc.case_id} - 未执行用例，保持 pending 状态`);
+            return {
+              case_id: pc.case_id,
+              case_name: pc.case_name,
+              case_type: pc.case_type,
+              result: '' as const, // 空字符串表示未执行
+              execution_status: 'pending' as const,
+              executed_at: null,
+              duration_ms: 0,
+            };
           }
-        })
-        .filter(Boolean);
+        });
       
       // 🔥 调试日志：检查 executionResults 的数据
       console.log('📊 [批量执行] 当前 executionResults:', {
@@ -1078,7 +1087,6 @@ export function TestPlanExecute() {
             case_id: record.case_id,
             case_name: record.case_name,
             result: record.result,
-            有execution_id: !!record.execution_id,
             有actualResult: !!record.actualResult,
             有screenshots: !!record.screenshots && Array.isArray(record.screenshots) && record.screenshots.length > 0,
             步骤统计: {
@@ -1234,14 +1242,11 @@ export function TestPlanExecute() {
       const blockedCount = Array.from(allCompletedCases.values()).filter(s => s.finalResult === 'block').length;
       const skippedCount = Array.from(allCompletedCases.values()).filter(s => s.finalResult === 'skip').length;
       
+      // 🔥 修复：构建 executionResults 时保留所有用例记录，只更新已完成用例的状态
+      // 这样可以确保未执行的用例仍然保持 pending 状态，而不是被丢弃
       const executionResults = planCases
-        .filter(pc => {
-          const state = allCompletedCases.get(pc.case_id);
-          return state && state.completed === true;
-        })
         .map((pc) => {
           const state = allCompletedCases.get(pc.case_id);
-          if (!state) return null;
           
           // 🔥 当前跳过的用例
           if (pc.case_id === currentCase.case_id) {
@@ -1260,8 +1265,9 @@ export function TestPlanExecute() {
               // 🔥 跳过的用例没有步骤执行结果
               stepResults: [],
             };
-          } else if (state.executionDetails) {
+          } else if (state && state.completed && state.executionDetails) {
             // 🔥 之前执行的用例，从 state.executionDetails 中读取完整的详细信息
+            // 🔥 修复：不再需要 execution_id
             return {
               case_id: pc.case_id,
               case_name: pc.case_name,
@@ -1269,7 +1275,6 @@ export function TestPlanExecute() {
               result: state.finalResult,
               executed_at: state.executionDetails.finished_at || new Date().toISOString(),
               executor_name: user?.accountName || user?.username,
-              execution_id: state.executionDetails.execution_id,
               duration_ms: state.executionDetails.duration_ms,
               actualResult: state.executionDetails.actualResult,
               comments: state.executionDetails.comments,
@@ -1286,7 +1291,7 @@ export function TestPlanExecute() {
               // 🔥 保存步骤执行结果，以便继续执行时恢复
               stepResults: state.executionDetails.stepResults,
             };
-          } else {
+          } else if (state && state.completed) {
             // 没有详细信息的情况（比如之前跳过的用例）
             const now = new Date().toISOString();
             return {
@@ -1304,9 +1309,19 @@ export function TestPlanExecute() {
               // 🔥 没有步骤执行结果
               stepResults: [],
             };
+          } else {
+            // 🔥 修复：未执行的用例，保持 pending 状态
+            return {
+              case_id: pc.case_id,
+              case_name: pc.case_name,
+              case_type: pc.case_type,
+              result: '' as const, // 空字符串表示未执行
+              execution_status: 'pending' as const,
+              executed_at: null,
+              duration_ms: 0,
+            };
           }
-        })
-        .filter(Boolean);
+        });
 
       showToast.info('已跳过当前用例');
       

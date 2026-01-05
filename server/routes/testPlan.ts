@@ -264,6 +264,23 @@ router.delete('/executions/:executionId', async (req: Request, res: Response) =>
   }
 });
 
+/**
+ * 🔥 重新执行测试计划执行记录（UI自动化）
+ * POST /api/test-plans/executions/:executionId/reexecute
+ */
+router.post('/executions/:executionId/reexecute', async (req: Request, res: Response) => {
+  try {
+    const executionId = req.params.executionId;
+    const executionConfig = req.body.executionConfig || {};
+    
+    await testPlanService.reExecuteTestPlanExecution(executionId, executionConfig, testExecutionService);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('重新执行测试计划执行记录失败:', error);
+    res.status(500).json({ error: error.message || '重新执行测试计划执行记录失败' });
+  }
+});
+
   return router;
 }
 

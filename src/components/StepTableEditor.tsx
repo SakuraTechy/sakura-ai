@@ -138,6 +138,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
             <p className="text-sm text-gray-500 mb-4">暂无步骤</p>
             {!readOnly && (
               <Button
+                type="button"
                 variant="default"
                 size="sm"
                 onClick={handleAddStep}
@@ -162,7 +163,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
               </div>
 
               {/* 操作步骤 */}
-              <div className="min-h-[60px]">
+              <div className="">
                 {editingCell?.rowId === step.id && editingCell?.field === 'action' ? (
                   <textarea
                     autoFocus
@@ -186,7 +187,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                 ) : (
                   <div
                     onClick={() => startEditing(step.id, 'action')}
-                    className={`px-3 py-2 rounded-lg cursor-text min-h-[60px] text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`px-3 py-2 rounded-lg cursor-text min-h-[30px] text-sm leading-relaxed whitespace-pre-wrap ${
                       step.action ? 'text-gray-900 bg-white border border-gray-200' : 'text-gray-400 bg-gray-50 border border-dashed border-gray-300'
                     } ${!readOnly && 'hover:border-blue-300 hover:bg-blue-50/30 transition-all'}`}
                   >
@@ -196,7 +197,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
               </div>
 
               {/* 预期结果 */}
-              <div className="min-h-[60px]">
+              <div className="">
                 {editingCell?.rowId === step.id && editingCell?.field === 'expected' ? (
                   <textarea
                     autoFocus
@@ -220,7 +221,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                 ) : (
                   <div
                     onClick={() => startEditing(step.id, 'expected')}
-                    className={`px-3 py-2 rounded-lg cursor-text min-h-[60px] text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`px-3 py-2 rounded-lg cursor-text min-h-[30px] text-sm leading-relaxed whitespace-pre-wrap ${
                       step.expected ? 'text-gray-900 bg-white border border-gray-200' : 'text-gray-400 bg-gray-50 border border-dashed border-gray-300'
                     } ${!readOnly && 'hover:border-green-300 hover:bg-green-50/30 transition-all'}`}
                   >
@@ -236,9 +237,9 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="icon-xs"
                       onClick={() => handleInsertAbove(step.id)}
-                      className="h-7 w-7 text-blue-500 hover:bg-blue-50 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-blue-500 hover:bg-blue-50 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="在上方插入"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
@@ -246,9 +247,9 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="icon-xs"
                       onClick={() => handleInsertBelow(step.id)}
-                      className="h-7 w-7 text-blue-500 hover:bg-blue-50 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-blue-500 hover:bg-blue-50 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="在下方插入"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
@@ -256,9 +257,9 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="icon-xs"
                       onClick={() => handleCopyStep(step.id)}
-                      className="h-7 w-7 text-purple-500 hover:bg-purple-50 hover:text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-purple-500 hover:bg-purple-50 hover:text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="复制步骤"
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -266,9 +267,9 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="icon-xs"
                       onClick={() => handleDeleteStep(step.id)}
-                      className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-red-500 hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="删除步骤"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -288,6 +289,7 @@ export function StepTableEditor({ steps, onChange, readOnly = false }: StepTable
             共 <span className="font-bold text-blue-600">{steps.length}</span> 个步骤
           </div>
           <Button
+            type="button"
             variant="default"
             size="sm"
             onClick={handleAddStep}

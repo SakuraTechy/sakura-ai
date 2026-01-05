@@ -36,6 +36,7 @@ import { clsx } from 'clsx';
 import { testPlanService } from '../services/testPlanService';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import { testService } from '../services/testService';
+import apiClient from '../utils/axios';
 import type { TestCaseType, TestPlan, TestPlanCase, TestPlanExecution, TestPlanStatistics, TestPlanType } from '../types/testPlan';
 import { showToast } from '../utils/toast';
 import { Modal } from '../components/ui/modal';
@@ -135,6 +136,7 @@ export function TestPlanDetail() {
   const [showExecutionConfig, setShowExecutionConfig] = useState(false);
   const [pendingExecutionType, setPendingExecutionType] = useState<'single' | 'batch'>('single');
   const [pendingCases, setPendingCases] = useState<TestPlanCase[]>([]);
+  const [pendingReexecuteExecution, setPendingReexecuteExecution] = useState<TestPlanExecution | null>(null); // 🔥 重新执行的execution对象
   const [executionConfig, setExecutionConfig] = useState({
     executionEngine: 'mcp' as 'mcp' | 'playwright',
     enableTrace: true,
@@ -991,43 +993,137 @@ export function TestPlanDetail() {
           throw new Error('执行失败');
         }
       } 
-      // 🔥 批量执行：创建测试计划执行记录并切换到执行历史tab
+      // 🔥 批量执行：判断是重新执行还是新建执行记录
       else {
-        console.log(`🚀 [TestPlanDetail] 批量执行UI自动化用例`, {
-          count: caseIds.length,
-          planId: parseInt(id!),
-          config: executionConfig
-        });
-
-        // 调用后端API开始执行（批量执行时autoExecute: true）
-        await testPlanService.startTestPlanExecution({
-          plan_id: parseInt(id!),
-          executor_id: user!.id,
-          execution_type: 'ui_auto',
-          case_ids: caseIds,
-          autoExecute: true, // 🔥 批量执行时自动执行
-          executionConfig: {
-            executionEngine: executionConfig.executionEngine,
-            enableTrace: executionConfig.enableTrace,
-            enableVideo: executionConfig.enableVideo,
-            environment: executionConfig.environment
+        // 🔥 如果是重新执行，重置结果和状态后调用重新执行API
+        if (pendingReexecuteExecution) {
+          console.log(`🔄 [TestPlanDetail] UI自动化重新执行：开始重置执行结果并重新执行, executionId: ${pendingReexecuteExecution.id}`);
+          
+          try {
+            // 🔥 步骤1：重置所有执行结果和状态
+            const resetResults = (pendingReexecuteExecution.execution_results || []).map(result => ({
+              ...result,
+              result: '' as const, // 空字符串表示未执行
+              execution_status: 'queued' as const, // 重置为队列状态
+              duration_ms: 0,
+              error_message: undefined,
+              executed_at: undefined,
+              finished_at: undefined,
+              started_at: undefined,
+              execution_id: undefined, // 清除之前的执行ID
+            }));
+            
+            // 先重置执行记录状态
+            await testPlanService.updateTestPlanExecution(pendingReexecuteExecution.id, {
+              status: 'running',
+              started_at: new Date(), // 重置开始时间
+              finished_at: null, // 重置结束时间
+              duration_ms: null, // 重置耗时
+              completed_cases: 0,
+              passed_cases: 0,
+              failed_cases: 0,
+              blocked_cases: 0,
+              skipped_cases: 0,
+              progress: 0,
+              execution_results: resetResults,
+              error_message: null, // 清除之前的错误信息
+            });
+            
+            console.log(`✅ [TestPlanDetail] UI自动化重新执行：执行结果已重置, executionId: ${pendingReexecuteExecution.id}`);
+            
+            // 🔥 步骤2：调用后端API重新执行现有记录（不创建新记录）
+            await apiClient.post(`/api/v1/test-plans/executions/${pendingReexecuteExecution.id}/reexecute`, {
+              executionConfig: {
+                executionEngine: executionConfig.executionEngine,
+                enableTrace: executionConfig.enableTrace,
+                enableVideo: executionConfig.enableVideo,
+                environment: executionConfig.environment
+              },
+            });
+            
+            console.log(`✅ [TestPlanDetail] UI自动化重新执行：已重新调用执行任务, executionId: ${pendingReexecuteExecution.id}`);
+            
+            // 🔥 立即更新本地状态
+            setExecutions(prev => prev.map(e => 
+              e.id === pendingReexecuteExecution.id ? {
+                ...e,
+                status: 'running',
+                started_at: new Date().toISOString(),
+                finished_at: undefined,
+                duration_ms: undefined,
+                completed_cases: 0,
+                passed_cases: 0,
+                failed_cases: 0,
+                blocked_cases: 0,
+                skipped_cases: 0,
+                progress: 0,
+                execution_results: resetResults,
+                error_message: undefined,
+              } : e
+            ));
+            
+            showToast.success('已重新开始执行UI自动化用例');
+            
+            // 关闭对话框
+            setShowExecutionConfig(false);
+            setPendingCases([]);
+            setPendingReexecuteExecution(null);
+            
+            // 切换到执行历史tab
+            setActiveTab('executions');
+            
+            // 重新加载测试计划详情以获取最新的执行状态（静默刷新）
+            await loadTestPlanDetail(true);
+          } catch (error) {
+            const err = error as { response?: { data?: { error?: string } }; message?: string };
+            console.error('❌ [TestPlanDetail] UI自动化重新执行：失败:', error);
+            console.error('❌ [TestPlanDetail] UI自动化重新执行：错误详情:', err?.response?.data || err?.message);
+            showToast.error(`重新执行失败: ${err?.response?.data?.error || err?.message || '未知错误'}`);
+            
+            // 清除重新执行状态
+            setPendingReexecuteExecution(null);
+            setShowExecutionConfig(false);
+            setPendingCases([]);
           }
-        });
+        } else {
+          // 🔥 新建执行记录（批量执行）
+          console.log(`🚀 [TestPlanDetail] 批量执行UI自动化用例`, {
+            count: caseIds.length,
+            planId: parseInt(id!),
+            config: executionConfig
+          });
 
-        showToast.success(`开始执行 ${caseIds.length} 个UI自动化用例`);
-        
-        // 关闭对话框
-        setShowExecutionConfig(false);
-        setPendingCases([]);
-        
-        // 清空选择
-        setSelectedCaseIds(new Set());
-        
-        // 切换到执行历史tab
-        setActiveTab('executions');
-        
-        // 重新加载测试计划详情以获取最新的执行记录（静默刷新）
-        await loadTestPlanDetail(true);
+          // 调用后端API开始执行（批量执行时autoExecute: true）
+          await testPlanService.startTestPlanExecution({
+            plan_id: parseInt(id!),
+            executor_id: user!.id,
+            execution_type: 'ui_auto',
+            case_ids: caseIds,
+            autoExecute: true, // 🔥 批量执行时自动执行
+            executionConfig: {
+              executionEngine: executionConfig.executionEngine,
+              enableTrace: executionConfig.enableTrace,
+              enableVideo: executionConfig.enableVideo,
+              environment: executionConfig.environment
+            }
+          });
+
+          showToast.success(`开始执行 ${caseIds.length} 个UI自动化用例`);
+          
+          // 关闭对话框
+          setShowExecutionConfig(false);
+          setPendingCases([]);
+          setPendingReexecuteExecution(null);
+          
+          // 清空选择
+          setSelectedCaseIds(new Set());
+          
+          // 切换到执行历史tab
+          setActiveTab('executions');
+          
+          // 重新加载测试计划详情以获取最新的执行记录（静默刷新）
+          await loadTestPlanDetail(true);
+        }
       }
     } catch (error) {
       console.error('❌ [TestPlanDetail] 执行UI自动化用例失败:', error);
@@ -1035,6 +1131,10 @@ export function TestPlanDetail() {
       setIsExecutingLocally(false); // 🔥 执行失败时重置本地执行状态
       isExecutingRef.current = false; // 🔥 同步重置 ref
       pendingExecutionIdRef.current = null; // 🔥 清除待处理的执行ID
+      // 清除执行配置相关状态
+      setPendingReexecuteExecution(null);
+      setShowExecutionConfig(false);
+      setPendingCases([]);
     } finally {
       setLoading(false);
     }
@@ -1112,6 +1212,31 @@ export function TestPlanDetail() {
       return;
     }
     
+    // 🔥 UI自动化：弹出配置对话框，与功能用例批量执行保持一致
+    if (execution.execution_type === 'ui_auto') {
+      console.log(`🔄 [TestPlanDetail] UI自动化重新执行：弹出配置对话框, executionId: ${execution.id}`);
+      
+      // 🔥 尝试从metadata获取执行配置，用于预填充配置对话框
+      const metadata = execution.metadata as any;
+      const previousConfig = metadata?.executionConfig;
+      if (previousConfig) {
+        setExecutionConfig({
+          executionEngine: previousConfig.executionEngine || 'mcp',
+          enableTrace: previousConfig.enableTrace !== undefined ? previousConfig.enableTrace : false,
+          enableVideo: previousConfig.enableVideo !== undefined ? previousConfig.enableVideo : false,
+          environment: previousConfig.environment || 'staging'
+        });
+      }
+      
+      // 设置待执行的用例和重新执行的execution对象
+      setPendingCases(allCasesOfType);
+      setPendingExecutionType('batch');
+      setPendingReexecuteExecution(execution);
+      setShowExecutionConfig(true);
+      return;
+    }
+    
+    // 🔥 功能用例：导航到执行页面，传递重新执行的参数
     // 🔥 立即更新执行状态为 running，并刷新本地状态
     // 🔥 关键：必须同时更新 started_at 为当前时间，否则会被 getTestPlanDetail 的超时清理逻辑又改回 cancelled
     try {
@@ -1709,17 +1834,17 @@ export function TestPlanDetail() {
                             </button>
                           </th>
                           {/* <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 uppercase">序号</th> */}
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例名称</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例版本</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例类型</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">优先级</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例来源</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">执行状态</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">执行结果</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">更新时间</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例名称</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例版本</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">用例类型</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">优先级</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">用例来源</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">执行状态</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">执行结果</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">更新时间</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
@@ -1745,19 +1870,19 @@ export function TestPlanDetail() {
                                 </button>
                               </td>
                               {/* <td className="px-4 py-3 text-sm text-gray-500">{globalIndex + 1}</td> */}
-                              <td className="px-4 py-3 text-sm font-medium text-gray-700">
+                              <td className="px-3 py-3 text-sm font-medium text-gray-700">
                                 {caseItem.case_id}
                               </td>
                               {/* <td className="px-4 py-3 text-sm font-medium text-gray-900">
                                 {caseItem.case_name}
                               </td> */}
-                              <td className="px-4 py-3 max-w-[600px]">
+                              <td className="px-3 py-3 max-w-[600px]">
                                 <div className="text-sm font-medium text-gray-900 truncate" title={caseItem.case_name}>
                                   {caseItem.case_name}
                                 </div>
                               </td>
                               {/* 🔥 用例版本 - 支持功能测试和UI自动化 */}
-                              <td className="px-4 py-3 text-sm text-gray-900">
+                              <td className="px-3 py-3 text-sm text-gray-900">
                                 {(() => {
                                   if (caseItem.case_type === 'functional' && caseItem.case_detail) {
                                     return (caseItem.case_detail as any).project_version?.version_name || 
@@ -1772,20 +1897,17 @@ export function TestPlanDetail() {
                                 })()}
                               </td>
                               {/* 🔥 用例类型 - 支持功能测试和UI自动化 */}
-                              <td className="px-4 py-3 text-sm text-gray-500">
+                              <td className="px-3 py-3 text-sm text-gray-500">
                                 {caseItem.case_type === 'functional' && caseItem.case_detail && (caseItem.case_detail as any).case_type ? (
                                   <CaseTypeBadge caseType={(caseItem.case_detail as any).case_type} />
-                                ) : caseItem.case_type === 'ui_auto' ? (
-                                  // <span className="inline-flex px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-700">
-                                  //   🤖 UI自动化
-                                  // </span>
+                                ) : caseItem.case_type === 'ui_auto' && caseItem.case_detail && (caseItem.case_detail as any).case_type ? (
                                   <CaseTypeBadge caseType={(caseItem.case_detail as any).case_type} />
                                 ) : (
                                   <span className="text-gray-400">-</span>
                                 )}
                               </td>
                               {/* 🔥 优先级 - 支持功能测试和UI自动化 */}
-                              <td className="px-4 py-3 text-sm text-gray-500 text-center">
+                              <td className="px-3 py-3 text-sm text-gray-500 text-center">
                                 {(() => {
                                   // 尝试从多个来源获取优先级
                                   const priority = (caseItem.case_detail as any)?.priority || (caseItem as any).priority;
@@ -1797,7 +1919,8 @@ export function TestPlanDetail() {
                                 })()}
                               </td>
                               {/* 🔥 用例来源 - 支持功能测试和UI自动化 */}
-                              <td className="px-4 py-3 text-sm text-gray-500">
+                              <td className="px-3 py-3 text-sm text-gray-500">
+                              <div className="flex items-center justify-center">
                                 {caseItem.case_type === 'functional' && caseItem.case_detail && (caseItem.case_detail as any).source ? (
                                   <span className={clsx(
                                     'inline-flex px-2 py-1 rounded-md text-xs font-medium',
@@ -1814,6 +1937,7 @@ export function TestPlanDetail() {
                                 ) : (
                                   <span className="text-gray-400">-</span>
                                 )}
+                                </div>
                               </td>
                               {/* <td className="px-4 py-3 text-sm text-center">
                                 {(() => {
@@ -1827,7 +1951,7 @@ export function TestPlanDetail() {
                                 })()}
                               </td> */}
                               {/* 执行状态 */}
-                              <td className="px-4 py-3 text-center">
+                              <td className="px-3 py-3 text-center">
                                 <div className="flex items-center justify-center">
                                   {(() => {
                                     // 🔥 修复：获取执行状态，完全基于执行历史数据
@@ -1867,7 +1991,7 @@ export function TestPlanDetail() {
                               {/* <td className="px-4 py-3 text-sm">
                                 {getResultBadge(caseItem.execution_result)}
                               </td> */}
-                              <td className="px-4 py-3 text-xs text-center">
+                              <td className="px-3 py-3 text-xs text-center">
                                 {(() => {
                                   // 🔥 修复：获取最新执行记录（从 case_detail 中获取）
                                   // 数据来源完全基于执行历史，确保与后端一致
@@ -1903,14 +2027,14 @@ export function TestPlanDetail() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-4 py-3 text-sm">
+                              <td className="px-3 py-3 text-sm">
                                 {formatDateTime(caseItem.created_at)}
                               </td>
-                              <td className="px-4 py-3 text-sm">
+                              <td className="px-3 py-3 text-sm">
                                 {caseItem.case_detail && (caseItem.case_detail as any).last_execution ? formatDateTime((caseItem.case_detail as any)?.last_execution?.executed_at) : '-'}
                               </td>
                               {/* 操作按钮 */}
-                              <td className="px-4 py-3 text-sm">
+                              <td className="px-3 py-3 text-sm">
                                 <div className="flex items-center gap-5">
                                   {/* 🔥 功能测试和UI自动化用例都显示执行按钮 */}
                                   {(caseItem.case_type === 'functional' || caseItem.case_type === 'ui_auto') && (
@@ -2159,12 +2283,33 @@ export function TestPlanDetail() {
                                 <td className="px-4 py-3 text-sm text-center font-medium text-red-600">{execution.failed_cases}</td>
                                 <td className="px-4 py-3 text-sm text-center font-medium text-yellow-600">{execution.blocked_cases}</td>
                                 <td className="px-4 py-3 text-sm text-center font-medium text-gray-600">{execution.skipped_cases}</td>
-                                <td className="px-4 py-3 text-sm text-center">
+                                {/* <td className="px-4 py-3 text-sm text-center">
                                   <div className="flex items-center gap-2">
                                     <div className="w-16 bg-gray-200 rounded-md h-1.5 overflow-hidden">
                                       <div 
                                         className="h-full bg-blue-500 rounded-md"
                                         style={{ width: `${execution.progress}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-medium text-gray-900 text-xs">{execution.progress}%</span>
+                                  </div>
+                                </td> */}
+                                <td className="px-4 py-3 text-sm text-center">
+                                  <div className="flex items-center justify-start gap-2">
+                                    <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden relative">
+                                      <div
+                                        className={clsx(
+                                          "h-full rounded-full transition-all duration-300",
+                                          execution.status === 'running'
+                                            ? "animate-progress-shimmer bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600"
+                                            : "bg-blue-500"
+                                        )}
+                                        style={{
+                                          width: `${execution.progress}%`,
+                                          ...(execution.status === 'running' ? {
+                                            backgroundSize: '200% 100%'
+                                          } : {})
+                                        }}
                                       />
                                     </div>
                                     <span className="font-medium text-gray-900 text-xs">{execution.progress}%</span>
@@ -2271,9 +2416,10 @@ export function TestPlanDetail() {
                                         <Eye className="w-4 h-4" />
                                       </button>
                                     {/* )} */}
-                                    {/* 继续执行按钮 - 对 running 或 cancelled 状态显示 */}
+                                    {/* 继续执行按钮 - 对 running 或 cancelled 状态显示（UI自动化不显示） */}
                                     {(execution.status === 'running' || execution.status === 'cancelled') && 
-                                      execution.completed_cases < execution.total_cases && (
+                                      execution.completed_cases < execution.total_cases &&
+                                      execution.execution_type !== 'ui_auto' && (
                                       <button
                                         onClick={() => handleContinueExecution(execution)}
                                         className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors"
@@ -2284,14 +2430,13 @@ export function TestPlanDetail() {
                                       </button>
                                     )}
                                     {/* 重新执行按钮 - 对 completed 状态显示 */}
-                                    {execution.status === 'completed' && (
+                                    {(execution.status === 'completed' || execution.execution_type === 'ui_auto') && (
                                       <button
                                         onClick={() => handleReExecute(execution)}
                                         className="inline-flex items-center gap-1 px-2 py-1 text-xs text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors"
                                         title="重新执行所有用例"
                                       >
                                         <RotateCcw className="w-4 h-4" />
-                                        {/* 重新执行 */}
                                       </button>
                                     )}
                                   </div>
@@ -2305,7 +2450,7 @@ export function TestPlanDetail() {
 
                     {/* 紧凑视图 */}
                     {executionViewMode === 'compact' && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 mb-4">
                         {getCurrentPageExecutions().map((execution) => (
                           <div
                             key={execution.id}
@@ -2344,10 +2489,11 @@ export function TestPlanDetail() {
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {/* 继续执行按钮 - 对 running 或 cancelled 状态显示 */}
+                            <div className="flex items-center gap-2 ml-5">
+                              {/* 继续执行按钮 - 对 running 或 cancelled 状态显示（UI自动化不显示） */}
                               {(execution.status === 'cancelled' || execution.status === 'running') && 
-                                execution.completed_cases < execution.total_cases && (
+                                execution.completed_cases < execution.total_cases &&
+                                execution.execution_type !== 'ui_auto' && (
                                 <button
                                   onClick={() => handleContinueExecution(execution)}
                                   className="inline-flex items-center gap-1 px-3 py-1 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
@@ -2357,10 +2503,10 @@ export function TestPlanDetail() {
                                 </button>
                               )}
                               {/* 重新执行按钮 - 对 completed 状态显示 */}
-                              {execution.status === 'completed' && (
+                              {execution.status === 'completed' || execution.execution_type === 'ui_auto' && (
                                 <button
                                   onClick={() => handleReExecute(execution)}
-                                  className="inline-flex items-center gap-1 px-3 py-1 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
+                                  className="inline-flex items-center gap-0 px-1 py-1 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
                                   title="重新执行所有用例"
                                 >
                                   <RotateCcw className="w-4 h-4" />
@@ -2369,7 +2515,7 @@ export function TestPlanDetail() {
                               {(execution.status === 'completed' || execution.status === 'cancelled') && (
                                 <button
                                   onClick={() => handleViewExecutionLog(execution.id)}
-                                  className="inline-flex items-center gap-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                  className="inline-flex items-center gap-0 px-1 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
                                   title="查看执行日志"
                                 >
                                   <FileText className="w-4 h-4" />
@@ -2385,7 +2531,7 @@ export function TestPlanDetail() {
                     {executionViewMode === 'timeline' && (
                       <div className="relative">
                         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-purple-200 to-pink-200" />
-                        <div className="space-y-6">
+                        <div className="space-y-6 mb-4">
                           {getCurrentPageExecutions().map((execution) => (
                             <div key={execution.id} className="relative pl-16">
                               <div className={clsx(
@@ -2422,9 +2568,10 @@ export function TestPlanDetail() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {/* 继续执行按钮 - 对 running 或 cancelled 状态显示 */}
+                                    {/* 继续执行按钮 - 对 running 或 cancelled 状态显示（UI自动化不显示） */}
                                     {(execution.status === 'cancelled' || execution.status === 'running') && 
-                                      execution.completed_cases < execution.total_cases && (
+                                      execution.completed_cases < execution.total_cases &&
+                                      execution.execution_type !== 'ui_auto' && (
                                       <button
                                         onClick={() => handleContinueExecution(execution)}
                                         className="inline-flex items-center gap-1 px-3 py-1 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
@@ -2434,7 +2581,7 @@ export function TestPlanDetail() {
                                       </button>
                                     )}
                                     {/* 重新执行按钮 - 对 completed 状态显示 */}
-                                    {execution.status === 'completed' && (
+                                    {(execution.status === 'completed' || execution.execution_type === 'ui_auto') && (
                                       <button
                                         onClick={() => handleReExecute(execution)}
                                         className="inline-flex items-center gap-1 px-3 py-1 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
@@ -2505,20 +2652,26 @@ export function TestPlanDetail() {
 
                     {/* 卡片视图 */}
                     {executionViewMode === 'cards' && (
-                      <div className="space-y-4">
+                      <div className="space-y-4 mb-4">
                         {getCurrentPageExecutions().map((execution) => (
                           <div
                             key={execution.id}
                             className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all hover:shadow-md"
                           >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
+                            <div className="flex items-start justify-between mb-2 ">
+                              <div className="flex items-center justify-between gap-2">
                                 <div className="font-medium text-gray-900">
                                   {execution.execution_type === 'functional' ? '功能测试执行' : 'UI自动化执行'}
                                 </div>
-                                <div className="text-sm text-gray-500 mt-0">
-                                  执行人: {execution.executor_name} | 执行时间: {formatDate(execution.started_at)}
+                                <div className="text-md font-medium text-gray-600">
+                                  {execution.executor_name}
                                 </div>
+                                <div className="text-md font-medium text-gray-600">
+                                  {formatDate(execution.started_at)}
+                                </div>
+                                {/* <div className="text-sm text-gray-500 mt-0">
+                                  执行人: {execution.executor_name} | 执行时间: {formatDate(execution.started_at)}
+                                </div> */}
                               </div>
                               <div className="flex items-center gap-3">
                                 <div className="text-sm font-medium">
@@ -2534,9 +2687,10 @@ export function TestPlanDetail() {
                                     <span className="text-gray-600">{execution.status}</span>
                                   )}
                                 </div>
-                                {/* 继续执行按钮 - 对 running 或 cancelled 状态显示 */}
+                                {/* 继续执行按钮 - 对 running 或 cancelled 状态显示（UI自动化不显示） */}
                                 {(execution.status === 'cancelled' || execution.status === 'running') && 
-                                  execution.completed_cases < execution.total_cases && (
+                                  execution.completed_cases < execution.total_cases &&
+                                  execution.execution_type !== 'ui_auto' && (
                                   <button
                                     onClick={() => handleContinueExecution(execution)}
                                     className="inline-flex items-center gap-1 px-3 py-1 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
@@ -2547,10 +2701,10 @@ export function TestPlanDetail() {
                                   </button>
                                 )}
                                 {/* 重新执行按钮 - 对 completed 状态显示 */}
-                                {execution.status === 'completed' && (
+                                {(execution.status === 'completed' || execution.execution_type === 'ui_auto') && (
                                   <button
                                     onClick={() => handleReExecute(execution)}
-                                    className="inline-flex items-center gap-1 px-3 py-1 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
+                                    className="inline-flex items-center gap-1 px-0 py-1 ml-2 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
                                     title="重新执行所有用例"
                                   >
                                     <RotateCcw className="w-4 h-4" />
@@ -2560,7 +2714,7 @@ export function TestPlanDetail() {
                                 {(execution.status === 'completed' || execution.status === 'cancelled') && (
                                   <button
                                     onClick={() => handleViewExecutionLog(execution.id)}
-                                    className="inline-flex items-center gap-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="查看执行日志"
                                   >
                                     <FileText className="w-4 h-4" />
@@ -2570,28 +2724,29 @@ export function TestPlanDetail() {
                               </div>
                             </div>
                             
-                            <div className="grid grid-cols-6 gap-4 mt-3 pt-3 border-t border-gray-200 text-sm">
-                              <div>
+                            {/* <div className="grid grid-cols-6 gap-4 mt-3 pt-3 border-t border-gray-200 text-sm"> */}
+                              <div className="flex items-center justify-between gap-4 mt-3 pt-4 border-t border-gray-200 text-sm">
+                              <div className="text-center">
                                 <div className="text-gray-500">总用例</div>
                                 <div className="font-medium">{execution.total_cases}</div>
                               </div>
-                              <div>
+                              <div className="text-center">
                                 <div className="text-gray-500">已完成</div>
                                 <div className="font-medium">{execution.completed_cases}</div>
                               </div>
-                              <div>
+                              <div className="text-center">
                                 <div className="text-gray-500">通过</div>
                                 <div className="font-medium text-green-600">{execution.passed_cases}</div>
                               </div>
-                              <div>
+                              <div className="text-center">
                                 <div className="text-gray-500">失败</div>
                                 <div className="font-medium text-red-600">{execution.failed_cases}</div>
                               </div>
-                              <div>
+                              <div className="text-center">
                                 <div className="text-gray-500">阻塞</div>
                                 <div className="font-medium text-yellow-600">{execution.blocked_cases}</div>
                               </div>
-                              <div>
+                              <div className="text-center">
                                 <div className="text-gray-500">进度</div>
                                 <div className="font-medium">{execution.progress}%</div>
                               </div>
@@ -3403,6 +3558,7 @@ export function TestPlanDetail() {
         onClose={() => {
           setShowExecutionConfig(false);
           setPendingCases([]);
+          setPendingReexecuteExecution(null);
         }}
         title="执行配置"
         size="md"
@@ -3511,6 +3667,7 @@ export function TestPlanDetail() {
               onClick={() => {
                 setShowExecutionConfig(false);
                 setPendingCases([]);
+                setPendingReexecuteExecution(null);
               }}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >

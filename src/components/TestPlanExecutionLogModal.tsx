@@ -6,6 +6,7 @@ import { testPlanService } from '../services/testPlanService';
 import { testService } from '../services/testService';
 import type { TestPlanExecution, TestPlanCaseResult, ExecutionResult } from '../types/testPlan';
 import { TestPlanCaseExecutionLogModal } from './TestPlanCaseExecutionLogModal';
+import { TestRunDetailModal } from './TestRunDetailModal';
 
 interface TestPlanExecutionLogModalProps {
   isOpen: boolean;
@@ -23,6 +24,9 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
   const [isRefreshing, setIsRefreshing] = useState(false);  // 🔥 新增：刷新状态（轻量指示器）
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [currentCaseResult, setCurrentCaseResult] = useState<TestPlanCaseResult | null>(null);
+  // 🔥 UI自动化测试执行详情弹窗状态
+  const [testRunDetailModalOpen, setTestRunDetailModalOpen] = useState(false);
+  const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 10,
@@ -231,7 +235,7 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
       case 'skip':
         return <Tag style={{ marginInlineEnd: 0 }} color="default">跳过</Tag>;
       default:
-        return <Tag style={{ marginInlineEnd: 0 }} color="default">未执行</Tag>;
+        return <Tag style={{ marginInlineEnd: 0 }} color="default">未知</Tag>;
     }
   };
 
@@ -268,7 +272,7 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
       case 'skip':
         return <Tag style={{ marginInlineEnd: 0 }} color="default">已跳过</Tag>;
       default:
-        return <Tag style={{ marginInlineEnd: 0 }} color="default">未执行</Tag>;
+        return <Tag style={{ marginInlineEnd: 0 }} color="default">未知</Tag>;
     }
   };
 
@@ -290,13 +294,14 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
     });
   };
 
-  // 🔥 点击日志按钮，在新标签页打开测试运行详情
+  // 🔥 点击日志按钮，弹窗显示测试运行详情
   const handleViewLogs = (caseResult: TestPlanCaseResult) => {
-    if (caseResult.case_type === 'ui_auto') {
-      // 如果有 execution_id，在新标签页打开测试运行详情页
-      window.open(`/test-runs/${caseResult.execution_id}/detail`, '_blank');
+    if (caseResult.case_type === 'ui_auto' && caseResult.execution_id) {
+      // UI自动化测试：在弹窗中显示测试运行详情
+      setCurrentExecutionId(caseResult.execution_id);
+      setTestRunDetailModalOpen(true);
     } else {
-      // 如果没有 execution_id，打开旧的 Modal（兼容功能测试）
+      // 功能测试：打开旧的 Modal
       setCurrentCaseResult(caseResult);
       setLogModalOpen(true);
     }
@@ -653,7 +658,7 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
         )}
       </div>
 
-      {/* 执行详情弹窗 */}
+      {/* 功能测试执行详情弹窗 */}
       <TestPlanCaseExecutionLogModal
         isOpen={logModalOpen}
         onClose={() => {
@@ -661,6 +666,16 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
           setCurrentCaseResult(null);
         }}
         caseResult={currentCaseResult}
+      />
+
+      {/* UI自动化测试执行详情弹窗 */}
+      <TestRunDetailModal
+        isOpen={testRunDetailModalOpen}
+        onClose={() => {
+          setTestRunDetailModalOpen(false);
+          setCurrentExecutionId(null);
+        }}
+        runId={currentExecutionId || ''}
       />
     </Modal>
   );

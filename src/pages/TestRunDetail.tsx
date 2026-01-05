@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,7 +11,9 @@ import {
   Loader2,
   Play,
   Square,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
@@ -21,7 +23,68 @@ import { LiveView } from '../components/LiveView';
 import { EvidenceViewerNew } from '../components/EvidenceViewerNew';
 
 // 使用统一的 TestRun 类型，从 types/test.ts 导入
-import type { TestRun as TestRunType } from '../types/test';
+import type { TestRun as TestRunType, TestCase } from '../types/test';
+
+// 🔥 可折叠的日志消息组件 - 用于处理过长的MCP返回内容
+const CollapsibleLogMessage: React.FC<{ message: string; maxLength?: number }> = ({ 
+  message, 
+  maxLength = 300 
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // 判断是否需要折叠（内容过长或包含特定关键词）
+  const needsCollapse = message.length > maxLength || 
+    (message.includes('🔍') && message.length > 200) ||
+    message.includes('MCP返回');
+  
+  if (!needsCollapse) {
+    return <span className="text-gray-300 break-all whitespace-pre-wrap">{message}</span>;
+  }
+  
+  // 截取摘要部分（取前面的描述性文字）
+  const getSummary = () => {
+    // 尝试提取关键操作描述
+    const colonIndex = message.indexOf(':');
+    if (colonIndex > 0 && colonIndex < 50) {
+      return message.substring(0, Math.min(colonIndex + 20, maxLength)) + '...';
+    }
+    return message.substring(0, maxLength) + '...';
+  };
+  
+  return (
+    <span className="text-gray-300 break-all whitespace-pre-wrap">
+      {isExpanded ? (
+        <>
+          {message}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(false);
+            }}
+            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-400 rounded transition-colors"
+          >
+            <ChevronUp className="w-3 h-3" />
+            收起
+          </button>
+        </>
+      ) : (
+        <>
+          {getSummary()}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(true);
+            }}
+            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-400 rounded transition-colors"
+          >
+            <ChevronDown className="w-3 h-3" />
+            展开 ({message.length}字符)
+          </button>
+        </>
+      )}
+    </span>
+  );
+};
 
 export function TestRunDetail() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +97,7 @@ export function TestRunDetail() {
   const planId = (location.state as any)?.planId;
 
   const [testRun, setTestRun] = useState<TestRunType | null>(null);
+  const [testCase, setTestCase] = useState<TestCase | null>(null); // 🔥 新增：测试用例详情
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'logs' | 'live' | 'evidence'>('logs');
   const [stopping, setStopping] = useState(false);
@@ -41,6 +105,8 @@ export function TestRunDetail() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   
+  // 全屏状态
+  const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
   
   // 日志滚动容器引用
   const logsScrollRef = useRef<HTMLDivElement>(null);
@@ -48,6 +114,21 @@ export function TestRunDetail() {
   const lastLogRef = useRef<HTMLDivElement>(null);
   // 记录上一次的日志数量，用于判断是否有新日志
   const prevLogsLengthRef = useRef<number>(0);
+
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // 🔥 处理返回逻辑
   const handleGoBack = () => {
@@ -113,45 +194,10 @@ export function TestRunDetail() {
     return { startTime: start, endTime: end };
   }, []);
 
-  // 格式化时间为24小时制格式（本地时间）
-  const formatTimeForBackend = useCallback((date: Date): string => {
-    return format(date, 'yyyy-MM-dd HH:mm:ss.SSS');
-  }, []);
-
   // 是否已同步 duration 到后端（只在测试刚完成时同步一次）
   const durationSyncedRef = useRef<boolean>(false);
   // 跟踪上一次的测试状态，用于检测状态变化
   const prevStatusRef = useRef<string | null>(null);
-
-  // 同步 duration 到后端（同时更新开始和结束时间）
-  // 🔥 关键：使用日志中提取的时间，确保 started_at, finished_at, duration_ms 三者一致
-  const syncDurationToBackend = useCallback(async (
-    runId: string, 
-    durationMs: number, 
-    startedAt: Date, 
-    finishedAt: Date
-  ) => {
-    try {
-      if (durationMs > 0) {
-        const startedAtStr = formatTimeForBackend(startedAt);
-        const finishedAtStr = formatTimeForBackend(finishedAt);
-        
-        await testService.updateTestRunDuration(
-          runId, 
-          durationMs, 
-          startedAtStr,
-          finishedAtStr
-        );
-        console.log(`✅ 执行时长已同步到后端: ${durationMs}ms`, {
-          startedAt: startedAtStr,
-          finishedAt: finishedAtStr,
-          duration: `${(durationMs / 1000).toFixed(3)}s`
-        });
-      }
-    } catch (error) {
-      console.error('同步执行时长到后端失败:', error);
-    }
-  }, [formatTimeForBackend]);
 
   // 加载测试运行数据
   const loadTestRun = useCallback(async (silent = false) => {
@@ -163,9 +209,14 @@ export function TestRunDetail() {
       const run = await testService.getTestRunById(id);
 
       if (run) {
+        // 🔥 修复：优先使用 actualStartedAt（用例实际开始执行时间），其次是 startedAt
+        const actualStartTime = (run as any).actualStartedAt || run.startedAt || (run as any).startTime;
+        const defaultStartTime = actualStartTime ? new Date(actualStartTime) : new Date();
+        
         const processedRun = {
           ...run,
-          startTime: run.startTime ? new Date(run.startTime) : new Date(),
+          startedAt: run.startedAt ? new Date(run.startedAt) : defaultStartTime,
+          actualStartedAt: (run as any).actualStartedAt ? new Date((run as any).actualStartedAt) : defaultStartTime,
           progress: run.progress ?? 0,
           totalSteps: run.totalSteps ?? 0,
           completedSteps: run.completedSteps ?? 0,
@@ -179,14 +230,28 @@ export function TestRunDetail() {
         
         setTestRun(processedRun);
         
+        // 🔥 获取测试用例详情，用于计算步骤和断言的准确数量
+        if (processedRun.testCaseId) {
+          try {
+            const caseDetail = await testService.getTestCaseById(processedRun.testCaseId);
+            setTestCase(caseDetail);
+            console.log('✅ 获取测试用例详情成功:', caseDetail.name);
+          } catch (error) {
+            console.warn('⚠️ 获取测试用例详情失败:', error);
+          }
+        }
+        
         // 初始化上一次的日志数量，避免首次加载时触发滚动
         prevLogsLengthRef.current = processedRun.logs?.length || 0;
         
+        // 🔥 修复：优先使用 actualStartedAt，其次是从日志中提取的时间
         // 从日志中提取开始时间和结束时间
         const { startTime: logStartTime, endTime: logEndTime } = extractTimesFromLogs(processedRun.logs);
         
-        if (logStartTime) {
-          setStartTime(logStartTime);
+        // 优先使用 actualStartedAt，其次是从日志中提取的时间
+        const effectiveStartTime = (processedRun as any).actualStartedAt || logStartTime || processedRun.startedAt;
+        if (effectiveStartTime) {
+          setStartTime(effectiveStartTime instanceof Date ? effectiveStartTime : new Date(effectiveStartTime));
         }
         
         if (logEndTime) {
@@ -446,6 +511,39 @@ export function TestRunDetail() {
     }
   }, [id, loadTestRun, formatDuration, extractTimesFromLogs, activeTab]);
 
+  // 🔥 修复：确保 duration 始终与显示的 startTime 和 endTime 一致
+  useEffect(() => {
+    if (!testRun) return;
+    
+    // 如果测试已完成，且 startTime 和 endTime 都存在，则根据它们计算 duration
+    if (testRun.status !== 'running' && testRun.status !== 'queued') {
+      if (startTime && endTime) {
+        const durationMs = endTime.getTime() - startTime.getTime();
+        if (durationMs >= 0) {
+          const durationStr = formatDuration(durationMs);
+          setDuration(durationStr);
+          console.log(`✅ [时长修复] 根据显示的开始和结束时间重新计算 duration: ${durationStr} (${durationMs}ms)`);
+        }
+      }
+      return;
+    }
+    
+    // 如果测试正在运行，且 startTime 存在，则实时更新 duration
+    if (testRun.status === 'running' && startTime) {
+      const durationInterval = setInterval(() => {
+        const now = new Date();
+        const durationMs = now.getTime() - startTime.getTime();
+        if (durationMs >= 0) {
+          const durationStr = formatDuration(durationMs);
+          setDuration(durationStr);
+          setEndTime(now);
+        }
+      }, 100);
+
+      return () => clearInterval(durationInterval);
+    }
+  }, [testRun?.status, startTime, endTime, formatDuration]);
+
   // 实时更新执行时长（从日志中提取时间 - 仅作为备用方案）
   useEffect(() => {
     if (!testRun || !testRun.logs || testRun.logs.length === 0) return;
@@ -465,29 +563,25 @@ export function TestRunDetail() {
       setStartTime(logStartTime);
     }
     
-    // 如果测试已完成，更新结束时间并计算 duration
+    // 如果测试已完成，更新结束时间
     if (testRun.status !== 'running' && testRun.status !== 'queued') {
       // 🔥 备用方案：仅在未收到 WebSocket 消息时使用日志时间
       if (logEndTime) {
         setEndTime(logEndTime);
       }
       
-      // 使用日志的开始和结束时间计算 duration
-      if (logStartTime && logEndTime) {
-        const durationMs = logEndTime.getTime() - logStartTime.getTime();
-        const durationStr = formatDuration(durationMs);
-        setDuration(durationStr);
-        
-        // 🔥 关键：只在测试刚完成时（状态从 running 变为 completed/failed）同步一次
-        // 检测状态变化，避免切换 tab 或重新进入页面时重复调用
-        const wasRunning = prevStatusRef.current === 'running';
-        const justCompleted = wasRunning && (testRun.status === 'completed' || testRun.status === 'failed' || testRun.status === 'cancelled' || testRun.status === 'error');
-        
-        if (justCompleted && !durationSyncedRef.current && id) {
-          // 🔥 不再需要前端同步，后端已自动处理
-          durationSyncedRef.current = true;
-          console.log(`📊 [备用方案] 测试刚完成，显示时间: ${durationStr} (${durationMs}ms)，后端已自动同步`);
-        }
+      // 🔥 注意：duration 的计算已在上面的 useEffect 中处理（基于 startTime 和 endTime）
+      // 这里不再直接计算 duration，而是依赖上面的 useEffect 来处理
+      
+      // 🔥 关键：只在测试刚完成时（状态从 running 变为 completed/failed）同步一次
+      // 检测状态变化，避免切换 tab 或重新进入页面时重复调用
+      const wasRunning = prevStatusRef.current === 'running';
+      const justCompleted = wasRunning && (testRun.status === 'completed' || testRun.status === 'failed' || testRun.status === 'cancelled' || testRun.status === 'error');
+      
+      if (justCompleted && !durationSyncedRef.current && id) {
+        // 🔥 不再需要前端同步，后端已自动处理
+        durationSyncedRef.current = true;
+        console.log(`📊 [备用方案] 测试刚完成，使用日志时间`);
       }
       
       // 更新上一次状态
@@ -497,23 +591,8 @@ export function TestRunDetail() {
     
     // 更新上一次状态
     prevStatusRef.current = testRun.status;
-
-    // 如果测试正在运行，实时更新 duration（每100ms更新一次）
-    if (logStartTime) {
-      const durationInterval = setInterval(() => {
-        const now = new Date();
-        const durationMs = now.getTime() - logStartTime.getTime();
-        const durationStr = formatDuration(durationMs);
-        setDuration(durationStr);
-        
-        // 更新结束时间为当前时间（实时更新）
-        setEndTime(now);
-      }, 100);
-
-      return () => clearInterval(durationInterval);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testRun?.status, testRun?.logs, id, formatDuration, extractTimesFromLogs, syncDurationToBackend]);
+  }, [testRun?.status, testRun?.logs, id, extractTimesFromLogs]);
 
   // 当有新日志时自动滚动到底部（只有日志数量增加时才滚动）
   useLayoutEffect(() => {
@@ -666,117 +745,165 @@ export function TestRunDetail() {
     );
   }
 
+  // 🔥 修复：从测试用例原始定义中解析步骤和断言数量
+  const parseStepsFromTestCase = (stepsText: string): number => {
+    if (!stepsText || typeof stepsText !== 'string') return 0;
+    // 按换行符分隔，过滤空行，统计有效步骤数
+    const lines = stepsText.split('\n').filter(line => line.trim());
+    // 匹配格式如 "1. xxx" 或 "1、xxx" 或纯文本行
+    return lines.filter(line => line.trim().length > 0).length;
+  };
+
+  const parseAssertionsFromTestCase = (assertionsText: string): number => {
+    if (!assertionsText || typeof assertionsText !== 'string') return 0;
+    // 按换行符分隔，过滤空行，统计有效断言数
+    const lines = assertionsText.split('\n').filter(line => line.trim());
+    return Math.max(lines.length, 0);
+  };
+
   // 计算步骤和断言统计数据（分开统计）
+  // 🔥 修复：优先从测试用例原始定义中获取总数，从日志中获取执行结果
   const calculateStepAndAssertionStats = () => {
-    // 从日志中识别断言执行记录（匹配 "执行断言 1:" 或 "🔍 执行断言 1:" 等模式）
-    const assertionExecutionLogs = testRun.logs?.filter(log => 
-      log.message?.match(/执行断言\s*\d+/)
-    ) || [];
+    // 🔥 步骤1：从测试用例原始定义中计算总步骤数和总断言数
+    let totalOperationSteps = 0;
+    let totalAssertions = 0;
 
-    // 从日志中提取断言数量（匹配 "执行断言 1:" 或 "断言 1 通过" 等模式）
-    const assertionNumbers = new Set<number>();
-    assertionExecutionLogs.forEach(log => {
-      const match = log.message?.match(/执行断言\s*(\d+)/);
-      if (match) {
-        assertionNumbers.add(parseInt(match[1], 10));
-      }
-    });
-    const totalAssertionsFromLogs = assertionNumbers.size > 0 ? Math.max(...Array.from(assertionNumbers)) : 0;
+    if (testCase) {
+      // 优先从测试用例原始定义中解析
+      totalOperationSteps = parseStepsFromTestCase(testCase.steps);
+      totalAssertions = parseAssertionsFromTestCase(testCase.assertions || '');
+      console.log('📊 从测试用例解析:', { 
+        steps: testCase.steps, 
+        assertions: testCase.assertions,
+        totalOperationSteps, 
+        totalAssertions 
+      });
+    }
 
-    // 从 testRun.steps 中识别断言步骤（如果存在）
-    let assertionSteps: typeof testRun.steps = [];
-    let operationSteps: typeof testRun.steps = [];
-    
-    if (testRun.steps && testRun.steps.length > 0) {
-      assertionSteps = testRun.steps.filter(step => 
-        step.stepType === 'assertion' || 
-        step.action === 'expect' ||
-        (step.id && step.id.startsWith('assertion-'))
-      );
-      operationSteps = testRun.steps.filter(step => 
+    // 🔥 步骤2：如果测试用例没有数据，回退到从日志和运行时数据中提取
+    if (totalOperationSteps === 0) {
+      // 从日志中识别操作步骤执行记录
+      const operationStepLogs = testRun.logs?.filter(log => 
+        log.message?.match(/执行步骤\s*\d+/) && 
+        !log.message?.match(/执行断言/) &&
+        !log.message?.match(/截图/) &&
+        !log.message?.includes('📸')
+      ) || [];
+      
+      const operationStepNumbers = new Set<number>();
+      operationStepLogs.forEach(log => {
+        const match = log.message?.match(/执行步骤\s*(\d+)/);
+        if (match) {
+          operationStepNumbers.add(parseInt(match[1], 10));
+        }
+      });
+      const totalOperationStepsFromLogs = operationStepNumbers.size > 0 ? Math.max(...Array.from(operationStepNumbers)) : 0;
+      
+      // 从 testRun.steps 中识别操作步骤
+      const operationSteps = testRun.steps?.filter(step => 
         step.stepType !== 'assertion' && 
         step.action !== 'expect' &&
         (!step.id || !step.id.startsWith('assertion-'))
-      );
+      ) || [];
+      
+      totalOperationSteps = operationSteps.length > 0 
+        ? operationSteps.length 
+        : (totalOperationStepsFromLogs > 0 
+            ? totalOperationStepsFromLogs 
+            : (testRun.totalSteps ?? 0));
     }
 
-    // 断言总数：优先使用从日志中提取的数量，如果没有则使用 steps 中的断言数量
-    const totalAssertions = totalAssertionsFromLogs > 0 ? totalAssertionsFromLogs : assertionSteps.length;
+    if (totalAssertions === 0) {
+      // 从日志中识别断言执行记录
+      const assertionExecutionLogs = testRun.logs?.filter(log => 
+        log.message?.match(/执行断言\s*\d+/)
+      ) || [];
 
-    // 从日志中识别操作步骤执行记录（匹配 "执行步骤 X/Y:" 或 "✅ 步骤 X 执行成功" 等模式）
-    // 🔥 排除截图相关的日志消息
-    const operationStepLogs = testRun.logs?.filter(log => 
-      log.message?.match(/执行步骤\s*\d+/) && 
-      !log.message?.match(/执行断言/) &&
-      !log.message?.match(/截图/) &&
-      !log.message?.includes('📸')
-    ) || [];
+      const assertionNumbers = new Set<number>();
+      assertionExecutionLogs.forEach(log => {
+        const match = log.message?.match(/执行断言\s*(\d+)/);
+        if (match) {
+          assertionNumbers.add(parseInt(match[1], 10));
+        }
+      });
+      const totalAssertionsFromLogs = assertionNumbers.size > 0 ? Math.max(...Array.from(assertionNumbers)) : 0;
+      
+      // 从 testRun.steps 中识别断言步骤
+      const assertionSteps = testRun.steps?.filter(step => 
+        step.stepType === 'assertion' || 
+        step.action === 'expect' ||
+        (step.id && step.id.startsWith('assertion-'))
+      ) || [];
+      
+      totalAssertions = totalAssertionsFromLogs > 0 ? totalAssertionsFromLogs : assertionSteps.length;
+    }
+
+    // 🔥 步骤3：从日志中统计执行结果（通过/失败/完成）
+    // 操作步骤通过数 - 匹配各种成功格式:
+    // - "✅ 步骤 1 执行成功"
+    // - "✅ [步骤 1] 执行成功"  
+    // - "步骤 1 执行成功"
+    const passedOperationStepLogs = testRun.logs?.filter(log => {
+      const msg = log.message || '';
+      // 排除截图相关日志
+      if (msg.includes('截图') || msg.includes('📸')) return false;
+      // 匹配步骤执行成功的各种格式
+      return msg.match(/✅.*步骤\s*\d+.*执行成功/) || 
+             msg.match(/✅.*\[步骤\s*\d+\].*执行成功/) ||
+             msg.match(/步骤\s*\d+\s*执行成功/);
+    }) || [];
     
-    // 从日志中提取操作步骤数量
-    const operationStepNumbers = new Set<number>();
-    operationStepLogs.forEach(log => {
-      const match = log.message?.match(/执行步骤\s*(\d+)/);
-      if (match) {
-        operationStepNumbers.add(parseInt(match[1], 10));
-      }
-    });
-    const totalOperationStepsFromLogs = operationStepNumbers.size > 0 ? Math.max(...Array.from(operationStepNumbers)) : 0;
+    // 操作步骤失败数 - 匹配各种失败格式:
+    // - "❌ 步骤 1 执行失败"
+    // - "❌ [步骤 1] 执行失败"
+    // - "步骤 1 失败"
+    const failedOperationStepLogs = testRun.logs?.filter(log => {
+      const msg = log.message || '';
+      // 排除截图和断言相关日志
+      if (msg.includes('截图') || msg.includes('📸') || msg.includes('断言')) return false;
+      // 匹配步骤执行失败的各种格式
+      return msg.match(/❌.*步骤\s*\d+.*失败/) ||
+             msg.match(/❌.*\[步骤\s*\d+\].*失败/) ||
+             msg.match(/步骤\s*\d+\s*失败/) ||
+             msg.match(/步骤执行最终失败/);
+    }) || [];
 
-    // 操作步骤统计
-    const totalOperationSteps = operationSteps.length > 0 
-      ? operationSteps.length 
-      : (totalOperationStepsFromLogs > 0 
-          ? totalOperationStepsFromLogs 
-          : Math.max(0, (testRun.totalSteps ?? 0) - totalAssertions)); // 如果 steps 为空，从 totalSteps 中减去断言数量
+    // 断言通过数 - 匹配各种通过格式:
+    // - "✅ 断言验证通过: xxx"
+    // - "✅ 默认断言验证通过: xxx"
+    // - "✅ 等待文本断言通过: xxx"
+    // - "断言 1 通过"
+    const passedAssertionLogs = testRun.logs?.filter(log => {
+      const msg = log.message || '';
+      // 排除截图和解析相关日志
+      if (msg.includes('截图') || msg.includes('解析成功') || msg.includes('匹配成功')) return false;
+      // 匹配断言通过的各种格式
+      return msg.match(/断言验证通过/) ||
+             msg.match(/默认断言验证通过/) ||
+             msg.match(/等待文本断言通过/) ||
+             msg.match(/断言\s*\d+\s*通过/);
+    }) || [];
+    
+    // 断言失败数 - 匹配各种失败格式:
+    // - "❌ 断言验证失败: xxx"
+    // - "❌ 断言 1 失败: xxx"
+    // - "❌ 等待文本断言失败: xxx"
+    const failedAssertionLogs = testRun.logs?.filter(log => {
+      const msg = log.message || '';
+      // 匹配断言失败的各种格式
+      return msg.match(/断言验证失败/) ||
+             msg.match(/等待文本断言失败/) ||
+             msg.match(/❌.*断言\s*\d+\s*失败/) ||
+             msg.match(/断言\s*\d+\s*失败/);
+    }) || [];
 
-    // 从日志中统计操作步骤的完成数和通过数
-    // 🔥 排除截图相关的日志消息
-    const passedOperationStepLogs = testRun.logs?.filter(log => 
-      (log.message?.match(/步骤\s*\d+\s*执行成功/) || 
-       log.message?.match(/✅\s*步骤\s*\d+/)) &&
-      !log.message?.match(/截图/) &&
-      !log.message?.includes('📸')
-    ) || [];
-    const failedOperationStepLogs = testRun.logs?.filter(log => 
-      (log.message?.match(/步骤\s*\d+\s*失败/) || 
-       log.message?.match(/❌\s*步骤\s*\d+/)) &&
-      !log.message?.match(/断言/) &&
-      !log.message?.match(/截图/) &&
-      !log.message?.includes('📸')
-    ) || [];
-
-    // 断言统计：从日志中统计（匹配 "断言 X 通过" 或 "✅ 断言 X 通过" 等模式）
-    const passedAssertionLogs = testRun.logs?.filter(log => 
-      log.message?.match(/断言\s*\d+\s*通过/)
-    ) || [];
-    const failedAssertionLogs = testRun.logs?.filter(log => 
-      log.message?.match(/断言\s*\d+\s*失败/) || 
-      (log.message?.includes('断言') && log.level === 'error')
-    ) || [];
+    const passedOperationSteps = passedOperationStepLogs.length;
+    const failedOperationSteps = failedOperationStepLogs.length;
+    const completedOperationSteps = passedOperationSteps + failedOperationSteps;
 
     const passedAssertions = passedAssertionLogs.length;
     const failedAssertions = failedAssertionLogs.length;
     const completedAssertions = passedAssertions + failedAssertions;
-
-    const completedOperationSteps = operationSteps.length > 0
-      ? operationSteps.filter(step => 
-          testRun.successfulSteps?.includes(step.id) || 
-          testRun.logs?.some(log => log.stepId === step.id)
-        ).length
-      : Math.max(0, (testRun.completedSteps ?? 0) - completedAssertions); // 从 completedSteps 中减去已完成的断言数
-
-    const passedOperationSteps = operationSteps.length > 0
-      ? operationSteps.filter(step => 
-          testRun.successfulSteps?.includes(step.id)
-        ).length
-      : passedOperationStepLogs.length;
-
-    const failedOperationSteps = operationSteps.length > 0
-      ? operationSteps.filter(step => 
-          !testRun.successfulSteps?.includes(step.id) && 
-          testRun.logs?.some(log => log.stepId === step.id && log.level === 'error')
-        ).length
-      : failedOperationStepLogs.length;
 
     return {
       // 操作步骤统计
@@ -794,9 +921,14 @@ export function TestRunDetail() {
 
   const stats = calculateStepAndAssertionStats();
 
+  // 计算可用高度：
+  // 非全屏：视口高度 - 顶部导航栏(80px) - TabBar(48px) - Layout main padding(上32px)
+  // 全屏：视口高度（全屏时顶部导航栏和TabBar都隐藏）
+  const containerHeight = isFullscreen ? '97vh' : 'calc(100vh - 160px)';
+  
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="flex flex-col overflow-hidden" style={{ height: containerHeight }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-0 py-1 flex flex-col flex-1 min-h-0 w-full">
         {/* 头部 */}
         {/* <div className="mb-6">
           <button
@@ -833,7 +965,7 @@ export function TestRunDetail() {
           </div>
         </div> */}
         {/* 顶部导航栏 */}
-        <div className="mb-3 flex items-center justify-between gap-0">
+        <div className="mb-3 flex items-center justify-between gap-0 flex-shrink-0">
           <div className="flex items-center gap-4">
             <button
               onClick={handleGoBack}
@@ -887,7 +1019,7 @@ export function TestRunDetail() {
         </div>
         {/* 统计信息 */}
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 flex-shrink-0">
           {/* <div className="bg-white rounded-lg shadow p-4">
           <div className="text-xs text-gray-500 mb-1">状态</div>
               <div className="flex items-center gap-2">
@@ -897,7 +1029,7 @@ export function TestRunDetail() {
                 </span>
               </div>
           </div> */}
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">执行进度</div>
             <div className="text-xl font-bold text-gray-900">{testRun.progress ?? 0}%</div>
             <div className="flex flex-col gap-2 mt-2">
@@ -911,7 +1043,7 @@ export function TestRunDetail() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">执行结果</div>
             <div className="flex items-center gap-3">
               {(stats.passedOperationSteps === stats.totalOperationSteps && stats.passedAssertions === stats.totalAssertions) && (
@@ -985,7 +1117,7 @@ export function TestRunDetail() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">执行时长</div>
             <div className="text-xl font-bold text-gray-900">{duration}</div>
             <div className="flex flex-col gap-2 mt-2 text-xs text-gray-600">
@@ -996,7 +1128,7 @@ export function TestRunDetail() {
                 <div>结束时间：{format(new Date(endTime), 'yyyy-MM-dd HH:mm:ss.SSS')}</div>
               )}
               {!startTime && !endTime && (
-                <div>{safeFormatDate(testRun.startTime, 'yyyy-MM-dd HH:mm:ss')}</div>
+                <div>{safeFormatDate(testRun.startedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
               )}
             </div>
           </div>
@@ -1075,8 +1207,8 @@ export function TestRunDetail() {
         </motion.div> */}
 
         {/* 标签页 */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="border-b border-gray-200">
+        <div className="bg-white rounded-lg shadow flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="border-b border-gray-200 flex-shrink-0">
             <nav className="flex -mb-px">
               <button
                 onClick={() => setActiveTab('logs')}
@@ -1152,9 +1284,9 @@ export function TestRunDetail() {
               </div>
             )} */}
 
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {activeTab === 'logs' && (
-              <div className="flex-1 flex flex-col p-4 overflow-hidden">
+              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
                 {/* <div className="flex items-center justify-end mb-3 flex-shrink-0">
                   <h3 className="text-lg font-semibold text-gray-900">执行日志</h3>
                   <button className="text-sm text-blue-600 hover:text-blue-700">
@@ -1164,7 +1296,7 @@ export function TestRunDetail() {
                 </div> */}
                 <div 
                   ref={logsScrollRef}
-                  className="bg-gray-900 rounded-lg p-4 flex-1 overflow-y-auto font-mono text-sm"
+                  className="bg-gray-900 rounded-lg p-4 flex-1 min-h-0 overflow-y-auto font-mono text-sm"
                 >
                   {testRun.logs.length === 0 ? (
                     <div className="text-gray-600 text-center py-8">暂无日志</div>
@@ -1179,7 +1311,7 @@ export function TestRunDetail() {
                           {safeFormatDate(log.timestamp, 'yyyy-MM-dd HH:mm:ss.SSS')}
                         </span>
                         <span className="flex-shrink-0">{getLevelIcon(log.level)}</span>
-                        <span className="text-gray-300 break-all whitespace-pre-wrap">{log.message}</span>
+                        <CollapsibleLogMessage message={log.message} />
                       </div>
                     ))
                   )}
@@ -1188,9 +1320,9 @@ export function TestRunDetail() {
             )}
 
             {activeTab === 'live' && (
-              <div className="flex-1 flex flex-col p-4 overflow-hidden">
+              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
                 {/* <h3 className="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">实时画面</h3> */}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-hidden">
                   {testRun.status === 'running' ? (
                     <LiveView runId={testRun.id} />
                   ) : (
@@ -1204,9 +1336,9 @@ export function TestRunDetail() {
             )}
 
             {activeTab === 'evidence' && (
-              <div className="flex-1 flex flex-col p-4 overflow-hidden">
+              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
                 {/* <h3 className="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">测试证据</h3> */}
-                <div className="flex-1 overflow-auto">
+                <div className="flex-1 min-h-0 overflow-auto">
                   {/* <EvidenceViewer runId={testRun.id} /> */}
                   <EvidenceViewerNew runId={testRun.id} />
                 </div>

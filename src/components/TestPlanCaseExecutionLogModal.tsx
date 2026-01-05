@@ -121,26 +121,26 @@ export const TestPlanCaseExecutionLogModal: React.FC<TestPlanCaseExecutionLogMod
                           <span className="text-gray-600">
                             总步骤: <span className="font-semibold text-gray-800">{caseResult.totalSteps}</span>
                           </span>
-                          {caseResult.completedSteps && (
+                          {/* {caseResult.completedSteps && ( */}
                             <span className="text-blue-600">
                               已完成: <span className="font-semibold">{caseResult.completedSteps}</span>
                             </span>
-                          )}
-                          {caseResult.passedSteps && (
+                          {/* )} */}
+                          {/* {caseResult.passedSteps && ( */}
                             <span className="text-green-600">
                               ✓ 通过: <span className="font-semibold">{caseResult.passedSteps}</span>
                             </span>
-                          )}
-                          {caseResult.failedSteps !== undefined && caseResult.failedSteps !== null && (
+                          {/* )} */}
+                          {/* {caseResult.failedSteps !== undefined && caseResult.failedSteps !== null && ( */}
                             <span className="text-red-600">
                               ✗ 失败: <span className="font-semibold">{caseResult.failedSteps}</span>
                             </span>
-                          )}
-                          {caseResult.blockedSteps !== undefined && caseResult.blockedSteps !== null && (
+                          {/* )} */}
+                          {/* {caseResult.blockedSteps !== undefined && caseResult.blockedSteps !== null && ( */}
                             <span className="text-orange-600">
                               ⚠ 受阻: <span className="font-semibold">{caseResult.blockedSteps}</span>
                             </span>
-                          )}
+                          {/* )} */}
                         </div>
                       </div>
                     )}

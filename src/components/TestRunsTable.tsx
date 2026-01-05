@@ -30,6 +30,7 @@ interface TestRun {
   // 🔥 优化：统一使用 startedAt 和 finishedAt 字段
   // 支持 Date 对象或 ISO 字符串，因为从后端可能返回字符串
   startedAt: Date | string;
+  actualStartedAt?: Date | string;
   finishedAt?: Date | string;
   duration: string;
   totalSteps: number;
@@ -66,7 +67,7 @@ interface TestRunsTableProps {
   selectAll: boolean;
 }
 
-type SortField = 'name' | 'status' | 'startedAt' | 'finishedAt' | 'duration' | 'executor' | 'environment' | 'system' | 'module' | 'priority' | 'projectVersion';
+type SortField = 'name' | 'status' | 'startedAt' | 'finishedAt' | 'duration' | 'executor' | 'environment' | 'system' | 'module' | 'priority' | 'projectVersion' | 'actualStartedAt';
 type SortDirection = 'asc' | 'desc';
 
 export function TestRunsTable({
@@ -80,8 +81,8 @@ export function TestRunsTable({
   selectAll
 }: TestRunsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('startedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>('actualStartedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // 状态图标
   const getStatusIcon = (status: string) => {
@@ -226,7 +227,7 @@ export function TestRunsTable({
     if (bValue === undefined) bValue = '';
 
     // 日期字段特殊处理
-    if (sortField === 'startedAt' || sortField === 'finishedAt') {
+    if (sortField === 'startedAt' || sortField === 'finishedAt' || sortField === 'actualStartedAt') {
       // 🔥 修复：处理字符串类型的日期
       const aDate = aValue 
         ? (aValue instanceof Date ? aValue.getTime() : new Date(aValue as string).getTime())
@@ -320,11 +321,11 @@ export function TestRunsTable({
                 </div>
               </th>
               {/* 进度 */}
-              <th className="px-0 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 <span>执行进度</span>
               </th>
               {/* 状态 */}
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+              <th className="px-0 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 <div className="flex items-center justify-center space-x-2 cursor-pointer hover:bg-gray-100 -mx-2 px-2 py-1 rounded" onClick={() => handleSort('status')}>
                   <span>执行状态</span>
                   {/* <SortIcon field="status" /> */}
@@ -343,9 +344,9 @@ export function TestRunsTable({
               </th>
               {/* 开始时间 */}
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 -mx-2 px-2 py-1 rounded" onClick={() => handleSort('startedAt')}>
+                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 -mx-2 px-2 py-1 rounded" onClick={() => handleSort('actualStartedAt')}>
                   <span>开始时间</span>
-                  <SortIcon field="startedAt" />
+                  <SortIcon field="actualStartedAt" />
                 </div>
               </th>
               {/* 结束时间 */}
@@ -543,8 +544,8 @@ export function TestRunsTable({
                         </div>
                       </div>
                     </td> */}
-                    <td className="px-0 py-3 text-sm text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-3 py-3 text-sm text-center">
+                      <div className="flex items-center justify-start gap-2">
                         <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden relative">
                           <div
                             className={clsx(
@@ -565,9 +566,9 @@ export function TestRunsTable({
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center justify-center flex-wrap gap-1">
+                      <div className="flex items-center justify-center gap-1">
                         <span className={clsx(
-                          'inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800 border border-blue-200 truncate max-w-[55px]',
+                          'inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800 border border-blue-200 truncate max-w-[65px]',
                           getStatusColor(run.status)
                         )}>
                           {/* {getStatusIcon(run.status)} &nbsp;  */}
@@ -612,8 +613,8 @@ export function TestRunsTable({
                                   )}
                                   <div>执行状态: {run.status === 'completed' ? '已完成' : run.status === 'running' ? '进行中' : run.status === 'failed' ? '失败' : run.status === 'queued' ? '排队中' : '未知'}</div>
                                   <div>执行结果: {resultText}</div>
-                                  {run.startedAt && (
-                                    <div>开始时间: {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
+                                  {run.actualStartedAt && (
+                                    <div>开始时间: {safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
                                   )}
                                   {run.finishedAt && (
                                     <div>结束时间: {safeFormat(run.finishedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
@@ -637,11 +638,18 @@ export function TestRunsTable({
                     </td>
                     {/* 开始时间 */}
                     <td className="px-2 py-3">
-                      <div className="flex items-center  text-sm text-gray-600">
-                        <Clock className="h-3 w-3 mr-1" />
-                        <span className="truncate min-w-20 max-w-32" title={safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}>
-                          {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}
-                        </span>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {/* <span className="truncate min-w-20 max-w-32" title={safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}>
+                            {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}
+                          </span> */}
+                          {run.actualStartedAt && (
+                            <span className="truncate min-w-20 max-w-32" title={safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}>
+                            {safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}
+                            </span>                    
+                          )}
+                        </div>
                       </div>
                     </td>
                     {/* 结束时间 */}

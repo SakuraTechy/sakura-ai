@@ -18,6 +18,8 @@ import { EvidenceService } from './evidenceService.js';
 import { TestCaseExecutionService } from './testCaseExecutionService.js';
 import { PlaywrightTestRunner } from './playwrightTestRunner.js';
 import sharp from 'sharp';
+// 🔥 导入测试计划状态更新函数
+import { updateTestPlanStatusFromLatestExecution, updateTestPlanExecution } from './testPlanService.js';
 
 // 重构后的测试执行服务：支持 MCP 和 Playwright Test Runner 两种执行引擎
 export class TestExecutionService {
@@ -144,16 +146,20 @@ export class TestExecutionService {
   private logAIParserInfo(): void {
     try {
       const modelInfo = this.aiParser.getCurrentModelInfo();
+      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       console.log(`🤖 测试执行服务已初始化，AI解析器配置:`);
-      console.log(`   模型: ${modelInfo.modelName} (${modelInfo.provider})`);
-      console.log(`   运行模式: ${modelInfo.mode}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`   📦 模型: ${modelInfo.modelName}`);
+      console.log(`   🏢 提供商: ${modelInfo.provider}`);
+      console.log(`   ⚙️ 运行模式: ${modelInfo.mode}`);
 
       if (this.aiParser.isConfigManagerMode()) {
-        console.log(`   配置管理器: 已启用`);
+        console.log(`   🔧 配置管理器: 已启用`);
       } else {
-        console.log(`   配置管理器: 未启用 (使用传统模式)`);
+        console.log(`   🔧 配置管理器: 未启用 (使用传统模式)`);
       }
-    } catch (error) {
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+    } catch (error: any) {
       console.warn(`⚠️ 无法获取AI解析器模型信息: ${error.message}`);
     }
   }
@@ -362,6 +368,7 @@ export class TestExecutionService {
   // 🔥 新增：支持分页和过滤的测试用例查询
   /**
    * 🔥 新增：增强测试用例数据，添加成功率、最后运行时间、执行状态和结果
+   * 🔥 修复：成功率改为基于最新执行的步骤通过率（passed_steps / total_steps）
    */
   private async enhanceTestCasesWithRunData(testCases: TestCase[]): Promise<TestCase[]> {
     if (testCases.length === 0) return testCases;
@@ -369,51 +376,42 @@ export class TestExecutionService {
     // 批量获取测试用例的运行数据
     const testCaseIds = testCases.map(tc => tc.id);
     
-    // 🔥 修复：通过test_run_results表关联获取运行记录
-    // test_runs表没有test_case_id字段，需要通过test_run_results关联
-    const allRunResults = await this.prisma.test_run_results.findMany({
+    // 🔥 修复：从 test_case_executions 表获取最新执行记录（包含步骤统计）
+    // 获取每个测试用例的最新执行记录
+    const allExecutions = await this.prisma.test_case_executions.findMany({
       where: {
-        case_id: { in: testCaseIds }
+        test_case_id: { in: testCaseIds },
+        // 只获取已完成的执行记录
+        status: { in: ['completed', 'failed', 'error'] }
       },
-      include: {
-        test_runs: {
-          select: {
-            id: true,
-            status: true,
-            started_at: true,
-            finished_at: true
-          }
-        }
+      select: {
+        test_case_id: true,
+        status: true,
+        started_at: true,
+        finished_at: true,
+        total_steps: true,
+        passed_steps: true,
+        failed_steps: true,
+        completed_steps: true
       },
       orderBy: {
-        executed_at: 'desc'
+        finished_at: 'desc'
       }
     });
 
-    // 按测试用例ID分组运行记录
-    const runsByTestCase = new Map<number, any[]>();
-    for (const runResult of allRunResults) {
-      const tcId = runResult.case_id;
-      if (!runsByTestCase.has(tcId)) {
-        runsByTestCase.set(tcId, []);
+    // 按测试用例ID分组，只保留每个用例的最新执行记录
+    const latestExecutionByCase = new Map<number, typeof allExecutions[0]>();
+    for (const exec of allExecutions) {
+      if (!latestExecutionByCase.has(exec.test_case_id)) {
+        latestExecutionByCase.set(exec.test_case_id, exec);
       }
-      // 组合test_run_results和test_runs的数据
-      runsByTestCase.get(tcId)!.push({
-        id: runResult.test_runs.id,
-        case_id: tcId,
-        status: runResult.test_runs.status,
-        result: runResult.status, // test_run_results的status就是结果
-        started_at: runResult.test_runs.started_at,
-        finished_at: runResult.test_runs.finished_at,
-        executed_at: runResult.executed_at
-      });
     }
 
     // 增强每个测试用例的数据
     return testCases.map(testCase => {
-      const runs = runsByTestCase.get(testCase.id) || [];
+      const latestExec = latestExecutionByCase.get(testCase.id);
       
-      if (runs.length === 0) {
+      if (!latestExec) {
         return {
           ...testCase,
           success_rate: 0,
@@ -423,33 +421,23 @@ export class TestExecutionService {
         };
       }
 
-      // 计算成功率
-      // test_run_results的status: PASSED, FAILED, SKIPPED
-      const completedRuns = runs.filter(r => 
-        r.result === 'PASSED' || r.result === 'FAILED' || r.result === 'SKIPPED'
-      );
-      const passedRuns = runs.filter(r => r.result === 'PASSED');
-      const successRate = completedRuns.length > 0 
-        ? Math.round((passedRuns.length / completedRuns.length) * 100)
+      // 🔥 修复：计算步骤通过率
+      // success_rate = (passed_steps / total_steps) * 100
+      const totalSteps = latestExec.total_steps || 0;
+      const passedSteps = latestExec.passed_steps || 0;
+      const successRate = totalSteps > 0 
+        ? Math.round((passedSteps / totalSteps) * 100)
         : 0;
       
       // 🔥 调试日志：记录成功率计算过程
-      if (testCase.id && runs.length > 0) {
-        console.log(`[成功率计算] 测试用例ID: ${testCase.id}, 总运行次数: ${runs.length}, 完成次数: ${completedRuns.length}, 通过次数: ${passedRuns.length}, 成功率: ${successRate}%`);
-      }
+      console.log(`[成功率计算] 测试用例ID: ${testCase.id}, 总步骤数: ${totalSteps}, 通过步骤数: ${passedSteps}, 成功率: ${successRate}%`);
 
-      // 获取最新的运行记录（按executed_at排序）
-      const latestRun = runs.sort((a, b) => {
-        const aTime = a.executed_at ? new Date(a.executed_at).getTime() : 0;
-        const bTime = b.executed_at ? new Date(b.executed_at).getTime() : 0;
-        return bTime - aTime;
-      })[0];
-      
       // 格式化最后运行时间
       let lastRun = '-';
-      if (latestRun?.executed_at) {
+      const execTime = latestExec.finished_at || latestExec.started_at;
+      if (execTime) {
         try {
-          const date = new Date(latestRun.executed_at);
+          const date = new Date(execTime);
           lastRun = date.toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -459,46 +447,33 @@ export class TestExecutionService {
             second: '2-digit'
           });
         } catch {
-          lastRun = latestRun.executed_at.toString();
-        }
-      } else if (latestRun?.started_at) {
-        try {
-          const date = new Date(latestRun.started_at);
-          lastRun = date.toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
-        } catch {
-          lastRun = latestRun.started_at.toString();
+          lastRun = execTime.toString();
         }
       }
 
-      // 映射执行状态（从test_runs的status）
+      // 映射执行状态
       let executionStatus: string | undefined;
-      if (latestRun?.status) {
-        const statusMap: Record<string, string> = {
-          'PENDING': 'pending',
-          'RUNNING': 'running',
-          'PASSED': 'completed',
-          'FAILED': 'failed',
-          'CANCELLED': 'cancelled'
-        };
-        executionStatus = statusMap[latestRun.status] || 'pending';
-      }
+      const statusMap: Record<string, string> = {
+        'queued': 'pending',
+        'running': 'running',
+        'completed': 'completed',
+        'failed': 'failed',
+        'error': 'error',
+        'cancelled': 'cancelled'
+      };
+      executionStatus = statusMap[latestExec.status] || 'pending';
 
-      // 映射执行结果（从test_run_results的status）
+      // 根据步骤结果判断执行结果
       let executionResult: string | undefined;
-      if (latestRun?.result) {
-        const resultMap: Record<string, string> = {
-          'PASSED': 'pass',
-          'FAILED': 'fail',
-          'SKIPPED': 'skip'
-        };
-        executionResult = resultMap[latestRun.result] || undefined;
+      const failedSteps = latestExec.failed_steps || 0;
+      if (latestExec.status === 'completed' || latestExec.status === 'failed') {
+        if (failedSteps > 0) {
+          executionResult = 'fail';
+        } else if (passedSteps >= totalSteps && totalSteps > 0) {
+          executionResult = 'pass';
+        } else if (totalSteps > 0 && passedSteps < totalSteps) {
+          executionResult = 'block';
+        }
       }
 
       return {
@@ -1129,22 +1104,51 @@ export class TestExecutionService {
     // 记录当前AI解析器配置信息
     try {
       // 🔥 修复：使用异步版本确保配置管理器已初始化，能正确获取模型信息
-      const modelInfo = await this.aiParser.getCurrentModelInfoAsync();
-      console.log(`🤖 [${runId}] AI解析器配置信息:`);
-      console.log(`   模型: ${modelInfo.modelName} (${modelInfo.provider})`);
-      console.log(`   运行模式: ${modelInfo.mode}`);
-      this.addLog(runId, `🤖 使用AI模型: ${modelInfo.modelName} (${modelInfo.provider})`, 'info');
-
+      const modelInfo = await this.aiParser.getDetailedModelInfoAsync();
+      // console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      // console.log(`🤖 [${runId}] AI解析器配置信息:`);
+      // console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      // console.log(`   ⚙️ 运行模式: ${modelInfo.mode}`);
+      // console.log(`   🏢 模型厂商: ${modelInfo.provider}`);
+      // console.log(`   📦 模型ID: ${modelInfo.modelId}`);
+      // console.log(`   📦 模型类型: ${modelInfo.modelName}`);
+      // console.log(`   📡 API格式: ${modelInfo.apiFormat}`);
+      // console.log(`   🌐 API端点: ${modelInfo.baseUrl}`);
+      // console.log(`   🤖 API模型: ${modelInfo.apiModel}`);
+      // console.log(`   🔑 API Key: ${modelInfo.apiKeyStatus}`);
+      // console.log(`   🌡️ Temperature: ${modelInfo.temperature}`);
+      // console.log(`   📊 Max Tokens: ${modelInfo.maxTokens}`);
+      // console.log(`   💰 成本级别: ${modelInfo.costLevel}`);
+      // if (modelInfo.capabilities.length > 0) {
+      //   console.log(`   🎯 模型能力: ${modelInfo.capabilities.join(', ')}`);
+      // }
+      // console.log(`   ✅ 初始化状态: ${modelInfo.isInitialized ? '已初始化' : '未初始化'}`);
+      // console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      
+      this.addLog(runId, `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`, 'info');
       if (this.aiParser.isConfigManagerMode()) {
         this.addLog(runId, `🔧 配置管理器模式已启用，支持动态模型切换`, 'info');
       } else {
         this.addLog(runId, `⚙️ 传统模式运行，使用固定配置`, 'info');
       }
-    } catch (error) {
+      this.addLog(runId, `⚙️ 运行模式: ${modelInfo.mode}`, 'info');
+      this.addLog(runId, `🏢 模型厂商: ${modelInfo.provider}`, 'info');
+      this.addLog(runId, `📦 模型类型: ${modelInfo.modelId} - ${modelInfo.modelName}`, 'info');
+      this.addLog(runId, `📡 API格式: ${modelInfo.apiFormat}`, 'info');
+      this.addLog(runId, `🌐 API端点: ${modelInfo.baseUrl}`, 'info');
+      this.addLog(runId, `🤖 API模型: ${modelInfo.apiModel}`, 'info');
+      // this.addLog(runId, `🔑 API Key: ${modelInfo.apiKeyStatus}`, 'info');
+      this.addLog(runId, `🌡️ Temperature: ${modelInfo.temperature}`, 'info');
+      this.addLog(runId, `📊 Max Tokens: ${modelInfo.maxTokens}`, 'info');
+      this.addLog(runId, `💰 成本级别: ${modelInfo.costLevel}`, 'info');
+      if (modelInfo.capabilities.length > 0) {
+        this.addLog(runId, `🎯 模型能力: ${modelInfo.capabilities.join(', ')}`, 'info');
+      }
+    } catch (error: any) {
       console.warn(`⚠️ [${runId}] 无法获取AI解析器信息: ${error.message}`);
       this.addLog(runId, `⚠️ 无法获取AI模型信息`, 'warning');
     }
-
+    this.addLog(runId, `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`, 'info');
     try {
       // 🔥 根据执行引擎选择初始化方式
       if (executionEngine === 'playwright') {
@@ -2911,24 +2915,19 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     const testRun = testRunStore.get(runId);
     if (testRun) {
       // 🔥 新增：首次变为running状态时，记录实际开始执行时间
-      if (status === 'running' && testRun.status !== 'running' && !testRun.actualStartedAt) {
-        testRun.actualStartedAt = new Date();
-        console.log(`⏱️ [${runId}] 记录实际开始执行时间: ${testRun.actualStartedAt.toISOString()}`);
-      }
-
-      // 🔥 记录真实的测试执行完成时间（actualEndedAt）
-      // 这是测试真正执行完成的时间，不包括后续的清理、保存等工作
-      if ((status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'error') && !testRun.finishedAt) {
-        testRun.finishedAt = new Date();
-        console.log(`⏱️ [${runId}] 记录真实执行完成时间（actualEndedAt）: ${testRun.finishedAt.toISOString()}`);
+      // 🔥 关键修复：每次用例开始时都设置 actualStartedAt，确保第二条用例也有开始时间
+      if (status === 'running' && testRun.status !== 'running') {
+        // 🔥 关键修复：每次变为 running 状态时都重新设置 actualStartedAt（确保第二条用例也有开始时间）
+        (testRun as any).actualStartedAt = new Date();
+        console.log(`⏱️ [${runId}] 记录实际开始执行时间: ${(testRun as any).actualStartedAt.toISOString()}`);
         
-        // 🔥 修复：测试完成时，确保进度为100%，completedSteps等于totalSteps
-        if (status === 'completed' || status === 'failed') {
-          testRun.progress = 100;
-          if (testRun.totalSteps && testRun.totalSteps > 0) {
-            testRun.completedSteps = testRun.totalSteps;
-          }
-          console.log(`📊 [${runId}] 测试完成，设置进度为100%，完成步骤: ${testRun.completedSteps}/${testRun.totalSteps}`);
+        // 🔥 修复：如果是从测试计划执行的，立即同步 started_at 到 execution_results
+        const planExecutionId = (testRun as any).planExecutionId;
+        if (planExecutionId) {
+          // 异步调用，不阻塞主流程
+          this.syncToTestPlanExecution(runId, testRun, planExecutionId).catch(err => {
+            console.error(`❌ [${runId}] 同步 started_at 到测试计划执行记录失败:`, err);
+          });
         }
       }
 
@@ -2945,6 +2944,24 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       const logLevel = (status === 'failed' || status === 'error') ? 'error' : 'info';
       if (message) {
         this.addLog(runId, message, logLevel);
+      }
+
+      // 🔥 修复：在添加日志之后设置 finishedAt，确保 finished_at 时间是最新的（最后一条日志的时间）
+      // 这是测试真正执行完成的时间，包括最后一条日志的时间
+      if ((status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'error') && !testRun.finishedAt) {
+        // 🔥 关键修复：使用当前时间（即最后一条日志的时间）作为 finishedAt
+        // 这样可以确保 finished_at 时间是最新的，不会早于最后一条日志
+        testRun.finishedAt = new Date();
+        console.log(`⏱️ [${runId}] 记录真实执行完成时间（actualEndedAt）: ${testRun.finishedAt.toISOString()}`);
+        
+        // 🔥 修复：测试完成时，确保进度为100%，completedSteps等于totalSteps
+        if (status === 'completed' || status === 'failed') {
+          testRun.progress = 100;
+          if (testRun.totalSteps && testRun.totalSteps > 0) {
+            testRun.completedSteps = testRun.totalSteps;
+          }
+          console.log(`📊 [${runId}] 测试完成，设置进度为100%，完成步骤: ${testRun.completedSteps}/${testRun.totalSteps}`);
+        }
       }
 
       // 🔥 修改：WebSocket 广播包含完整的进度数据
@@ -3049,18 +3066,185 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         }
       }
       
-      // 🔥 获取完成时间
-      const startedAt = testRun.startedAt?.toISOString() || new Date().toISOString();
-      const finishedAt = testRun.finishedAt?.toISOString() || new Date().toISOString();
-      const completedSteps = testRun.completedSteps || totalSteps;
-      const blockedSteps = totalSteps - passedSteps - failedSteps;
+      // 🔥 关键修复：使用 actualStartedAt（用例实际开始执行的时间），而不是 startedAt（加入队列的时间）
+      // 由于用例是串行执行的，第二条用例的 actualStartedAt 应该是在第一条用例完成后
+      // 优先使用 actualStartedAt，如果没有则使用 startedAt
+      const startedAt = ((testRun as any).actualStartedAt || testRun.startedAt)?.toISOString() || new Date().toISOString();
       
       // 🔥 确定执行状态
       let executionStatus: 'running' | 'completed' | 'failed' | 'cancelled' | 'error' | 'queued' = 'completed';
-      if (testRun.status === 'failed' || testRun.status === 'error') {
+      if (testRun.status === 'running') {
+        executionStatus = 'running';
+      } else if (testRun.status === 'failed' || testRun.status === 'error') {
         executionStatus = testRun.status as 'failed' | 'error';
       } else if (testRun.status === 'cancelled') {
         executionStatus = 'cancelled';
+      } else if (testRun.status === 'queued') {
+        executionStatus = 'queued';
+      }
+      
+      // 🔥 修复：如果用例还在执行中或排队中，只更新必要的字段，不更新其他字段
+      if (testRun.status === 'running' || testRun.status === 'queued') {
+        // 🔥 关键修复：重新从数据库获取最新的 execution_results，确保包含所有用例的完整信息
+        const latestPlanExecution = await this.prisma.test_plan_executions.findUnique({
+          where: { id: planExecutionId },
+          select: { execution_results: true }
+        });
+        const existingResults = (latestPlanExecution?.execution_results as any[]) || [];
+        
+        console.log(`📊 [${runId}] 执行中：从数据库获取最新的 execution_results，包含 ${existingResults.length} 条记录`);
+        
+        // 🔥 关键修复：确保当前用例的开始时间 >= 前一条用例的结束时间
+        // 查找前一条用例（已完成且 case_id 小于当前用例的 case_id）
+        let finalStartedAt = startedAt;
+        const previousCaseResults = existingResults
+          .filter(r => r.case_id < testRun.testCaseId && r.finished_at && (r.execution_status === 'completed' || r.execution_status === 'failed'))
+          .sort((a, b) => b.case_id - a.case_id); // 按 case_id 降序排列，获取最近完成的用例
+        
+        if (previousCaseResults.length > 0) {
+          const latestPreviousCase = previousCaseResults[0];
+          const previousFinishedAt = new Date(latestPreviousCase.finished_at);
+          const currentStartedAt = new Date(startedAt);
+          
+          // 如果当前开始时间 < 前一条用例的结束时间，则使用前一条用例的结束时间
+          if (currentStartedAt < previousFinishedAt) {
+            finalStartedAt = previousFinishedAt.toISOString();
+            console.log(`📊 [${runId}] 调整开始时间：${startedAt} -> ${finalStartedAt}（确保 >= 前一条用例结束时间 ${latestPreviousCase.finished_at}）`);
+          }
+        }
+        
+        // 查找当前用例的记录
+        const existingIndex = existingResults.findIndex(r => 
+          r.case_id === testRun.testCaseId && r.execution_id === runId
+        );
+        
+        let updatedResults: any[];
+        if (existingIndex >= 0) {
+          // 🔥 关键修复：只更新当前用例的 started_at 和 execution_status，完全保留其他字段
+          // 🔥 如果记录中已有 started_at，优先保留（可能是 testPlanService.ts 中设置的）
+          // 如果没有，则使用 finalStartedAt（从 actualStartedAt 或 startedAt 计算得出）
+          const existingResult = existingResults[existingIndex];
+          const finalStartedAtToUse = existingResult.started_at || finalStartedAt;
+          
+          updatedResults = existingResults.map((r, index) => {
+            if (index === existingIndex) {
+              // 只更新当前用例
+              return {
+                ...r, // 🔥 完全保留原有记录的所有字段
+                started_at: finalStartedAtToUse, // 🔥 更新开始时间（如果已有则保留，否则使用计算值）
+                execution_status: executionStatus, // 🔥 更新执行状态
+              };
+            }
+            // 其他用例完全保留，不做任何修改
+            return r;
+          });
+        } else {
+          // 如果不存在，创建新记录，但只设置必要的字段
+          const newResult = {
+            case_id: testRun.testCaseId,
+            case_name: caseName,
+            case_type: 'ui_auto' as const,
+            execution_status: executionStatus,
+            execution_id: runId,
+            result: '' as const,
+            started_at: finalStartedAt, // 🔥 使用调整后的开始时间（确保 >= 前一条用例的结束时间）
+            duration_ms: 0,
+          };
+          
+          // 过滤掉相同 case_id 但没有 execution_id 的初始记录
+          updatedResults = [
+            ...existingResults.filter(r => 
+              !(r.case_id === testRun.testCaseId && r.execution_id === runId) && // 过滤相同 execution_id
+              !(r.case_id === testRun.testCaseId && !r.execution_id) // 🔥 过滤没有 execution_id 的初始记录
+            ),
+            newResult
+          ];
+        }
+        
+        // 🔥 只更新 execution_results，不更新进度和其他统计数据
+        await updateTestPlanExecution(planExecutionId, {
+          execution_results: updatedResults,
+        });
+        
+        console.log(`✅ [${runId}] 同步 started_at 到测试计划执行记录成功（仅更新开始时间）`);
+        return;
+      }
+      
+      // 🔥 用例已完成：更新所有字段
+      let finishedAt = testRun.finishedAt?.toISOString() || new Date().toISOString();
+      const completedSteps = testRun.completedSteps || totalSteps;
+      const blockedSteps = totalSteps - passedSteps - failedSteps;
+      
+      // 🔥 关键修复：重新从数据库获取最新的 execution_results，确保包含所有用例的完整信息
+      const latestPlanExecution = await this.prisma.test_plan_executions.findUnique({
+        where: { id: planExecutionId },
+        select: { execution_results: true }
+      });
+      const existingResults = (latestPlanExecution?.execution_results as any[]) || [];
+      
+      console.log(`📊 [${runId}] 从数据库获取最新的 execution_results，包含 ${existingResults.length} 条记录`);
+      
+      // 🔥 修复：添加或更新当前用例的结果
+      // 只更新当前执行记录（execution_id 匹配）的结果，保留其他执行记录的结果
+      // 如果当前执行记录不存在，则添加新记录
+      const existingIndex = existingResults.findIndex(r => 
+        r.case_id === testRun.testCaseId && r.execution_id === runId
+      );
+      
+      // 🔥 关键修复：如果存在现有记录，优先保留原有的 started_at（避免覆盖执行中时设置的开始时间）
+      // 执行中时已经设置了正确的 started_at（使用 actualStartedAt），完成时应该保留它
+      let finalStartedAt = startedAt;
+      if (existingIndex >= 0) {
+        const existingResult = existingResults[existingIndex];
+        // 如果原有记录已经有 started_at，且是有效的，则保留它（这是执行中时设置的）
+        if (existingResult.started_at) {
+          try {
+            const existingStartTime = new Date(existingResult.started_at);
+            if (!isNaN(existingStartTime.getTime())) {
+              // 🔥 关键：保留执行中时设置的 started_at，不要用完成时重新计算的 startedAt 覆盖
+              finalStartedAt = existingResult.started_at;
+              console.log(`📊 [${runId}] 保留执行中时设置的 started_at: ${finalStartedAt}（避免覆盖）`);
+            }
+          } catch (e) {
+            console.warn(`⚠️ [${runId}] 原有 started_at 无效，使用新值: ${e}`);
+          }
+        } else {
+          // 如果原有记录没有 started_at，使用新计算的 startedAt
+          console.log(`📊 [${runId}] 原有记录没有 started_at，使用新值: ${finalStartedAt}`);
+        }
+      }
+      
+      // 🔥 关键修复：确保当前用例的开始时间 >= 前一条用例的结束时间
+      // 查找前一条用例（已完成且 case_id 小于当前用例的 case_id）
+      const previousCaseResults = existingResults
+        .filter(r => r.case_id < testRun.testCaseId && r.finished_at && (r.execution_status === 'completed' || r.execution_status === 'failed'))
+        .sort((a, b) => b.case_id - a.case_id); // 按 case_id 降序排列，获取最近完成的用例
+      
+      if (previousCaseResults.length > 0) {
+        const latestPreviousCase = previousCaseResults[0];
+        const previousFinishedAt = new Date(latestPreviousCase.finished_at);
+        const currentStartedAt = new Date(finalStartedAt);
+        
+        // 如果当前开始时间 < 前一条用例的结束时间，则使用前一条用例的结束时间
+        if (currentStartedAt < previousFinishedAt) {
+          finalStartedAt = previousFinishedAt.toISOString();
+          console.log(`📊 [${runId}] 完成时调整开始时间：${existingResults[existingIndex]?.started_at || startedAt} -> ${finalStartedAt}（确保 >= 前一条用例结束时间 ${latestPreviousCase.finished_at}）`);
+        }
+        
+        // 🔥 关键修复：确保结束时间 >= 前一条用例的结束时间
+        const currentFinishedAt = new Date(finishedAt);
+        if (currentFinishedAt < previousFinishedAt) {
+          finishedAt = previousFinishedAt.toISOString();
+          console.log(`📊 [${runId}] 完成时调整结束时间：${testRun.finishedAt?.toISOString()} -> ${finishedAt}（确保 >= 前一条用例结束时间 ${latestPreviousCase.finished_at}）`);
+        }
+      }
+      
+      // 🔥 关键修复：确保结束时间 >= 开始时间
+      const finishedAtDate = new Date(finishedAt);
+      const startedAtDate = new Date(finalStartedAt);
+      if (finishedAtDate < startedAtDate) {
+        finishedAt = startedAtDate.toISOString();
+        console.log(`📊 [${runId}] 调整结束时间：${finishedAt} -> ${finishedAt}（确保 >= 开始时间 ${finalStartedAt}）`);
       }
       
       // 构建执行结果（🔥 修复：添加步骤统计数据，与功能测试保持一致）
@@ -3078,7 +3262,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         failedSteps: failedSteps,
         blockedSteps: blockedSteps > 0 ? blockedSteps : 0,
         completedSteps: completedSteps,
-        started_at: startedAt,
+        started_at: finalStartedAt, // 🔥 使用保留的开始时间
         finished_at: finishedAt,
         executor_name: executorName,
         executor_id: executorId,
@@ -3086,18 +3270,43 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         execution_status: executionStatus,
       };
       
-      // 获取现有的 execution_results
-      const existingResults = (planExecution.execution_results as any[]) || [];
+      let updatedResults: any[];
+      if (existingIndex >= 0) {
+        // 🔥 关键修复：更新现有记录时，完全保留原有记录的所有字段，只更新必要的字段
+        updatedResults = existingResults.map((r, index) => {
+          if (index === existingIndex) {
+            // 只更新当前用例，保留所有原有字段
+            return {
+              ...r, // 🔥 完全保留原有记录的所有字段（包括 started_at）
+              ...caseResult, // 更新新字段
+              started_at: finalStartedAt, // 🔥 确保使用保留的开始时间（如果原有记录有 started_at，则保留它）
+            };
+          }
+          // 其他用例完全保留，不做任何修改
+          return r;
+        });
+      } else {
+        // 🔥 关键修复：添加新记录时，需要过滤掉：
+        // 1. 相同 case_id 且相同 execution_id 的记录（避免重复）
+        // 2. 相同 case_id 但没有 execution_id 的记录（初始记录，应该被替换）
+        // 这样可以确保每个用例在当前执行记录中只有一条记录
+        updatedResults = [
+          ...existingResults.filter(r => 
+            !(r.case_id === testRun.testCaseId && r.execution_id === runId) && // 过滤相同 execution_id
+            !(r.case_id === testRun.testCaseId && !r.execution_id) // 🔥 过滤没有 execution_id 的初始记录
+          ),
+          caseResult
+        ];
+      }
       
-      // 添加或更新当前用例的结果
-      const updatedResults = [...existingResults.filter(r => r.case_id !== testRun.testCaseId), caseResult];
-      
-      // 计算统计数据
+      // 🔥 修复：计算统计数据时，只统计已完成的用例（result 不为空的）
       const passedCases = updatedResults.filter(r => r.result === 'pass').length;
       const failedCases = updatedResults.filter(r => r.result === 'fail').length;
       const blockedCases = updatedResults.filter(r => r.result === 'block').length;
-      const completedCases = updatedResults.length;
-      const totalCases = planExecution.total_cases || completedCases;
+      const skippedCases = updatedResults.filter(r => r.result === 'skip').length;
+      // 🔥 修复：已完成用例数 = 有结果的用例数（result 不为空）
+      const completedCases = updatedResults.filter(r => r.result && r.result !== '').length;
+      const totalCases = planExecution.total_cases || updatedResults.length;
       const progress = totalCases > 0 ? Math.round((completedCases / totalCases) * 100) : 100;
       
       // 确定执行状态
@@ -3107,20 +3316,18 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       // 计算总执行时长
       const totalDurationMs = updatedResults.reduce((sum, r) => sum + (r.duration_ms || 0), 0);
       
-      // 更新测试计划执行记录
-      await this.prisma.test_plan_executions.update({
-        where: { id: planExecutionId },
-        data: {
-          status: newStatus,
-          progress: progress,
-          completed_cases: completedCases,
-          passed_cases: passedCases,
-          failed_cases: failedCases,
-          blocked_cases: blockedCases,
-          execution_results: updatedResults,
-          duration_ms: totalDurationMs,
-          finished_at: isAllCompleted ? new Date() : undefined,
-        }
+      // 🔥 修复：使用 updateTestPlanExecution 函数更新，而不是直接使用 prisma.update
+      // 这样可以确保发送 WebSocket 广播，前端能实时看到状态更新
+      await updateTestPlanExecution(planExecutionId, {
+        status: newStatus,
+        progress: progress,
+        completed_cases: completedCases,
+        passed_cases: passedCases,
+        failed_cases: failedCases,
+        blocked_cases: blockedCases,
+        execution_results: updatedResults,
+        duration_ms: totalDurationMs,
+        finished_at: isAllCompleted ? new Date() : undefined,
       });
       
       console.log(`✅ [${runId}] 同步到测试计划执行记录成功:`, {
@@ -3132,6 +3339,16 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         failedCases,
         blockedCases,
       });
+      
+      // 🔥 修复问题1：更新测试计划状态（与功能测试逻辑保持一致）
+      // 同步更新 test_plans 表的状态
+      try {
+        await updateTestPlanStatusFromLatestExecution(planExecution.plan_id);
+        console.log(`✅ [${runId}] 测试计划状态已同步更新, planId: ${planExecution.plan_id}`);
+      } catch (statusError) {
+        console.error(`⚠️ [${runId}] 更新测试计划状态失败:`, statusError);
+        // 不抛出错误，避免影响主流程
+      }
     } catch (error) {
       console.error(`❌ [${runId}] 同步到测试计划执行记录失败:`, error);
       throw error;
@@ -3336,12 +3553,28 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       });
     }
     
-    // 🔥 优先使用日志时间，如果没有则使用其他时间
-    const effectiveStartTime = logStartTime || testRun.actualStartedAt || testRun.startedAt;
-    const effectiveEndTime = logEndTime || testRun.finishedAt || testRun.endedAt || new Date();
+    // 🔥 优先使用日志时间（第一条日志的时间），如果没有则使用其他时间
+    const actualStartedAt = (testRun as any).actualStartedAt;
+    const effectiveStartTime = logStartTime || actualStartedAt || testRun.startedAt;
+    const effectiveEndTime = logEndTime || testRun.finishedAt || (testRun as any).endedAt || new Date();
+    
+    // 🔥 关键修复：优先使用日志第一条记录的时间作为开始时间
+    // 日志时间是最准确的，因为它记录了实际的第一条操作日志
+    if (logStartTime) {
+      // 优先使用日志时间，更新 actualStartedAt 为日志时间
+      (testRun as any).actualStartedAt = logStartTime;
+      console.log(`⏱️ [${runId}] finalizeTestRun - 使用日志第一条记录时间作为 actualStartedAt: ${logStartTime.toISOString()}`);
+    } else if (!actualStartedAt) {
+      // 如果日志时间不存在，且 actualStartedAt 也不存在，使用 startedAt
+      (testRun as any).actualStartedAt = testRun.startedAt;
+      console.log(`⏱️ [${runId}] finalizeTestRun - 设置 actualStartedAt: ${(testRun as any).actualStartedAt?.toISOString()}`);
+    } else {
+      // 如果日志时间不存在，但 actualStartedAt 已存在，保留它
+      console.log(`⏱️ [${runId}] finalizeTestRun - 保留已有的 actualStartedAt: ${actualStartedAt.toISOString()}`);
+    }
     
     // 设置 endedAt（用于 WebSocket 消息）
-    testRun.endedAt = effectiveEndTime;
+    (testRun as any).endedAt = effectiveEndTime;
     if (!testRun.finishedAt) {
       testRun.finishedAt = effectiveEndTime;
     }
@@ -3372,7 +3605,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         runId, 
         data: { 
           status: finalStatus, 
-          endedAt: testRun.endedAt, 
+          endedAt: (testRun as any).endedAt, 
           duration,
           progress: testRun.progress,
           completedSteps: testRun.completedSteps ?? testRun.totalSteps ?? 0,
@@ -3382,22 +3615,36 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         } 
       });
       
-      // 🔥 修复：先同步到数据库，确保数据持久化，然后再发送完成消息
-      try {
-        await this.syncTestRunToDatabase(runId);
-        console.log(`💾 [${runId}] 测试完成，已同步到数据库（duration: ${duration}）`);
-      } catch (err) {
-        console.error(`❌ [${runId}] 同步数据库失败:`, err);
-      }
-      
-      // 🔥 新增：如果存在 planExecutionId，同步数据到 test_plan_executions 表
+      // 🔥 修复：根据是否来自测试计划决定同步目标
+      // 如果存在 planExecutionId，说明是测试计划执行，只同步到 test_plan_executions 表
+      // 如果不存在 planExecutionId，说明是单独执行，只同步到 test_case_executions 表
+      // 这样可以确保测试计划和UI自动化模块的执行记录完全独立
       const planExecutionId = (testRun as any).planExecutionId;
+      
       if (planExecutionId) {
+        // 🔥 测试计划执行：同步到 test_plan_executions 表，同时也写入 test_case_executions 表（用于测试执行页面显示）
         try {
           await this.syncToTestPlanExecution(runId, testRun, planExecutionId);
-          console.log(`📋 [${runId}] 测试完成，已同步到测试计划执行记录: ${planExecutionId}`);
+          console.log(`📋 [${runId}] 测试计划执行完成，已同步到 test_plan_executions 表: ${planExecutionId}`);
+          
+          // 🔥 修复：同时也写入 test_case_executions 表，确保测试执行页面能正确显示开始时间
+          // 使用 actualStartedAt（用例实际开始执行的时间），而不是 startedAt（加入队列的时间）
+          try {
+            await this.syncTestRunToDatabase(runId);
+            console.log(`💾 [${runId}] 测试计划执行完成，已同步到 test_case_executions 表（用于测试执行页面显示）`);
+          } catch (dbErr) {
+            console.warn(`⚠️ [${runId}] 同步到 test_case_executions 表失败（不影响主流程）:`, dbErr);
+          }
         } catch (err) {
           console.error(`❌ [${runId}] 同步到测试计划执行记录失败:`, err);
+        }
+      } else {
+        // 🔥 单独执行（非测试计划）：只同步到 test_case_executions 表
+        try {
+          await this.syncTestRunToDatabase(runId);
+          console.log(`💾 [${runId}] 单独执行完成，已同步到 test_case_executions 表（duration: ${duration}）`);
+        } catch (err) {
+          console.error(`❌ [${runId}] 同步数据库失败:`, err);
         }
       }
       
@@ -3409,7 +3656,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
             status: finalStatus,
             startedAt: effectiveStartTime, // 🔥 使用日志时间（最准确）
             endedAt: effectiveEndTime, // 🔥 使用日志时间（最准确）
-            actualStartedAt: logStartTime || testRun.actualStartedAt, // 🔥 日志开始时间
+            actualStartedAt: logStartTime || (testRun as any).actualStartedAt, // 🔥 日志开始时间
             actualEndedAt: logEndTime || testRun.finishedAt, // 🔥 日志结束时间
             duration,
             progress: testRun.progress,
@@ -3426,7 +3673,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         runId, 
         data: { 
           status: finalStatus, 
-          endedAt: testRun.endedAt, 
+          endedAt: (testRun as any).endedAt, 
           duration 
         } 
       });
@@ -5527,11 +5774,14 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     let stepIndex = 0;
     let previousStepsText = '';
     const maxSteps = 50;
-    const estimatedTotalSteps = this.estimateStepsCount(testCase.steps);
+    const estimatedOperationSteps = this.estimateStepsCount(testCase.steps);
+    // 🔥 修复：计算断言数量并加入总步骤数
+    const estimatedAssertionSteps = this.estimateStepsCount(testCase.assertions || '');
+    const estimatedTotalSteps = estimatedOperationSteps + estimatedAssertionSteps;
     
     if (testRun) {
       testRun.totalSteps = estimatedTotalSteps;
-      console.log(`📊 [${runId}] 预估总步骤数: ${estimatedTotalSteps}`);
+      console.log(`📊 [${runId}] 预估总步骤数: ${estimatedTotalSteps} (操作: ${estimatedOperationSteps}, 断言: ${estimatedAssertionSteps})`);
     }
 
     // AI闭环执行流程（原有逻辑）
@@ -5678,14 +5928,34 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
 
       for (let i = 0; i < aiAssertions.steps.length; i++) {
         const assertion = aiAssertions.steps[i];
+        const assertionStepIndex = stepIndex + i + 1; // 断言步骤序号 = 操作步骤数 + 断言序号
         console.log(`🔍 [${runId}] 执行断言步骤 ${i + 1}: ${assertion.description}`);
+        this.addLog(runId, `🔍 执行断言 ${i + 1}: ${assertion.description}`, 'info');
         try {
           const result = await this.executeMcpCommand(assertion, runId);
           if (!result.success) {
+            // 🔥 修复：断言失败时更新 failedSteps，确保执行结果计算正确
+            if (testRun) {
+              testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+              testRun.completedSteps = assertionStepIndex;
+            }
+            this.addLog(runId, `❌ 断言 ${i + 1} 失败: ${result.error}`, 'error');
             this.updateTestRunStatus(runId, 'failed', `断言 ${i + 1} 失败: ${result.error}`);
             return;
           }
+          // 🔥 修复：断言成功时也更新 passedSteps，并添加日志
+          if (testRun) {
+            testRun.passedSteps = (testRun.passedSteps || 0) + 1;
+            testRun.completedSteps = assertionStepIndex;
+          }
+          this.addLog(runId, `✅ 断言 ${i + 1} 通过`, 'success');
         } catch (error: any) {
+          // 🔥 修复：断言异常时更新 failedSteps
+          if (testRun) {
+            testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+            testRun.completedSteps = assertionStepIndex;
+          }
+          this.addLog(runId, `❌ 断言 ${i + 1} 失败: ${error.message}`, 'error');
           this.updateTestRunStatus(runId, 'failed', `断言 ${i + 1} 异常: ${error.message}`);
           return;
         }
@@ -6395,7 +6665,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       const result = await this.playwrightRunner.executeStep(enhancedStep, runId, i);
 
       if (!result.success) {
-        this.addLog(runId, `❌ 步骤 ${stepIndex} 失败: ${result.error}`, 'error');
+        // 🔥 注意：失败日志由 updateTestRunStatus 统一添加，这里不重复添加
         
         // 🔥 等待一下再截图，确保页面状态稳定
         await this.delay(500);
@@ -6425,7 +6695,14 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           this.addLog(runId, `⚠️ 失败步骤 ${stepIndex} 截图失败: ${screenshotError.message}`, 'warning');
         }
         
-        this.updateTestRunStatus(runId, 'failed', `步骤 ${stepIndex} 失败: ${result.error}`);
+        // 🔥 修复：步骤失败时更新 failedSteps 和 completedSteps，确保执行结果计算正确
+        if (testRun) {
+          testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+          testRun.completedSteps = stepIndex;
+          testRun.progress = Math.round((stepIndex / totalSteps) * 100);
+        }
+        
+        this.updateTestRunStatus(runId, 'failed', `❌ 步骤 ${stepIndex} 失败: ${result.error}`);
         return;
       }
 
@@ -6868,8 +7145,15 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       const result = await this.playwrightRunner.executeStep(assertion, runId, assertionIndex - 1);
 
       if (!result.success) {
-        this.addLog(runId, `❌ 断言 ${i + 1} 失败: ${result.error}`, 'error');
-        this.updateTestRunStatus(runId, 'failed', `断言 ${i + 1} 失败: ${result.error}`);
+        // 🔥 修复：断言失败时更新 failedSteps 和 completedSteps，确保执行结果计算正确
+        if (testRun) {
+          testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+          testRun.completedSteps = assertionIndex;
+          testRun.progress = Math.round((assertionIndex / totalSteps) * 100);
+        }
+        
+        // 🔥 注意：失败日志由 updateTestRunStatus 统一添加，这里不重复添加
+        this.updateTestRunStatus(runId, 'failed', `❌ 断言 ${i + 1} 失败: ${result.error}`);
         return;
       }
 

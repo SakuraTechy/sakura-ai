@@ -36,6 +36,12 @@ export class BackendSettingsService {
   public async getLLMSettings(): Promise<LLMSettings> {
     try {
       const settings = await this.loadSettingsFromDB();
+      console.log('📖 [后端] 从数据库加载LLM设置:', {
+        selectedModelId: settings.llm.selectedModelId,
+        baseUrl: settings.llm.baseUrl,
+        customModelName: settings.llm.customModelName,
+        hasApiKey: !!settings.llm.apiKey
+      });
       return settings.llm;
     } catch (error) {
       console.warn('Failed to load LLM settings from database, using defaults:', error);
@@ -181,12 +187,16 @@ export class BackendSettingsService {
 
       if (settingsRecord && settingsRecord.value) {
         const parsed = JSON.parse(settingsRecord.value);
-        return this.mergeWithDefaults(parsed);
+        console.log('🗄️ [后端] 数据库原始数据:', JSON.stringify(parsed.llm, null, 2));
+        const merged = this.mergeWithDefaults(parsed);
+        console.log('🔀 [后端] 合并后数据:', JSON.stringify(merged.llm, null, 2));
+        return merged;
       }
     } catch (error) {
       console.warn('Failed to load settings from database:', error);
     }
 
+    console.log('⚠️ [后端] 使用默认设置');
     return this.getDefaultSettings();
   }
 

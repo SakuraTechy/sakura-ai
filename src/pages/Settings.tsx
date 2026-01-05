@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Select } from 'antd';
 import {
   Save,
   RotateCcw,
@@ -54,6 +55,7 @@ export function Settings() {
   const [formData, setFormData] = useState<LLMSettings>({
     selectedModelId: '',
     apiKey: '',
+    customModelName: '',
     customConfig: {
       temperature: 0.3,
       maxTokens: 1500
@@ -71,6 +73,12 @@ export function Settings() {
   const [connectionResult, setConnectionResult] = useState<ConnectionTestResult | null>(null);
   const [pendingChanges, setPendingChanges] = useState<ConfigChange[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  
+  // 🔥 新增：厂商模型列表状态
+  const [providerModels, setProviderModels] = useState<Array<{ id: string; name: string; owned_by?: string }>>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [useCustomInput, setUseCustomInput] = useState(false); // 是否使用手动输入模式
 
   // 初始化
   useEffect(() => {
@@ -88,13 +96,14 @@ export function Settings() {
       // 获取当前设置
       let settings = await settingsService.getLLMSettings();
       
-      // 🔥 确保 baseUrl 根据模型配置正确设置
+      // 🔥 确保 baseUrl 和 customModelName 根据模型配置正确设置
       if (settings.selectedModelId) {
         const model = modelRegistry.getModelById(settings.selectedModelId);
-        if (model && (!settings.baseUrl || settings.baseUrl === 'https://openrouter.ai/api/v1')) {
+        if (model) {
           settings = {
             ...settings,
-            baseUrl: model.customBaseUrl || 'https://openrouter.ai/api/v1'
+            baseUrl: settings.baseUrl || model.customBaseUrl || 'https://openrouter.ai/api/v1',
+            customModelName: settings.customModelName || model.openRouterModel // 自动填充默认模型名称
           };
         }
       }
@@ -102,7 +111,31 @@ export function Settings() {
       setCurrentSettings(settings);
       setFormData(settings);
       
-      console.log('✅ 设置页面初始化完成', { modelId: settings.selectedModelId, baseUrl: settings.baseUrl });
+      // 🔥 如果模型要求手动输入，自动启用手动输入模式
+      if (settings.selectedModelId) {
+        const model = modelRegistry.getModelById(settings.selectedModelId);
+        if (model?.requiresManualInput) {
+          setUseCustomInput(true);
+        }
+      }
+      
+      // 🔥 如果有 apiKey 和 selectedModelId，且模型不要求手动输入，自动获取厂商模型列表
+      if (settings.selectedModelId && settings.apiKey) {
+        const model = modelRegistry.getModelById(settings.selectedModelId);
+        if (!model?.requiresManualInput) {
+          console.log('🔄 自动获取厂商模型列表...');
+          // 延迟执行，确保状态已更新
+          setTimeout(() => {
+            autoFetchProviderModels(settings.selectedModelId, settings.apiKey, settings.baseUrl);
+          }, 100);
+        }
+      }
+      
+      console.log('✅ 设置页面初始化完成', { 
+        modelId: settings.selectedModelId, 
+        baseUrl: settings.baseUrl,
+        customModelName: settings.customModelName 
+      });
     } catch (error) {
       console.error('❌ 设置页面初始化失败:', error);
       setSaveMessage({ type: 'error', text: '加载设置失败' });
@@ -124,6 +157,7 @@ export function Settings() {
         ...prev,
         selectedModelId: modelId,
         baseUrl: model.customBaseUrl || 'https://openrouter.ai/api/v1',
+        customModelName: model.openRouterModel, // 自动填充默认模型名称
         customConfig: {
           ...prev.customConfig,
           temperature: model.defaultConfig.temperature,
@@ -132,7 +166,69 @@ export function Settings() {
       }));
       setValidationErrors([]);
       setConnectionResult(null);
+      // 清空厂商模型列表
+      setProviderModels([]);
+      setModelsError(null);
+      // 🔥 如果模型要求手动输入，自动启用；否则默认关闭
+      setUseCustomInput(model.requiresManualInput || false);
+      
+      // 🔥 如果有 apiKey 且不需要手动输入，自动获取厂商模型列表
+      if (formData.apiKey && !model.requiresManualInput) {
+        const newBaseUrl = model.customBaseUrl || 'https://openrouter.ai/api/v1';
+        setTimeout(() => {
+          autoFetchProviderModels(modelId, formData.apiKey, newBaseUrl);
+        }, 100);
+      }
     }
+  };
+
+  // 🔥 自动获取厂商可用模型列表（不依赖 formData 状态）
+  const autoFetchProviderModels = async (modelId: string, apiKey: string, customBaseUrl?: string) => {
+    if (!modelId || !apiKey) {
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setModelsError(null);
+
+    try {
+      // 构建查询参数，包含可选的自定义 baseUrl
+      let url = `/api/config/available-models?modelId=${encodeURIComponent(modelId)}&apiKey=${encodeURIComponent(apiKey)}`;
+      if (customBaseUrl) {
+        url += `&baseUrl=${encodeURIComponent(customBaseUrl)}`;
+      }
+      const response = await fetch(url);
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || '获取模型列表失败');
+      }
+
+      setProviderModels(result.data.models || []);
+      console.log(`✅ 自动获取到 ${result.data.models?.length || 0} 个可用模型`);
+      
+      // 如果没有模型，自动切换到手动输入模式
+      if (!result.data.models || result.data.models.length === 0) {
+        setModelsError('未获取到可用模型，可手动输入');
+        setUseCustomInput(true);
+      }
+    } catch (error: any) {
+      console.error('❌ 自动获取模型列表失败:', error);
+      setModelsError(error.message || '获取模型列表失败，可手动输入');
+      // 不自动切换到手动输入模式，让用户可以重试
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  // 🔥 手动获取厂商可用模型列表（使用 formData 状态）
+  const fetchProviderModels = async () => {
+    if (!formData.selectedModelId || !formData.apiKey) {
+      setModelsError('请先选择模型并输入API密钥');
+      return;
+    }
+    await autoFetchProviderModels(formData.selectedModelId, formData.apiKey, formData.baseUrl);
   };
 
   // 处理表单字段变更
@@ -176,67 +272,52 @@ export function Settings() {
       setIsSaving(true);
       setSaveMessage(null);
       
+      // 🔥 检查是否已通过连接测试
+      if (!connectionResult?.success) {
+        setSaveMessage({ type: 'error', text: '请先测试连接并确保连接成功后再保存设置' });
+        return;
+      }
+      
       // 验证表单
       const isValid = await validateForm();
-      if (!isValid) {
+      if (!isValid && validationErrors.length > 0) {
         const enhancedErrors = handleValidationErrors(validationErrors);
         const errorMessages = enhancedErrors.map(e => e.userMessage).join(', ');
         setSaveMessage({ type: 'error', text: `配置验证失败: ${errorMessages}` });
         return;
       }
       
-      // 🔥 确保 baseUrl 根据模型配置正确设置
+      // 🔥 确保 baseUrl 根据模型配置正确设置（优先使用 formData 中的值）
       const selectedModel = modelRegistry.getModelById(formData.selectedModelId);
       const settingsToSave: LLMSettings = {
         ...formData,
-        baseUrl: selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'
+        baseUrl: formData.baseUrl || selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'
       };
       
-      // 保存设置到localStorage
+      console.log('💾 [前端] 保存设置数据:', {
+        selectedModelId: settingsToSave.selectedModelId,
+        baseUrl: settingsToSave.baseUrl,
+        customModelName: settingsToSave.customModelName,
+        hasApiKey: !!settingsToSave.apiKey
+      });
+      
+      // 🔥 修复：settingsService.saveLLMSettings 内部已包含 API 同步，不需要再次调用
+      // 保存设置到localStorage并同步到服务器
       await settingsService.saveLLMSettings(settingsToSave);
       
-      // 更新前端配置管理器
+      // 更新前端配置管理器（仅更新内存中的配置）
       await llmConfigManager.updateConfig(settingsToSave);
       
-      // 🔥 新增：同步配置到服务器端
-      try {
-        console.log('🔄 同步配置到服务器端...');
-        console.log('📋 发送的配置数据:', settingsToSave);
-        const response = await fetch('/api/config/llm', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(settingsToSave)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '服务器端配置更新失败');
-        }
-        
-        const result = await response.json();
-        
-        // 从后端响应或本地模型信息获取模型名称
-        const modelName = result.data?.summary?.modelName || selectedModel?.name || '新模型';
-        console.log('✅ 服务器端配置已更新:', modelName);
-        
-        setCurrentSettings(settingsToSave);
-        setSaveMessage({ 
-          type: 'success', 
-          text: `设置保存成功，已切换到 ${modelName}` 
-        });
-        
-      } catch (serverError: any) {
-        console.warn('⚠️ 服务器端配置更新失败，但前端配置已保存:', serverError.message);
-        setCurrentSettings(settingsToSave);
-        setSaveMessage({ 
-          type: 'success', 
-          text: '前端设置保存成功，但服务器端同步失败。请重启服务器以应用新配置。' 
-        });
-      }
+      // 获取模型名称用于显示
+      const modelName = settingsToSave.customModelName || selectedModel?.name || '新模型';
+      console.log('✅ 设置保存成功:', modelName);
       
-      console.log('✅ 设置保存成功');
+      setCurrentSettings(settingsToSave);
+      setSaveMessage({ 
+        type: 'success', 
+        text: `设置保存成功，已切换到 ${modelName}` 
+      });
+      
     } catch (error: any) {
       console.error('❌ 保存设置失败:', error);
       
@@ -328,12 +409,18 @@ export function Settings() {
         return;
       }
       
-      // 🔥 确保 baseUrl 根据模型配置正确设置
+      // 🔥 确保 baseUrl 根据模型配置正确设置（优先使用 formData 中的值）
       const selectedModel = modelRegistry.getModelById(formData.selectedModelId);
       const testSettings: LLMSettings = {
         ...formData,
-        baseUrl: selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'
+        baseUrl: formData.baseUrl || selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'
       };
+      
+      console.log('🧪 [前端] 测试连接配置:', {
+        selectedModelId: testSettings.selectedModelId,
+        baseUrl: testSettings.baseUrl,
+        customModelName: testSettings.customModelName
+      });
       
       // 临时更新配置管理器进行测试
       await llmConfigManager.updateConfig(testSettings);
@@ -563,6 +650,153 @@ export function Settings() {
             </div>
           )}
 
+          {/* API 地址配置 */}
+          {formData.selectedModelId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                API 地址
+                <span className="ml-2 text-xs text-gray-500">
+                  {selectedModel?.requiresManualInput
+                    ? '(请手动输入本地地址)'
+                    : '(可从厂商获取或使用指定的地址)'
+                  }
+                </span>
+              </label>
+              <input
+                type="text"
+                value={formData.baseUrl || ''}
+                onChange={(e) => handleFieldChange('baseUrl', e.target.value)}
+                placeholder={selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  getFieldError('baseUrl') ? 'border-red-300' : 'border-gray-300'
+                }`}
+              />
+              {getFieldError('baseUrl') && (
+                <p className="mt-1 text-sm text-red-600">{getFieldError('baseUrl')}</p>
+              )}
+              <p className="mt-1 text-sm text-gray-500">
+                默认: {selectedModel?.customBaseUrl || 'https://openrouter.ai/api/v1'}
+              </p>
+            </div>
+          )}
+
+          {/* 模型名称选择 */}
+          {formData.selectedModelId && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  模型名称
+                  <span className="ml-2 text-xs text-gray-500">
+                    {selectedModel?.requiresManualInput 
+                      ? '(请手动输入模型名称)'
+                      : '(可从厂商获取或手动输入)'
+                    }
+                  </span>
+                </label>
+                {!selectedModel?.requiresManualInput && (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setUseCustomInput(!useCustomInput)}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      {useCustomInput ? '切换为选择模式' : '切换为手动输入'}
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {(useCustomInput || selectedModel?.requiresManualInput) ? (
+                /* 手动输入模式 */
+                <input
+                  type="text"
+                  value={formData.customModelName || ''}
+                  onChange={(e) => handleFieldChange('customModelName', e.target.value)}
+                  placeholder={selectedModel?.openRouterModel || '请输入模型名称'}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    getFieldError('customModelName') ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                />
+              ) : (
+                /* 选择模式 */
+                <div className="flex space-x-2">
+                  <div className="flex-1 relative">
+                    <Select
+                      className="w-full h-10 rounded-md border-gray-300"
+                      // size="large"
+                      // style={{ width: '100%', height: '32px' }}
+                      value={formData.customModelName || selectedModel?.openRouterModel || undefined}
+                      onChange={(value) => handleFieldChange('customModelName', value)}
+                      disabled={isLoadingModels}
+                      loading={isLoadingModels}
+                      placeholder="请选择模型"
+                      showSearch
+                      optionFilterProp="label"
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      status={getFieldError('customModelName') ? 'error' : undefined}
+                      options={[
+                        // 默认模型选项
+                        {
+                          label: selectedModel?.openRouterModel || '默认模型',
+                          value: selectedModel?.openRouterModel || ''
+                        },
+                        // 如果当前保存的模型不是默认模型且不在 providerModels 中，单独显示
+                        ...(formData.customModelName && 
+                           formData.customModelName !== selectedModel?.openRouterModel &&
+                           !providerModels.some(m => m.id === formData.customModelName)
+                          ? [{
+                              label: `${formData.customModelName} (当前配置)`,
+                              value: formData.customModelName
+                            }]
+                          : []),
+                        // 厂商模型列表
+                        ...providerModels
+                          .filter(model => model.id !== selectedModel?.openRouterModel)
+                          .map(model => ({
+                            label: model.id,
+                            value: model.id
+                          }))
+                      ]}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchProviderModels}
+                    disabled={isLoadingModels || !formData.apiKey}
+                    title={!formData.apiKey ? '请先输入API密钥' : '从厂商获取可用模型列表'}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isLoadingModels ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              )}
+              
+              {getFieldError('customModelName') && (
+                <p className="mt-1 text-sm text-red-600">{getFieldError('customModelName')}</p>
+              )}
+              
+              {modelsError && !useCustomInput && !selectedModel?.requiresManualInput && (
+                <p className="mt-1 text-sm text-amber-600">
+                  <AlertCircle className="inline h-3 w-3 mr-1" />
+                  {modelsError}
+                </p>
+              )}
+              
+              <p className="mt-1 text-sm text-gray-500">
+                {providerModels.length > 0 && !useCustomInput && !selectedModel?.requiresManualInput ? (
+                  <>已获取 {providerModels.length} 个可用模型</>
+                ) : (
+                  <>
+                    默认: {selectedModel?.openRouterModel || '未选择模型'}
+                    {!formData.apiKey && !selectedModel?.requiresManualInput && ' (输入API密钥后可获取厂商模型列表)'}
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           {/* API密钥 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -778,7 +1012,8 @@ export function Settings() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSave}
-                disabled={!hasChanges() || isSaving}
+                disabled={!hasChanges() || isSaving || !connectionResult?.success}
+                title={!connectionResult?.success ? '请先测试连接并确保连接成功' : undefined}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? (

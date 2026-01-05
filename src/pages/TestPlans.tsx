@@ -112,7 +112,19 @@ export function TestPlans() {
 
   // 执行测试计划
   const handleExecutePlan = (plan: TestPlan) => {
-    navigate(`/test-plans/${plan.id}/execute`);
+    // 🔥 修复：根据测试计划类型确定执行类型
+    // UI自动化和混合类型：跳转到详情页的执行历史tab，让用户在详情页选择执行方式
+    // 功能测试类型：直接跳转到执行页面
+    if (plan.plan_type === 'ui_auto') {
+      // UI自动化计划：跳转到详情页执行历史tab
+      navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'executions' } });
+    } else if (plan.plan_type === 'mixed') {
+      // 混合类型：跳转到详情页用例tab，让用户选择
+      navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'cases' } });
+    } else {
+      // 功能测试计划：直接跳转到执行页面
+      navigate(`/test-plans/${plan.id}/execute?type=functional`);
+    }
   };
 
 
@@ -224,6 +236,8 @@ export function TestPlans() {
     const passedCases = plan.latest_execution_passed_cases || 0;
     const failedCases = plan.latest_execution_failed_cases || 0;
     const blockedCases = plan.latest_execution_blocked_cases || 0;
+    const skippedCases = plan.latest_execution_skipped_cases || 0;
+    const totalCases = plan.latest_execution_total_cases || plan.total_cases || 0;
 
     if (status === 'completed') {
       // 已完成：根据失败和阻塞情况判断
@@ -231,6 +245,9 @@ export function TestPlans() {
         executionResult = 'fail';
       } else if (blockedCases > 0) {
         executionResult = 'block';
+      } else if (totalCases > 0 && skippedCases >= totalCases) {
+        // 全部跳过：跳过数大于等于总用例数
+        executionResult = 'skip';
       } else if (passedCases > 0) {
         executionResult = 'pass';
       }
@@ -247,9 +264,9 @@ export function TestPlans() {
         executionResult === 'block' ? '阻塞' :
           executionResult === 'skip' ? '跳过' : '未知';
 
-    if (!executionResult && status !== 'running') {
-      return <span className="text-sm text-gray-400">-</span>;
-    }
+    // if (!executionResult && status !== 'running') {
+    //   return <span className="text-sm text-gray-400">-</span>;
+    // }
 
     return (
       <Tooltip
@@ -263,6 +280,7 @@ export function TestPlans() {
               {passedCases > 0 && <div>通过: {passedCases}</div>}
               {failedCases > 0 && <div>失败: {failedCases}</div>}
               {blockedCases > 0 && <div>阻塞: {blockedCases}</div>}
+              {skippedCases > 0 && <div>跳过: {skippedCases}</div>}
             </div>
           ) : status === 'running' ? '执行中，暂无结果' : '暂无执行结果'
         }
@@ -454,7 +472,7 @@ export function TestPlans() {
                   <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     阻塞
                   </th> */}
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="pl-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     计划进度
                   </th>
                   <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -512,12 +530,33 @@ export function TestPlans() {
                     <td className="px-3 py-3 text-center whitespace-nowrap w-15">
                       <span className="text-sm font-medium text-yellow-600">{plan.latest_execution_blocked_cases || 0}</span>
                     </td> */}
-                    <td className="px-3 py-3 text-center whitespace-nowrap w-15">
+                    {/* <td className="px-3 py-3 text-center whitespace-nowrap w-15">
                       <div className="flex items-center justify-start gap-2 ">
                         <div className="w-16 bg-gray-200 rounded-md h-1.5 overflow-hidden">
                           <div 
                             className="h-full bg-blue-500 rounded-md"
                             style={{ width: `${plan.latest_execution_progress ?? 0}%` }}
+                          />
+                        </div>
+                        <span className="font-medium text-gray-900 text-xs">{plan.latest_execution_progress ?? 0}%</span>
+                      </div>
+                    </td> */}
+                    <td className="pl-3 py-3 text-sm text-center">
+                      <div className="flex items-center justify-start gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden relative">
+                          <div
+                            className={clsx(
+                              "h-full rounded-full transition-all duration-300",
+                              plan.status === 'active' 
+                                ? "animate-progress-shimmer bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600" 
+                                : "bg-blue-500"
+                            )}
+                            style={{ 
+                              width: `${plan.latest_execution_progress ?? 0}%`,
+                              ...(plan.status === 'active' ? {
+                                backgroundSize: '200% 100%'
+                              } : {})
+                            }}
                           />
                         </div>
                         <span className="font-medium text-gray-900 text-xs">{plan.latest_execution_progress ?? 0}%</span>

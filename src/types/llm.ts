@@ -6,5 +6,6 @@ export interface LLMConfig {
   model: string;
   temperature: number;
   maxTokens: number;
+  apiFormat?: 'openai' | 'ollama'; // API 格式：openai（默认）或 ollama
 }
 

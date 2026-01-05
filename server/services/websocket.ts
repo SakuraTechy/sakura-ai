@@ -322,4 +322,63 @@ export class WebSocketManager extends EventEmitter {
       }
     });
   }
+}
+
+// 🔥 新增：全局 WebSocketManager 实例管理
+// 用于在不直接访问 WebSocketManager 实例的模块中发送 WebSocket 消息
+let globalWsManager: WebSocketManager | null = null;
+
+/**
+ * 设置全局 WebSocketManager 实例
+ * @param manager WebSocketManager 实例
+ */
+export function setGlobalWsManager(manager: WebSocketManager): void {
+  globalWsManager = manager;
+  console.log('✅ [WebSocket] 全局 WebSocketManager 已设置');
+}
+
+/**
+ * 获取全局 WebSocketManager 实例
+ * @returns WebSocketManager 实例或 null
+ */
+export function getGlobalWsManager(): WebSocketManager | null {
+  return globalWsManager;
+}
+
+/**
+ * 🔥 全局广播消息函数
+ * 用于在不直接访问 WebSocketManager 实例的模块中发送 WebSocket 消息
+ * @param message WebSocket 消息
+ */
+export function globalBroadcast(message: WebSocketMessage): void {
+  if (globalWsManager) {
+    globalWsManager.broadcast(message);
+  } else {
+    console.warn('⚠️ [WebSocket] 全局 WebSocketManager 未设置，无法发送消息:', message.type);
+  }
+}
+
+/**
+ * 🔥 测试计划执行状态更新广播
+ * 专门用于测试计划执行过程中的状态更新
+ * @param executionId 执行记录ID
+ * @param data 更新数据
+ */
+export function broadcastTestPlanExecutionUpdate(executionId: string, data: any): void {
+  if (!globalWsManager) {
+    console.warn('⚠️ [WebSocket] 全局 WebSocketManager 未设置，无法广播测试计划执行更新');
+    return;
+  }
+  
+  globalWsManager.broadcast({
+    type: 'test_update',
+    runId: executionId,
+    data: {
+      ...data,
+      executionId,
+      updateType: 'test_plan_execution',
+    },
+  });
+  
+  console.log(`📡 [WebSocket] 广播测试计划执行更新: executionId=${executionId.substring(0, 8)}...`);
 } 
