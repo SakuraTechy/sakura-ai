@@ -380,7 +380,7 @@ router.post('/:id/versions', async (req: Request, res: Response) => {
     console.error('创建项目版本失败:', error);
 
     if (error instanceof Error) {
-      if (error.message === '项目不存在' || error.message === '该版本号已存在') {
+      if (error.message === '项目不存在' || error.message === '该版本名称已存在') {
         return res.status(400).json({ error: error.message });
       }
     }
@@ -415,7 +415,7 @@ router.put('/:id/versions/:versionId', async (req: Request, res: Response) => {
     console.error('更新项目版本失败:', error);
 
     if (error instanceof Error) {
-      if (error.message === '版本不存在' || error.message === '该版本号已存在') {
+      if (error.message === '版本不存在' || error.message === '该版本名称已存在') {
         return res.status(400).json({ error: error.message });
       }
     }
@@ -474,6 +474,87 @@ router.put('/:id/versions/:versionId/set-main', async (req: Request, res: Respon
 
     res.status(500).json({
       error: '设置主线版本失败',
+      message: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+});
+
+// 🔥 ===== 项目账号管理API ===== 🔥
+
+/**
+ * GET /api/v1/systems/:id/accounts
+ * 获取项目的所有账号配置
+ */
+router.get('/:id/accounts', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    
+    // 检查项目是否存在
+    const project = await systemService.getSystemById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: '项目不存在' });
+    }
+
+    const accounts = await systemService.getProjectAccounts(projectId);
+    res.json(accounts);
+  } catch (error) {
+    console.error('获取项目账号失败:', error);
+    res.status(500).json({
+      error: '获取项目账号失败',
+      message: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+});
+
+// 🔥 ===== 项目服务器管理API ===== 🔥
+
+/**
+ * GET /api/v1/systems/:id/servers
+ * 获取项目的所有服务器配置
+ */
+router.get('/:id/servers', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    
+    // 检查项目是否存在
+    const project = await systemService.getSystemById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: '项目不存在' });
+    }
+
+    const servers = await systemService.getProjectServers(projectId);
+    res.json(servers);
+  } catch (error) {
+    console.error('获取项目服务器失败:', error);
+    res.status(500).json({
+      error: '获取项目服务器失败',
+      message: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+});
+
+// 🔥 ===== 项目数据库管理API ===== 🔥
+
+/**
+ * GET /api/v1/systems/:id/databases
+ * 获取项目的所有数据库配置
+ */
+router.get('/:id/databases', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    
+    // 检查项目是否存在
+    const project = await systemService.getSystemById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: '项目不存在' });
+    }
+
+    const databases = await systemService.getProjectDatabases(projectId);
+    res.json(databases);
+  } catch (error) {
+    console.error('获取项目数据库失败:', error);
+    res.status(500).json({
+      error: '获取项目数据库失败',
       message: error instanceof Error ? error.message : '未知错误'
     });
   }

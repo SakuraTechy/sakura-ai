@@ -37,7 +37,7 @@ import { testPlanService } from '../services/testPlanService';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import { testService } from '../services/testService';
 import apiClient from '../utils/axios';
-import type { TestCaseType, TestPlan, TestPlanCase, TestPlanExecution, TestPlanStatistics, TestPlanType } from '../types/testPlan';
+import type { TestCaseType, TestPlan, TestPlanCase, TestPlanExecution, TestPlanStatistics, TestPlanType, TestPlanCaseResult } from '../types/testPlan';
 import { showToast } from '../utils/toast';
 import { Modal } from '../components/ui/modal';
 import { Modal as AntModal } from 'antd';
@@ -399,23 +399,24 @@ export function TestPlanDetail() {
 
   // 🔥 新增：返回列表的处理函数（带离开确认）
   const handleBackToList = () => {
-    console.log('🔙 [TestPlanDetail] 点击返回列表, hasActiveExecution:', hasActiveExecution, 'isExecutingRef:', isExecutingRef.current, 'activeExecutions:', activeExecutions);
-    if (hasActiveExecution || isExecutingRef.current) {
-      AntModal.confirm({
-        title: '确认离开',
-        content: `当前有 ${activeExecutions.length || 1} 个测试正在执行或排队中，离开页面可能会导致执行记录状态异常。确定要离开吗？`,
-        okText: '确认离开',
-        cancelText: '取消',
-        okButtonProps: { danger: true },
-        onOk: () => {
-          setIsExecutingLocally(false); // 🔥 重置本地执行状态
-          isExecutingRef.current = false; // 🔥 同步重置 ref
-          navigate('/test-plans');
-        }
-      });
-    } else {
-      navigate('/test-plans');
-    }
+    // console.log('🔙 [TestPlanDetail] 点击返回列表, hasActiveExecution:', hasActiveExecution, 'isExecutingRef:', isExecutingRef.current, 'activeExecutions:', activeExecutions);
+    // if (hasActiveExecution || isExecutingRef.current) {
+    //   AntModal.confirm({
+    //     title: '确认离开',
+    //     content: `当前有 ${activeExecutions.length || 1} 个测试正在执行或排队中，离开页面可能会导致执行记录状态异常。确定要离开吗？`,
+    //     okText: '确认离开',
+    //     cancelText: '取消',
+    //     okButtonProps: { danger: true },
+    //     onOk: () => {
+    //       setIsExecutingLocally(false); // 🔥 重置本地执行状态
+    //       isExecutingRef.current = false; // 🔥 同步重置 ref
+    //       navigate('/test-plans');
+    //     }
+    //   });
+    // } else {
+    //   navigate('/test-plans');
+    // }
+    navigate('/test-plans');
   };
 
   // 执行测试计划
@@ -479,8 +480,10 @@ export function TestPlanDetail() {
         }>; pagination?: { page: number; pageSize: number; total: number; totalPages: number } };
         
         const data = response.success ? (response.data || []) : [];
-        console.log(`✅ [TestPlanDetail] 功能测试用例加载成功，共 ${data.length} 条`);
-        setAvailableCases(data);
+        // 🔥 按用例ID正序排列
+        const sortedData = [...data].sort((a, b) => (a.id || 0) - (b.id || 0));
+        console.log(`✅ [TestPlanDetail] 功能测试用例加载成功，共 ${sortedData.length} 条`);
+        setAvailableCases(sortedData);
         
         // 更新分页信息
         if (response.pagination) {
@@ -537,6 +540,9 @@ export function TestPlanDetail() {
             (c.description?.toLowerCase().includes(searchLower))
           );
         }
+        
+        // 🔥 按用例ID正序排列
+        filteredCases = [...filteredCases].sort((a, b) => (a.id || 0) - (b.id || 0));
         
         console.log(`✅ [TestPlanDetail] UI自动化用例加载成功，总数: ${response.length}, 过滤后: ${filteredCases.length}`);
         console.log('🔍 [TestPlanDetail] UI自动化用例示例数据:', filteredCases.slice(0, 2));
@@ -1440,6 +1446,44 @@ export function TestPlanDetail() {
     }
   };
 
+  // 🔥 修复：从executions数组的execution_results中获取用例的最新执行记录
+  // 数据来源：test_plan_executions表的execution_results字段
+  const getLatestCaseExecution = (caseId: number): TestPlanCaseResult | null => {
+    if (!executions || executions.length === 0) {
+      return null;
+    }
+
+    let latestResult: TestPlanCaseResult | null = null;
+    let latestTime: string = '';
+
+    // 遍历所有执行记录，查找该用例的最新执行结果
+    for (const execution of executions) {
+      if (!execution.execution_results || !Array.isArray(execution.execution_results)) {
+        continue;
+      }
+
+      // 在当前执行记录的execution_results中查找该用例
+      for (const result of execution.execution_results) {
+        if (result.case_id === caseId) {
+          // 获取执行时间：优先使用finished_at，其次executed_at，最后started_at
+          const executedTime = result.finished_at || result.executed_at || execution.started_at;
+          
+          // 如果这是第一条记录，或者当前记录更新，则更新latestResult
+          if (!latestResult || executedTime > latestTime) {
+            latestResult = {
+              ...result,
+              // 确保execution_status存在：优先使用result.execution_status，其次使用execution.status
+              execution_status: result.execution_status || (execution.status as any) || 'completed',
+            };
+            latestTime = executedTime;
+          }
+        }
+      }
+    }
+
+    return latestResult;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
@@ -1954,9 +1998,10 @@ export function TestPlanDetail() {
                               <td className="px-3 py-3 text-center">
                                 <div className="flex items-center justify-center">
                                   {(() => {
-                                    // 🔥 修复：获取执行状态，完全基于执行历史数据
-                                    const lastExecution = (caseItem.case_detail as any)?.last_execution;
-                                    const executionStatus = lastExecution?.status;
+                                    // 🔥 修复：从executions数组的execution_results中获取用例的最新执行状态
+                                    // 数据来源：test_plan_executions表的execution_results字段
+                                    const latestExecution = getLatestCaseExecution(caseItem.case_id);
+                                    const executionStatus = latestExecution?.execution_status;
 
                                     if (!executionStatus) {
                                       return <span className="text-gray-500 text-sm">-</span>;
@@ -1988,35 +2033,35 @@ export function TestPlanDetail() {
                                   })()}
                                 </div>
                               </td>
-                              {/* <td className="px-4 py-3 text-sm">
-                                {getResultBadge(caseItem.execution_result)}
-                              </td> */}
                               <td className="px-3 py-3 text-xs text-center">
                                 {(() => {
-                                  // 🔥 修复：获取最新执行记录（从 case_detail 中获取）
-                                  // 数据来源完全基于执行历史，确保与后端一致
-                                  const lastExecution = (caseItem.case_detail as any)?.last_execution;
-                                  const executionResult = lastExecution?.final_result;
+                                  // 🔥 修复：从executions数组的execution_results中获取用例的最新执行结果
+                                  // 数据来源：test_plan_executions表的execution_results字段
+                                  const latestExecution = getLatestCaseExecution(caseItem.case_id);
+                                  const executionResult = latestExecution?.result;
                                   const config = getStatusConfig(executionResult || null);
                                   const resultText = executionResult === 'pass' ? '通过' :
                                     executionResult === 'fail' ? '失败' :
                                       executionResult === 'block' ? '阻塞' :
                                         executionResult === 'skip' ? '跳过' : '未知';
 
+                                  // 获取执行时间：优先使用finished_at，其次executed_at
+                                  const executedTime = latestExecution?.finished_at || latestExecution?.executed_at;
+
                                   return (
                                     <Tooltip
                                       placement="top"
                                       styles={{ body: { padding: '8px', fontSize: '13px' } }}
                                       title={
-                                        lastExecution ? (
+                                        latestExecution ? (
                                           <div>
-                                            {lastExecution.executed_at && (
-                                              <div>执行时间: {new Date(lastExecution.executed_at).toLocaleString('zh-CN')}</div>
+                                            {executedTime && (
+                                              <div>执行时间: {new Date(executedTime).toLocaleString('zh-CN')}</div>
                                             )}
-                                            {lastExecution.executor_name && (
-                                              <div>执行人: {lastExecution.executor_name}</div>
+                                            {latestExecution.executor_name && (
+                                              <div>执行人: {latestExecution.executor_name}</div>
                                             )}
-                                            <div>执行状态: {lastExecution.status === 'running' ? '执行中' : lastExecution.status === 'completed' ? '已完成' : '已执行'}</div>
+                                            <div>执行状态: {latestExecution.execution_status === 'running' ? '执行中' : latestExecution.execution_status === 'completed' ? '已完成' : '已执行'}</div>
                                             <div>执行结果: {resultText}</div>
                                           </div>
                                         ) : '暂无执行记录'
@@ -2031,7 +2076,13 @@ export function TestPlanDetail() {
                                 {formatDateTime(caseItem.created_at)}
                               </td>
                               <td className="px-3 py-3 text-sm">
-                                {caseItem.case_detail && (caseItem.case_detail as any).last_execution ? formatDateTime((caseItem.case_detail as any)?.last_execution?.executed_at) : '-'}
+                                {(() => {
+                                  // 🔥 修复：从executions数组的execution_results中获取用例的最后执行时间
+                                  // 数据来源：test_plan_executions表的execution_results字段
+                                  const latestExecution = getLatestCaseExecution(caseItem.case_id);
+                                  const executedTime = latestExecution?.finished_at || latestExecution?.executed_at;
+                                  return executedTime ? formatDateTime(executedTime) : '-';
+                                })()}
                               </td>
                               {/* 操作按钮 */}
                               <td className="px-3 py-3 text-sm">

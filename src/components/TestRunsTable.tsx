@@ -82,7 +82,7 @@ export function TestRunsTable({
 }: TestRunsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('actualStartedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // 状态图标
   const getStatusIcon = (status: string) => {
@@ -200,7 +200,7 @@ export function TestRunsTable({
   // 排序处理
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === 'asc' ? 'asc' : 'desc');
     } else {
       setSortField(field);
       setSortDirection('asc');
@@ -332,7 +332,7 @@ export function TestRunsTable({
                 </div>
               </th>
               {/* 执行信息 */}
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+              <th className="px-0 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 执行结果
               </th>
               {/* 执行者 */}

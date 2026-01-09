@@ -289,16 +289,16 @@ export async function createProjectVersion(input: CreateVersionInput): Promise<P
     throw new Error('项目不存在');
   }
 
-  // 检查版本号是否重复
+  // 检查版本名称是否重复（版本号可以重复，版本名称不能重复）
   const existingVersion = await prisma.project_versions.findFirst({
     where: {
       project_id: input.project_id,
-      version_code: input.version_code
+      version_name: input.version_name
     }
   });
 
   if (existingVersion) {
-    throw new Error('该版本号已存在');
+    throw new Error('该版本名称已存在');
   }
 
   // 如果设置为主线版本，先取消其他主线版本
@@ -347,18 +347,18 @@ export async function updateProjectVersion(
     throw new Error('版本不存在');
   }
 
-  // 如果更新版本号，检查是否重复
-  if (input.version_code && input.version_code !== existing.version_code) {
+  // 如果更新版本名称，检查是否重复（版本号可以重复，版本名称不能重复）
+  if (input.version_name && input.version_name !== existing.version_name) {
     const duplicate = await prisma.project_versions.findFirst({
       where: {
         project_id: projectId,
-        version_code: input.version_code,
+        version_name: input.version_name,
         NOT: { id: versionId }
       }
     });
 
     if (duplicate) {
-      throw new Error('该版本号已存在');
+      throw new Error('该版本名称已存在');
     }
   }
 
@@ -439,4 +439,55 @@ export async function setMainVersion(projectId: number, versionId: number): Prom
   });
 
   return result as ProjectVersion;
+}
+
+// ==================== 项目账号管理 ====================
+
+/**
+ * 获取项目的所有账号配置
+ */
+export async function getProjectAccounts(projectId: number) {
+  const accounts = await prisma.account_configs.findMany({
+    where: { project_id: projectId },
+    orderBy: [
+      { is_default: 'desc' },
+      { created_at: 'desc' }
+    ]
+  });
+
+  return accounts;
+}
+
+// ==================== 项目服务器管理 ====================
+
+/**
+ * 获取项目的所有服务器配置
+ */
+export async function getProjectServers(projectId: number) {
+  const servers = await prisma.server_configs.findMany({
+    where: { project_id: projectId },
+    orderBy: [
+      { is_default: 'desc' },
+      { created_at: 'desc' }
+    ]
+  });
+
+  return servers;
+}
+
+// ==================== 项目数据库管理 ====================
+
+/**
+ * 获取项目的所有数据库配置
+ */
+export async function getProjectDatabases(projectId: number) {
+  const databases = await prisma.database_configs.findMany({
+    where: { project_id: projectId },
+    orderBy: [
+      { is_default: 'desc' },
+      { created_at: 'desc' }
+    ]
+  });
+
+  return databases;
 }

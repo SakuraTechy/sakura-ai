@@ -60,7 +60,7 @@ export function TestCaseTable({
 }: TestCaseTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [sortField, setSortField] = useState<SortField>('created');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // 🔥 新增：全选/取消全选逻辑
   const allSelected = testCases.length > 0 && testCases.every(tc => selectedIds.includes(tc.id));
@@ -335,7 +335,7 @@ export function TestCaseTable({
                   <SortIcon field="name" />
                 </div>
               </th>
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '80px', minWidth: '80px' }}>
+              <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                 标签
               </th>
               <th
@@ -530,7 +530,7 @@ export function TestCaseTable({
                   </td>
                   {/* Tags */}
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex items-center justify-center flex-wrap gap-1">
                       {testCase.tags && testCase.tags.length > 0 ? (
                         <>
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200 truncate max-w-[80px]" title={testCase.tags[0]}>
@@ -582,7 +582,7 @@ export function TestCaseTable({
                   </td>
                   {/* Success Rate */}
                   <td className="px-3 py-3 text-center">
-                    {testCase.lastRun && testCase.lastRun !== '' && testCase.success_rate !== undefined && testCase.success_rate !== null ? (
+                    {testCase.success_rate !== undefined && testCase.success_rate !== null ? (
                       <span className="text-sm text-gray-800 font-medium">
                         {testCase.success_rate}%
                       </span>
@@ -666,6 +666,13 @@ export function TestCaseTable({
                   )}>
                     <div className="flex items-center justify-start space-x-1">
                       <button
+                        onClick={() => onEditTestCase(testCase)}
+                        className="p-1.5 rounded text-gray-600 hover:text-green-600 hover:bg-green-50 transition-colors"
+                        title="编辑"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => onRunTest(testCase)}
                         disabled={runningTestId === testCase.id}
                         className={clsx(
@@ -681,13 +688,6 @@ export function TestCaseTable({
                         ) : (
                           <Play className="h-4 w-4" />
                         )}
-                      </button>
-                      <button
-                        onClick={() => onEditTestCase(testCase)}
-                        className="p-1.5 rounded text-gray-600 hover:text-green-600 hover:bg-green-50 transition-colors"
-                        title="编辑"
-                      >
-                        <Edit3 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => onDeleteTestCase(testCase)}

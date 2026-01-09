@@ -36,6 +36,8 @@ export interface TestCase {
   lastRunStatus?: 'completed' | 'failed' | 'error' | 'cancelled'; // 🔥 新增：最后一次执行状态
   success_rate?: number;
   suiteId?: number; // 🔥 新增：关联的测试套件ID
+  executionStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'; // 🔥 新增：执行状态（来自test_case_executions表）
+  executionResult?: 'pass' | 'fail' | 'block' | 'skip'; // 🔥 新增：执行结果（来自test_case_executions表）
 }
 
 // 用于显示的简化测试用例接口（兼容现有数据）
@@ -414,4 +416,135 @@ export interface FunctionalTestCaseExtended {
   project_version_id?: number;    // 项目版本ID
   case_type?: CaseType;           // 用例类型（冒烟/全量）
   requirement_source?: string;    // 需求来源
+}
+
+// ==================== 账号配置相关类型 ====================
+
+export type AccountType = 'admin' | 'security' | 'auditor';  // 管理员账号、安全员账号、审核员账号
+
+export interface AccountConfig {
+  id: number;
+  project_id: number;
+  account_type: AccountType;
+  account_name: string;
+  account_password: string;
+  account_description?: string | null;
+  status: SystemStatus;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAccountInput {
+  project_id: number;
+  account_type: AccountType;
+  account_name: string;
+  account_password: string;
+  account_description?: string;
+  status?: SystemStatus;
+}
+
+export interface UpdateAccountInput {
+  account_type?: AccountType;
+  account_name?: string;
+  account_password?: string;
+  account_description?: string;
+  status?: SystemStatus;
+}
+
+// ==================== 服务器配置相关类型 ====================
+
+export interface ServerConfig {
+  id: number;
+  project_id: number;
+  server_type: string;  // 服务器类型，如：Linux
+  server_version: string;  // 服务器版本，如：CentOS 7.9.2009
+  host_name: string;  // 主机名称，如：172.19.5.45
+  host_port: number;  // 主机端口，如：22
+  username: string;  // 用户名
+  password: string;  // 密码
+  description?: string | null;  // 描述
+  status: SystemStatus;  // 启用状态
+  is_default: boolean;
+  parameters?: Record<string, string>;  // 参数配置（键值对）
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateServerInput {
+  project_id: number;
+  server_type: string;
+  server_version: string;
+  host_name: string;
+  host_port: number;
+  username: string;
+  password: string;
+  description?: string;
+  status?: SystemStatus;
+  parameters?: Record<string, string>;
+}
+
+export interface UpdateServerInput {
+  server_type?: string;
+  server_version?: string;
+  host_name?: string;
+  host_port?: number;
+  username?: string;
+  password?: string;
+  description?: string;
+  status?: SystemStatus;
+  parameters?: Record<string, string>;
+}
+
+// ==================== 数据库配置相关类型 ====================
+
+export interface DatabaseConfig {
+  id: number;
+  project_id: number;
+  database_type: string;  // 数据库类型，如：MySQL
+  database_version: string;  // 数据库版本，如：MySQL 5.7.38
+  database_driver: string;  // 数据库驱动，如：com.mysql.jdbc.Driver
+  database_name: string;  // 数据库名称（IP或主机名），如：172.19.5.45
+  database_port: number;  // 数据库端口，如：3306
+  database_schema: string;  // 数据库/模式，如：bs_audit
+  username: string;  // 用户名
+  password: string;  // 密码
+  connection_string: string;  // 数据库连接串，如：jdbc:mysql://172.19.5.45:3306/bs_audit
+  description?: string | null;  // 数据库描述
+  status: SystemStatus;  // 启用状态
+  is_default: boolean;
+  parameters?: Record<string, string>;  // 参数配置（键值对）
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDatabaseInput {
+  project_id: number;
+  database_type: string;
+  database_version: string;
+  database_driver: string;
+  database_name: string;
+  database_port: number;
+  database_schema: string;
+  username: string;
+  password: string;
+  connection_string: string;
+  description?: string;
+  status?: SystemStatus;
+  parameters?: Record<string, string>;
+}
+
+export interface UpdateDatabaseInput {
+  database_type?: string;
+  database_version?: string;
+  database_driver?: string;
+  database_name?: string;
+  database_port?: number;
+  database_schema?: string;
+  username?: string;
+  password?: string;
+  connection_string?: string;
+  description?: string;
+  status?: SystemStatus;
+  parameters?: Record<string, string>;
 } 

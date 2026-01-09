@@ -719,6 +719,7 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
   const cases: TestPlanCase[] = await Promise.all(
     plan.plan_cases.map(async (c) => {
       let caseDetail = undefined;
+      let latestCaseName = c.case_name; // 🔥 默认使用 plan_cases 表中的 case_name
       
       // 如果是功能测试用例，获取详细信息
       if (c.case_type === 'functional') {
@@ -736,6 +737,8 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
         });
         
         if (functionalCase) {
+          // 🔥 使用 test_cases 表的最新 name
+          latestCaseName = functionalCase.name;
           caseDetail = {
             id: functionalCase.id,
             name: functionalCase.name,
@@ -760,6 +763,8 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
           const uiAutoCase = await testExecutionService.getTestCaseById(c.case_id);
           
           if (uiAutoCase) {
+            // 🔥 使用 test_cases 表的最新 title（通过 name 字段返回）
+            latestCaseName = uiAutoCase.name;
             console.log(`✅ [testPlanService] 获取UI自动化用例详情成功, ID: ${c.case_id}, 名称: ${uiAutoCase.name}`);
             caseDetail = {
               id: uiAutoCase.id,
@@ -778,7 +783,7 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
           }
         } catch (error) {
           console.error(`❌ [testPlanService] 获取UI自动化用例详情失败, ID: ${c.case_id}:`, error);
-          // 失败时不影响整体流程，caseDetail 保持 undefined
+          // 失败时不影响整体流程，caseDetail 保持 undefined，使用默认的 c.case_name
         }
       }
       
@@ -824,7 +829,7 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
         plan_id: c.plan_id,
         case_id: c.case_id,
         case_type: c.case_type as any,
-        case_name: c.case_name,
+        case_name: latestCaseName, // 🔥 使用从 test_cases 表获取的最新名称
         sort_order: c.sort_order,
         is_executed: is_executed,
         execution_result: execution_result as any,

@@ -281,7 +281,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/Sakura AI/Sakura AI.git
+git clone https://github.com/SakuraTechy/sakura-ai.git
 cd Sakura AI
 
 # 2. 安装依赖

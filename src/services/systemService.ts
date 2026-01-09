@@ -6,7 +6,16 @@ import type {
   UpdateSystemInput,
   ProjectVersion,
   CreateVersionInput,
-  UpdateVersionInput
+  UpdateVersionInput,
+  AccountConfig,
+  CreateAccountInput,
+  UpdateAccountInput,
+  ServerConfig,
+  CreateServerInput,
+  UpdateServerInput,
+  DatabaseConfig,
+  CreateDatabaseInput,
+  UpdateDatabaseInput
 } from '../types/test';
 
 // 🔥 使用统一的 API 配置
@@ -245,5 +254,228 @@ export async function setMainVersion(
 ): Promise<ProjectVersion> {
   return request<ProjectVersion>(`${API_BASE_URL}/${projectId}/versions/${versionId}/set-main`, {
     method: 'PUT'
+  });
+}
+
+// ==================== 账号配置相关 API ====================
+
+const ACCOUNT_API_BASE_URL = getApiBaseUrl('/api/v1/accounts');
+
+/**
+ * 获取账号配置列表
+ */
+export async function getAccounts(): Promise<AccountConfig[]> {
+  return request<AccountConfig[]>(ACCOUNT_API_BASE_URL);
+}
+
+/**
+ * 获取指定项目的账号配置列表
+ */
+export async function getProjectAccounts(projectId: number): Promise<AccountConfig[]> {
+  return request<AccountConfig[]>(`${API_BASE_URL}/${projectId}/accounts`);
+}
+
+/**
+ * 根据ID获取账号配置
+ */
+export async function getAccountById(id: number): Promise<AccountConfig> {
+  return request<AccountConfig>(`${ACCOUNT_API_BASE_URL}/${id}`);
+}
+
+/**
+ * 创建账号配置
+ */
+export async function createAccount(data: CreateAccountInput): Promise<AccountConfig> {
+  return request<AccountConfig>(ACCOUNT_API_BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 更新账号配置
+ */
+export async function updateAccount(id: number, data: UpdateAccountInput): Promise<AccountConfig> {
+  return request<AccountConfig>(`${ACCOUNT_API_BASE_URL}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 删除账号配置
+ */
+export async function deleteAccount(id: number): Promise<{ message: string }> {
+  return request<{ message: string }>(`${ACCOUNT_API_BASE_URL}/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 设置默认账号
+ */
+export async function setDefaultAccount(projectId: number, accountId: number): Promise<AccountConfig> {
+  return request<AccountConfig>(`${ACCOUNT_API_BASE_URL}/${accountId}/set-default`, {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId })
+  });
+}
+
+// ==================== 服务器配置相关 API ====================
+
+const SERVER_API_BASE_URL = getApiBaseUrl('/api/v1/servers');
+
+/**
+ * 获取服务器配置列表
+ */
+export async function getServers(): Promise<ServerConfig[]> {
+  return request<ServerConfig[]>(SERVER_API_BASE_URL);
+}
+
+/**
+ * 获取指定项目的服务器配置列表
+ */
+export async function getProjectServers(projectId: number): Promise<ServerConfig[]> {
+  return request<ServerConfig[]>(`${API_BASE_URL}/${projectId}/servers`);
+}
+
+/**
+ * 根据ID获取服务器配置
+ */
+export async function getServerById(id: number): Promise<ServerConfig> {
+  return request<ServerConfig>(`${SERVER_API_BASE_URL}/${id}`);
+}
+
+/**
+ * 创建服务器配置
+ */
+export async function createServer(data: CreateServerInput): Promise<ServerConfig> {
+  return request<ServerConfig>(SERVER_API_BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 更新服务器配置
+ */
+export async function updateServer(id: number, data: UpdateServerInput): Promise<ServerConfig> {
+  return request<ServerConfig>(`${SERVER_API_BASE_URL}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 删除服务器配置
+ */
+export async function deleteServer(id: number): Promise<{ message: string }> {
+  return request<{ message: string }>(`${SERVER_API_BASE_URL}/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 测试服务器连接
+ * @param id 服务器ID（如果提供了config，id可以为null）
+ * @param config 可选的服务器配置数据（用于测试未保存的配置）
+ */
+export async function testServerConnection(
+  id: number | null, 
+  config?: Partial<CreateServerInput>
+): Promise<{ success: boolean; message: string }> {
+  return request<{ success: boolean; message: string }>(`${SERVER_API_BASE_URL}/${id || 'test'}/test`, {
+    method: 'POST',
+    body: config ? JSON.stringify({ config }) : undefined
+  });
+}
+
+/**
+ * 设置默认服务器
+ */
+export async function setDefaultServer(projectId: number, serverId: number): Promise<ServerConfig> {
+  return request<ServerConfig>(`${SERVER_API_BASE_URL}/${serverId}/set-default`, {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId })
+  });
+}
+
+// ==================== 数据库配置相关 API ====================
+
+const DATABASE_API_BASE_URL = getApiBaseUrl('/api/v1/databases');
+
+/**
+ * 获取数据库配置列表
+ */
+export async function getDatabases(): Promise<DatabaseConfig[]> {
+  return request<DatabaseConfig[]>(DATABASE_API_BASE_URL);
+}
+
+/**
+ * 获取指定项目的数据库配置列表
+ */
+export async function getProjectDatabases(projectId: number): Promise<DatabaseConfig[]> {
+  return request<DatabaseConfig[]>(`${API_BASE_URL}/${projectId}/databases`);
+}
+
+/**
+ * 根据ID获取数据库配置
+ */
+export async function getDatabaseById(id: number): Promise<DatabaseConfig> {
+  return request<DatabaseConfig>(`${DATABASE_API_BASE_URL}/${id}`);
+}
+
+/**
+ * 创建数据库配置
+ */
+export async function createDatabase(data: CreateDatabaseInput): Promise<DatabaseConfig> {
+  return request<DatabaseConfig>(DATABASE_API_BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 更新数据库配置
+ */
+export async function updateDatabase(id: number, data: UpdateDatabaseInput): Promise<DatabaseConfig> {
+  return request<DatabaseConfig>(`${DATABASE_API_BASE_URL}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+/**
+ * 删除数据库配置
+ */
+export async function deleteDatabase(id: number): Promise<{ message: string }> {
+  return request<{ message: string }>(`${DATABASE_API_BASE_URL}/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 设置默认数据库
+ */
+export async function setDefaultDatabase(projectId: number, databaseId: number): Promise<DatabaseConfig> {
+  return request<DatabaseConfig>(`${DATABASE_API_BASE_URL}/${databaseId}/set-default`, {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId })
+  });
+}
+
+/**
+ * 测试数据库连接
+ * @param id 数据库ID（如果提供了config，id可以为null）
+ * @param config 可选的数据库配置数据（用于测试未保存的配置）
+ */
+export async function testDatabaseConnection(
+  id: number | null,
+  config?: Partial<CreateDatabaseInput>
+): Promise<{ success: boolean; message: string }> {
+  const endpoint = id !== null ? `${DATABASE_API_BASE_URL}/${id}/test` : `${DATABASE_API_BASE_URL}/test/test`;
+  return request<{ success: boolean; message: string }>(endpoint, {
+    method: 'POST',
+    body: config ? JSON.stringify({ config }) : undefined
   });
 }

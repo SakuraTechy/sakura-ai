@@ -700,7 +700,7 @@ export class FunctionalTestCaseService {
               module: tc.module,
               priority: tc.priority || 'medium',
               tags: Array.isArray(tc.tags) ? tc.tags.join(',') : tc.tags || '',
-              status: 'ACTIVE',
+              status: 'DRAFT',
               source: 'AI_GENERATED',
               ai_session_id: aiSessionId,
               creator_id: userId,

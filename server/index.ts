@@ -58,6 +58,12 @@ import { createFunctionalTestCaseRoutes } from './routes/functionalTestCase.js';
 import { createRequirementDocRoutes } from './routes/requirementDoc.js';
 // 🔥 新增：系统字典管理路由
 import systemsRouter from './routes/systems.js';
+// 🔥 新增：账号配置路由
+import accountsRouter from './routes/accounts.js';
+// 🔥 新增：服务器配置路由
+import serversRouter from './routes/servers.js';
+// 🔥 新增：数据库配置路由
+import databasesRouter from './routes/databases.js';
 // 🔥 新增：知识库管理路由
 import knowledgeRouter from './routes/knowledge.js';
 // 🔥 新增：测试计划管理路由
@@ -735,6 +741,18 @@ async function startServer() {
     // 🔥 新增：系统字典管理路由
     console.log('🔧 注册系统字典管理路由...');
     app.use('/api/v1/systems', authenticate, systemsRouter);
+
+    // 🔥 新增：账号配置路由
+    console.log('🔧 注册账号配置路由...');
+    app.use('/api/v1/accounts', authenticate, accountsRouter);
+
+    // 🔥 新增：服务器配置路由
+    console.log('🔧 注册服务器配置路由...');
+    app.use('/api/v1/servers', authenticate, serversRouter);
+
+    // 🔥 新增：数据库配置路由
+    console.log('🔧 注册数据库配置路由...');
+    app.use('/api/v1/databases', authenticate, databasesRouter);
 
     // 🔥 新增：知识库管理路由（移除认证，允许公开搜索）
     console.log('🔧 注册知识库管理路由...');

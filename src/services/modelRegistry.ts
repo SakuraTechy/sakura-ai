@@ -416,7 +416,7 @@ export class ModelRegistry {
         },
         capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding'],
         description: '本地部署的大模型（Ollama），使用 /api/generate 端点，可指定具体的模型名称，免费畅通使用',
-        costLevel: 'high'
+        costLevel: 'low'
       },
       // ============ 本地系列（OpenAI兼容格式） ============
       {
@@ -434,7 +434,7 @@ export class ModelRegistry {
         },
         capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding'],
         description: '本地部署的大模型（OpenAI兼容格式），使用 /chat/completions 端点，可指定具体的模型名称，免费畅通使用',
-        costLevel: 'high'
+        costLevel: 'low'
       },
     ];
   }

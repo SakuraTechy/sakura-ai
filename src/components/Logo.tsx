@@ -62,7 +62,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
                   src="/logo1.svg"
                   alt="Sakura Logo"
                   className=" object-contain"
-                  style={{ width: '60px', height: '60px' }}
+                  style={{ width: '75px', height: '75px' }}
                 />
       {/* 系统名称 - 现代化排版 */}
       {showText && (

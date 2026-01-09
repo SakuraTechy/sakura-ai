@@ -1026,7 +1026,7 @@ export function TestCases() {
             <span className="font-medium">{testCase.name}</span>" 吗？
           </p>
           <p className="text-xs text-gray-500">
-            注意：测试用例的历史执行记录将被保留，用于数据分析和统计。
+            注意：用例的历史执行记录将被保留，用于数据分析和统计。
           </p>
         </div>
       ),
@@ -1067,7 +1067,7 @@ export function TestCases() {
             您确定要删除选中的 <span className="font-medium text-red-600">{selectedTestCaseIds.length}</span> 个测试用例吗？
           </p>
           <p className="text-xs text-gray-500">
-            注意：测试用例的历史执行记录将被保留，用于数据分析和统计。
+            注意：用例的历史执行记录将被保留，用于数据分析和统计。
           </p>
         </div>
       ),
@@ -3132,6 +3132,15 @@ export function TestCases() {
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
+                              onClick={() => handleEditTestCase(testCase)}
+                              className="p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                              title="编辑测试用例"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => handleRunTest(testCase)}
                               disabled={runningTestId === testCase.id}
                               className={clsx(
@@ -3147,15 +3156,6 @@ export function TestCases() {
                               ) : (
                                 <Play className="h-4 w-4" />
                               )}
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => handleEditTestCase(testCase)}
-                              className="p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
-                              title="编辑测试用例"
-                            >
-                              <Edit3 className="h-4 w-4" />
                             </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.05 }}

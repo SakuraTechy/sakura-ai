@@ -304,7 +304,7 @@ export const TableView: React.FC<ViewProps> = ({
             width: 80,
             sorter: (a, b) => a.id - b.id,
             sortDirections: ['ascend', 'descend'],
-            defaultSortOrder: 'descend',
+            defaultSortOrder: 'ascend',
             render: (id: number) => (
                 <span className="font-mono font-semibold text-indigo-600 text-sm whitespace-nowrap">
                     {/* {record.case_id ? record.case_id : `TC_${String(id).padStart(5, '0')}`} */}
@@ -640,7 +640,7 @@ export const TableView: React.FC<ViewProps> = ({
         //     },
         // },
         {
-            title: '来源',
+            title: '用例来源',
             dataIndex: 'source',
             key: 'source',
             width: 90,

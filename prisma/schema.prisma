@@ -478,6 +478,9 @@ model systems {
   updated_at            DateTime                @updatedAt @db.Timestamp(0)
   versions              project_versions[]
   requirement_documents requirement_documents[]
+  account_configs       account_configs[]
+  server_configs        server_configs[]
+  database_configs      database_configs[]
 
   @@index([status])
   @@index([sort_order])
@@ -498,7 +501,7 @@ model project_versions {
   project               systems                 @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requirement_documents requirement_documents[]
 
-  @@unique([project_id, version_code])
+  @@unique([project_id, version_name])
   @@index([project_id])
   @@index([is_main])
 }
@@ -837,4 +840,78 @@ model ai_operation_cache {
   
   @@index([expires_at])
   @@index([created_at])
+}
+
+// ==================== 账号配置表 ====================
+model account_configs {
+  id                  Int           @id @default(autoincrement())
+  project_id          Int
+  account_type        String        @db.VarChar(20)  // admin, security, auditor
+  account_name        String        @db.VarChar(100)
+  account_password    String        @db.VarChar(255)
+  account_description String?       @db.Text
+  status              system_status @default(active)
+  is_default          Boolean       @default(false)  // 是否为默认账号
+  created_at          DateTime      @default(now()) @db.Timestamp(0)
+  updated_at          DateTime      @updatedAt @db.Timestamp(0)
+  project             systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([account_type])
+  @@index([status])
+  @@index([account_name])
+  @@index([project_id])
+  @@index([is_default])
+}
+
+// ==================== 服务器配置表 ====================
+model server_configs {
+  id            Int           @id @default(autoincrement())
+  project_id    Int
+  server_type   String        @db.VarChar(50)
+  server_version String       @db.VarChar(100)
+  host_name     String        @db.VarChar(255)
+  host_port     Int
+  username      String        @db.VarChar(100)
+  password      String        @db.VarChar(255)
+  description   String?       @db.Text
+  status        system_status @default(active)
+  is_default    Boolean       @default(false)  // 是否为默认服务器
+  parameters    Json?         // 参数配置（键值对）
+  created_at    DateTime      @default(now()) @db.Timestamp(0)
+  updated_at    DateTime      @updatedAt @db.Timestamp(0)
+  project       systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([server_type])
+  @@index([status])
+  @@index([host_name])
+  @@index([project_id])
+  @@index([is_default])
+}
+
+// ==================== 数据库配置表 ====================
+model database_configs {
+  id                Int           @id @default(autoincrement())
+  project_id        Int
+  database_type     String        @db.VarChar(50)
+  database_version  String        @db.VarChar(100)
+  database_driver   String        @db.VarChar(255)
+  database_name     String        @db.VarChar(255)
+  database_port     Int
+  database_schema   String        @db.VarChar(100)
+  username          String        @db.VarChar(100)
+  password          String        @db.VarChar(255)
+  connection_string String        @db.VarChar(500)
+  description       String?       @db.Text
+  status            system_status @default(active)
+  is_default        Boolean       @default(false)  // 是否为默认数据库
+  parameters        Json?         // 参数配置（键值对）
+  created_at        DateTime      @default(now()) @db.Timestamp(0)
+  updated_at        DateTime      @updatedAt @db.Timestamp(0)
+  project           systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([database_type])
+  @@index([status])
+  @@index([database_name])
+  @@index([project_id])
+  @@index([is_default])
 }

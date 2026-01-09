@@ -46,6 +46,9 @@ export function TestPlans() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
+  // 🔥 新增：批量选择状态
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   // 加载测试计划列表
   const loadTestPlans = async () => {
@@ -89,6 +92,16 @@ export function TestPlans() {
     loadTestPlans();
   }, [currentPage, pageSize, searchTerm, selectedProject, selectedPlanType, selectedStatus, selectedResult]);
 
+  // 🔥 新增：数据变化时更新全选状态 - 检查当前页是否全部被选中
+  useEffect(() => {
+    if (testPlans.length > 0) {
+      const allCurrentPageSelected = testPlans.every(plan => selectedPlanIds.has(plan.id));
+      setSelectAll(allCurrentPageSelected);
+    } else {
+      setSelectAll(false);
+    }
+  }, [testPlans, selectedPlanIds]);
+
   // 处理每页条数变化
   const handlePageSizeChange = (newPageSize: number) => {
     setPageSize(newPageSize);
@@ -115,16 +128,17 @@ export function TestPlans() {
     // 🔥 修复：根据测试计划类型确定执行类型
     // UI自动化和混合类型：跳转到详情页的执行历史tab，让用户在详情页选择执行方式
     // 功能测试类型：直接跳转到执行页面
-    if (plan.plan_type === 'ui_auto') {
-      // UI自动化计划：跳转到详情页执行历史tab
-      navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'executions' } });
-    } else if (plan.plan_type === 'mixed') {
-      // 混合类型：跳转到详情页用例tab，让用户选择
-      navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'cases' } });
-    } else {
-      // 功能测试计划：直接跳转到执行页面
-      navigate(`/test-plans/${plan.id}/execute?type=functional`);
-    }
+    // if (plan.plan_type === 'ui_auto') {
+    //   // UI自动化计划：跳转到详情页执行历史tab
+    //   navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'executions' } });
+    // } else if (plan.plan_type === 'mixed') {
+    //   // 混合类型：跳转到详情页用例tab，让用户选择
+    //   navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'cases' } });
+    // } else {
+    //   // 功能测试计划：直接跳转到执行页面
+    //   navigate(`/test-plans/${plan.id}/execute?type=functional`);
+    // }
+    navigate(`/test-plans/${plan.id}`, { state: { activeTab: 'executions' } });
   };
 
 
@@ -143,6 +157,105 @@ export function TestPlans() {
     setSelectedResult('');
     setCurrentPage(1);
     showToast.success('已重置筛选条件');
+  };
+
+  // 🔥 新增：全选/取消全选
+  const handleSelectAll = () => {
+    if (selectAll) {
+      // 取消全选
+      setSelectedPlanIds(new Set());
+      setSelectAll(false);
+    } else {
+      // 全选当前页
+      const allIds = new Set(testPlans.map(plan => plan.id));
+      setSelectedPlanIds(allIds);
+      setSelectAll(true);
+    }
+  };
+
+  // 🔥 新增：单项选择/取消选择
+  const handleSelectPlan = (planId: number) => {
+    setSelectedPlanIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(planId)) {
+        newSet.delete(planId);
+      } else {
+        newSet.add(planId);
+      }
+      // 检查当前页是否全部被选中
+      const allCurrentPageSelected = testPlans.length > 0 && 
+        testPlans.every(plan => {
+          if (plan.id === planId) {
+            return newSet.has(planId);
+          }
+          return newSet.has(plan.id);
+        });
+      setSelectAll(allCurrentPageSelected);
+      return newSet;
+    });
+  };
+
+  // 🔥 新增：批量删除测试计划
+  const handleBatchDelete = () => {
+    if (selectedPlanIds.size === 0) {
+      showToast.warning('请先选择要删除的测试计划');
+      return;
+    }
+
+    const selectedPlans = testPlans.filter(plan => selectedPlanIds.has(plan.id));
+    const planNames = selectedPlans.map(plan => plan.name).join(',');
+
+    AntModal.confirm({
+      title: '批量删除确认',
+      content: (
+        <div className="space-y-2">
+          <p>
+            您确定要删除选中的 <span className="font-medium text-red-600">{selectedPlanIds.size}</span> 个测试计划吗？
+          </p>
+          {/* <p className="text-xs text-gray-500">
+            计划名称：{planNames}
+          </p> */}
+        </div>
+      ),
+      okText: '确认删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          setLoading(true);
+          let successCount = 0;
+          let failCount = 0;
+
+          // 逐个删除选中的测试计划
+          for (const planId of Array.from(selectedPlanIds)) {
+            try {
+              await testPlanService.deleteTestPlan(planId);
+              successCount++;
+            } catch (error) {
+              console.error(`删除测试计划 ${planId} 失败:`, error);
+              failCount++;
+            }
+          }
+
+          // 重新加载列表，清空选择
+          await loadTestPlans();
+          setSelectedPlanIds(new Set());
+          setSelectAll(false);
+
+          // 显示结果
+          if (failCount === 0) {
+            showToast.success(`成功删除 ${successCount} 个测试计划！`);
+          } else {
+            showToast.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+          }
+        } catch (error: any) {
+          console.error('批量删除失败:', error);
+          showToast.error(`批量删除失败: ${error.message}`);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   // 计算测试计划的实际状态（基于执行情况和时间）
@@ -331,14 +444,26 @@ export function TestPlans() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">测试计划</h1>
           <p className="text-gray-600">管理和执行测试计划</p>
         </div>
-        {/* 新建按钮 */}
-        <button
-              onClick={handleCreatePlan}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        <div className="flex items-center gap-3">
+          {/* 🔥 批量删除按钮 - 仅在有选中项时显示 */}
+          {selectedPlanIds.size > 0 && (
+            <button
+              onClick={handleBatchDelete}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
             >
-              <Plus className="w-5 h-5" />
-              新建计划
+              <Trash2 className="w-5 h-5" />
+              批量删除 ({selectedPlanIds.size})
             </button>
+          )}
+          {/* 新建按钮 */}
+          <button
+            onClick={handleCreatePlan}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            新建计划
+          </button>
+        </div>
         </div>
         {/* 工具栏 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -451,6 +576,16 @@ export function TestPlans() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  {/* 🔥 新增：全选复选框列 */}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectAll}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                      title={selectAll ? "取消全选" : "全选"}
+                    />
+                  </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     所属项目
                   </th>
@@ -498,6 +633,16 @@ export function TestPlans() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {testPlans.map((plan) => (
                   <tr key={plan.id} className="hover:bg-gray-50 transition-colors">
+                    {/* 🔥 新增：选择复选框列 */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedPlanIds.has(plan.id)}
+                        onChange={() => handleSelectPlan(plan.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
                     <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                       {plan.project || '-'}
                     </td>
@@ -598,16 +743,9 @@ export function TestPlans() {
                         <button
                           onClick={() => handleViewPlan(plan)}
                           className="text-blue-600 hover:text-blue-800"
-                          title="查看详情"
+                          title="详情"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleExecutePlan(plan)}
-                          className="text-green-600 hover:text-green-800"
-                          title="执行计划"
-                        >
-                          <Play className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleEditPlan(plan)}
@@ -615,6 +753,13 @@ export function TestPlans() {
                           title="编辑"
                         >
                           <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleExecutePlan(plan)}
+                          className="text-green-600 hover:text-green-800"
+                          title="历史"
+                        >
+                          <Play className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => {

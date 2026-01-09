@@ -774,7 +774,7 @@ AI生成用例时会自动检索相关知识，质量提升明显：
 
 ```bash
 # 克隆项目
-git clone https://github.com/Sakura AI/Sakura AI.git
+git clone https://github.com/SakuraTechy/sakura-ai.git
 cd Sakura AI
 
 # 安装依赖

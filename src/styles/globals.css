@@ -295,10 +295,81 @@ body {
   color: var(--color-gray-300);
 }
 
+/* 统一所有输入框的字体大小 */
 .ant-input,
 .ant-input-password,
-.ant-select-selector {
+.ant-input-password input,
+.ant-input-number,
+.ant-input-number-input,
+.ant-select-selector,
+.ant-select-selection-item,
+.ant-select-selection-placeholder,
+.ant-picker,
+.ant-picker-input > input {
+  font-size: 14px !important;
+}
+
+/* 统一所有输入框的圆角为 8px */
+.ant-input,
+.ant-input-password,
+.ant-input-number,
+.ant-select-selector,
+.ant-picker,
+textarea.ant-input {
+  border-radius: 8px !important;
+}
+
+/* 优化 Select 下拉框选项高度和文字大小 */
+.ant-select-dropdown {
   font-size: 14px;
+}
+
+.ant-select-item {
+  font-size: 14px;
+  min-height: 40px;
+  line-height: 40px;
+  padding: 0 12px;
+}
+
+.ant-select-item-option {
+  font-size: 14px;
+  min-height: 40px;
+  line-height: 40px;
+  padding: 0 12px;
+}
+
+.ant-select-item-option-content {
+  font-size: 14px;
+  line-height: 40px;
+}
+
+/* 优化 Select 大尺寸的高度和样式 */
+.ant-select-lg .ant-select-selector {
+  height: 40px;
+  font-size: 14px !important;
+  line-height: 40px;
+  border-radius: 8px !important;
+}
+
+.ant-select-lg .ant-select-selection-item {
+  line-height: 40px;
+  font-size: 14px !important;
+}
+
+.ant-select-lg .ant-select-selection-placeholder {
+  line-height: 40px;
+  font-size: 14px !important;
+}
+
+/* DatePicker 大尺寸样式 */
+.ant-picker-large {
+  height: 40px;
+  font-size: 14px !important;
+  border-radius: 8px !important;
+}
+
+.ant-picker-large .ant-picker-input > input {
+  font-size: 14px !important;
 }
 
 /* 🔥 去掉所有输入框点击后的黑边（outline） */
@@ -435,6 +506,16 @@ select:disabled {
   color: #6b7280 !important;
   transition: all 0.2s ease !important;
   font-size: 12px !important;
+  /* top: 40% !important; */
+}
+
+.ant-select-single {
+  height: auto;
+  /* margin-top: 5px; */
+}
+
+.ant-select-clear {
+  top: 50% !important;
 }
 
 .ant-select-arrow .anticon {

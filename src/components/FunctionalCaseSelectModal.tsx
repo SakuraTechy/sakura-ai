@@ -324,7 +324,8 @@ export const FunctionalCaseSelectModal: React.FC<FunctionalCaseSelectModalProps>
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="text-xs text-gray-500">TC_{String(functionalCase.id).padStart(5, '0')}</span>
+          {/* <span className="text-xs text-gray-500">TC_{String(functionalCase.id).padStart(5, '0')}</span> */}
+          <span className="text-sm text-gray-500">#{functionalCase.id}</span>
           <h4 className="font-medium text-gray-900">{functionalCase.name}</h4>
           {CaseTypeBadge && functionalCase.case_type && (
             <CaseTypeBadge caseType={functionalCase.case_type} />
@@ -465,7 +466,8 @@ export const FunctionalCaseSelectModal: React.FC<FunctionalCaseSelectModalProps>
                   />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-500 font-mono">
-                  TC_{String(functionalCase.id).padStart(5, '0')}
+                  {/* TC_{String(functionalCase.id).padStart(5, '0')} */}
+                  #{functionalCase.id}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {functionalCase.system ? (
@@ -567,8 +569,9 @@ export const FunctionalCaseSelectModal: React.FC<FunctionalCaseSelectModalProps>
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-xs text-gray-500 font-mono">
-              TC_{String(functionalCase.id).padStart(5, '0')}
+            <span className="text-sm text-gray-500 font-mono">
+              {/* TC_{String(functionalCase.id).padStart(5, '0')} */}
+              #{functionalCase.id}
             </span>
             {CaseTypeBadge && functionalCase.case_type && (
               <CaseTypeBadge caseType={functionalCase.case_type} />

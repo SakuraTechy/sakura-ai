@@ -82,49 +82,78 @@ function checkDependencies() {
 async function runDatabaseMigrations() {
   try {
     return new Promise((resolve, reject) => {
-      const migrateDeploy = spawn(npxCmd, ['prisma', 'migrate', 'deploy'], { 
-        cwd: path.join(__dirname, '..'),
-        stdio: 'inherit',
-        shell: process.platform === 'win32'
-      });
+      // 检查是否有迁移文件（除了 migration_lock.toml）
+      console.log('   ⚙️  检查迁移文件...');
+      const migrationsDir = path.join(__dirname, '..', 'prisma', 'migrations');
+      const migrationFiles = fs.readdirSync(migrationsDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
       
-      migrateDeploy.on('close', (code) => {
-        if (code === 0) {
-          // 迁移成功，静默完成
-          resolve();
-        } else {
-          // 如果 migrate deploy 失败，尝试使用 migrate dev（开发环境）
-          const migrateDev = spawn(npxCmd, ['prisma', 'migrate', 'dev', '--name', 'init'], { 
-            cwd: path.join(__dirname, '..'),
-            stdio: 'inherit',
-            shell: process.platform === 'win32'
-          });
-          
-          migrateDev.on('close', (devCode) => {
-            if (devCode === 0) {
-              resolve();
-            } else {
-              // 静默处理，可能是表已存在
-              resolve();
-            }
-          });
-          
-          migrateDev.on('error', (error) => {
-            // 静默处理，不阻止启动
-            resolve();
-          });
-        }
-      });
+      const hasMigrations = migrationFiles.length > 0;
       
-      migrateDeploy.on('error', (error) => {
-        // 静默处理，不阻止启动
-        resolve();
-      });
+      if (hasMigrations) {
+        console.log(`   📦 发现 ${migrationFiles.length} 个迁移文件，先执行 migrate deploy...`);
+        // 如果有迁移文件，先尝试 migrate deploy
+        const migrateDeploy = spawn(npxCmd, ['prisma', 'migrate', 'deploy'], { 
+          cwd: path.join(__dirname, '..'),
+          stdio: 'inherit',
+          shell: process.platform === 'win32'
+        });
+        
+        migrateDeploy.on('close', (code) => {
+          if (code === 0) {
+            console.log('   ✅ migrate deploy 完成');
+          } else {
+            console.log(`   ⚠️  migrate deploy 退出码: ${code}`);
+          }
+          // 无论 migrate deploy 是否成功，都执行 db push 确保同步
+          console.log('   ⚙️  执行 db push 确保数据库同步...');
+          executeDbPush(resolve);
+        });
+        
+        migrateDeploy.on('error', (error) => {
+          console.warn('   ⚠️  migrate deploy 出错:', error.message);
+          // 如果 migrate deploy 出错，直接执行 db push
+          console.log('   ⚙️  执行 db push 确保数据库同步...');
+          executeDbPush(resolve);
+        });
+      } else {
+        console.log('   📝 未发现迁移文件，直接执行 npx prisma db push 确保数据库同步...');
+        // 如果没有迁移文件，直接执行 db push
+        executeDbPush(resolve);
+      }
     });
   } catch (error) {
     console.warn('⚠️ 数据库迁移异常，但继续启动:', error.message);
-    // 不阻止启动，可能是数据库连接问题或表已存在
+    // 如果检查迁移文件失败，也尝试执行 db push
+    console.log('   ⚙️  尝试执行 db push...');
+    executeDbPush(() => {});
   }
+}
+
+// 执行 db push
+function executeDbPush(resolve) {
+  const dbPush = spawn(npxCmd, ['prisma', 'db', 'push'], { 
+    cwd: path.join(__dirname, '..'),
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  });
+  
+  dbPush.on('close', (pushCode) => {
+    if (pushCode === 0) {
+      console.log('   ✅ npx prisma db push 完成');
+    } else {
+      console.log(`   ⚠️  db push 退出码: ${pushCode}`);
+    }
+    // 无论成功与否，都继续启动
+    resolve();
+  });
+  
+  dbPush.on('error', (error) => {
+    console.warn('   ⚠️  db push 出错:', error.message);
+    // 静默处理，不阻止启动
+    resolve();
+  });
 }
 
 // 生成 Prisma 客户端

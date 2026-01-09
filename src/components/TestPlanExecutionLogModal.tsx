@@ -339,9 +339,10 @@ export const TestPlanExecutionLogModal: React.FC<TestPlanExecutionLogModalProps>
       key: 'case_id',
       width: 20,
       fixed: 'left',
-      // align: 'center',
+      align: 'center',
       render: (id: number) => (
-        <span className="font-mono text-gray-700">{`TC_${String(id).padStart(5, '0')}`}</span>
+        // <span className="font-mono text-gray-700">TC_{String(id).padStart(5, '0')}</span>
+        <span className="font-mono text-gray-700 text-sm">#{id}</span>
       ),
     },
     {

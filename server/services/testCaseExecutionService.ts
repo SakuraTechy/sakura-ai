@@ -62,6 +62,7 @@ export class TestCaseExecutionService {
 
   /**
    * 创建新的测试执行记录
+   * 🔥 修复：UI自动化测试创建时状态直接设置为 running，因为它们是立即执行的
    */
   async createExecution(data: {
     id: string;
@@ -73,6 +74,7 @@ export class TestCaseExecutionService {
     executorDepartment?: string;
   }): Promise<TestCaseExecutionData> {
     try {
+      const now = getNow();
       const execution = await this.prisma.test_case_executions.create({
         data: {
           id: data.id,
@@ -80,10 +82,12 @@ export class TestCaseExecutionService {
           test_case_title: data.testCaseTitle,
           environment: data.environment,
           execution_mode: data.executionMode || 'standard',
-          status: 'queued',
+          // 🔥 修复：UI自动化测试创建时状态直接设置为 running，因为它们是立即执行的
+          status: 'running',
           executor_user_id: data.executorUserId,
           executor_project: data.executorDepartment,
-          queued_at: getNow(),
+          queued_at: now,
+          started_at: now, // 🔥 修复：同时设置 started_at，因为状态是 running
           total_steps: 0,
           completed_steps: 0,
           passed_steps: 0,
@@ -92,7 +96,7 @@ export class TestCaseExecutionService {
         },
       });
 
-      console.log(`✅ [${data.id}] 创建测试执行记录成功`);
+      console.log(`✅ [${data.id}] 创建测试执行记录成功，状态: running`);
       return this.mapToExecutionData(execution);
     } catch (error) {
       console.error(`❌ [${data.id}] 创建测试执行记录失败:`, error);

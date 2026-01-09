@@ -376,17 +376,16 @@ export class TestExecutionService {
     // 批量获取测试用例的运行数据
     const testCaseIds = testCases.map(tc => tc.id);
     
-    // 🔥 修复：从 test_case_executions 表获取最新执行记录（包含步骤统计）
-    // 获取每个测试用例的最新执行记录
+    // 🔥 修复：从 test_case_executions 表获取所有状态的最新执行记录
+    // 获取每个测试用例的所有执行记录（包括运行中的）
     const allExecutions = await this.prisma.test_case_executions.findMany({
       where: {
-        test_case_id: { in: testCaseIds },
-        // 只获取已完成的执行记录
-        status: { in: ['completed', 'failed', 'error'] }
+        test_case_id: { in: testCaseIds }
       },
       select: {
         test_case_id: true,
         status: true,
+        queued_at: true,
         started_at: true,
         finished_at: true,
         total_steps: true,
@@ -394,16 +393,32 @@ export class TestExecutionService {
         failed_steps: true,
         completed_steps: true
       },
-      orderBy: {
-        finished_at: 'desc'
-      }
+      orderBy: [
+        // 优先按 finished_at 降序（已完成的最新的在前）
+        { finished_at: 'desc' },
+        // 如果没有 finished_at，按 started_at 降序（运行中的最新的在前）
+        { started_at: 'desc' },
+        // 最后按 queued_at 降序（排队中的最新的在前）
+        { queued_at: 'desc' }
+      ]
     });
 
     // 按测试用例ID分组，只保留每个用例的最新执行记录
+    // 使用时间戳比较来确定最新记录
     const latestExecutionByCase = new Map<number, typeof allExecutions[0]>();
     for (const exec of allExecutions) {
-      if (!latestExecutionByCase.has(exec.test_case_id)) {
+      const existing = latestExecutionByCase.get(exec.test_case_id);
+      if (!existing) {
         latestExecutionByCase.set(exec.test_case_id, exec);
+      } else {
+        // 比较时间戳，选择最新的记录
+        const existingTime = existing.finished_at || existing.started_at || existing.queued_at;
+        const currentTime = exec.finished_at || exec.started_at || exec.queued_at;
+        if (existingTime && currentTime && new Date(currentTime) > new Date(existingTime)) {
+          latestExecutionByCase.set(exec.test_case_id, exec);
+        } else if (!existingTime && currentTime) {
+          latestExecutionByCase.set(exec.test_case_id, exec);
+        }
       }
     }
 
@@ -414,27 +429,30 @@ export class TestExecutionService {
       if (!latestExec) {
         return {
           ...testCase,
-          success_rate: 0,
+          success_rate: undefined,
           lastRun: '',
           executionStatus: undefined,
           executionResult: undefined
         };
       }
 
-      // 🔥 修复：计算步骤通过率
+      // 🔥 修复：计算步骤通过率（基于最新执行记录）
       // success_rate = (passed_steps / total_steps) * 100
+      // 只有已完成或失败的执行才计算通过率
       const totalSteps = latestExec.total_steps || 0;
       const passedSteps = latestExec.passed_steps || 0;
-      const successRate = totalSteps > 0 
-        ? Math.round((passedSteps / totalSteps) * 100)
-        : 0;
+      let successRate: number | undefined;
       
-      // 🔥 调试日志：记录成功率计算过程
-      console.log(`[成功率计算] 测试用例ID: ${testCase.id}, 总步骤数: ${totalSteps}, 通过步骤数: ${passedSteps}, 成功率: ${successRate}%`);
+      // 只有已完成或失败的执行才显示通过率
+      if (latestExec.status === 'completed' || latestExec.status === 'failed' || latestExec.status === 'error') {
+        successRate = totalSteps > 0 
+          ? Math.round((passedSteps / totalSteps) * 100)
+          : 0;
+      }
 
       // 格式化最后运行时间
       let lastRun = '-';
-      const execTime = latestExec.finished_at || latestExec.started_at;
+      const execTime = latestExec.finished_at || latestExec.started_at || latestExec.queued_at;
       if (execTime) {
         try {
           const date = new Date(execTime);
@@ -451,30 +469,43 @@ export class TestExecutionService {
         }
       }
 
-      // 映射执行状态
+      // 🔥 修复：映射执行状态（直接从最新执行记录的 status 获取）
       let executionStatus: string | undefined;
       const statusMap: Record<string, string> = {
         'queued': 'pending',
         'running': 'running',
         'completed': 'completed',
         'failed': 'failed',
-        'error': 'error',
+        'error': 'failed', // error 状态映射为 failed
         'cancelled': 'cancelled'
       };
       executionStatus = statusMap[latestExec.status] || 'pending';
 
-      // 根据步骤结果判断执行结果
+      // 🔥 修复：根据最新执行记录的状态和步骤结果判断执行结果
       let executionResult: string | undefined;
       const failedSteps = latestExec.failed_steps || 0;
-      if (latestExec.status === 'completed' || latestExec.status === 'failed') {
-        if (failedSteps > 0) {
+      
+      // 只有已完成或失败的执行才有执行结果
+      if (latestExec.status === 'completed' || latestExec.status === 'failed' || latestExec.status === 'error') {
+        if (totalSteps === 0) {
+          // 如果没有步骤，无法判断结果
+          executionResult = undefined;
+        } else if (failedSteps > 0) {
           executionResult = 'fail';
-        } else if (passedSteps >= totalSteps && totalSteps > 0) {
+        } else if (passedSteps >= totalSteps) {
           executionResult = 'pass';
-        } else if (totalSteps > 0 && passedSteps < totalSteps) {
+        } else if (passedSteps < totalSteps && passedSteps > 0) {
+          // 部分通过，视为阻塞
           executionResult = 'block';
+        } else {
+          // 没有通过的步骤，视为失败
+          executionResult = 'fail';
         }
+      } else if (latestExec.status === 'cancelled') {
+        // 已取消的执行没有结果
+        executionResult = undefined;
       }
+      // running 和 queued 状态没有执行结果
 
       return {
         ...testCase,
@@ -588,7 +619,8 @@ export class TestExecutionService {
         },
         skip,
         take: pageSize,
-        orderBy: { created_at: 'desc' }
+        // orderBy: { created_at: 'desc' }
+        orderBy: { id: 'asc' } // 🔥 按用例ID正序排列
       })
     ]);
 
@@ -640,7 +672,8 @@ export class TestExecutionService {
           module: true,
           project: true, // 🔥 修复：添加 project 字段
           created_at: true
-        }
+        },
+        orderBy: { id: 'asc' } // 🔥 按用例ID正序排列
       });
 
       let allFilteredData = allTestCases.map(this.dbTestCaseToApp);
@@ -670,6 +703,9 @@ export class TestExecutionService {
         allFilteredData = allFilteredData.filter(testCase => testCase.author === author);
       }
 
+      // 🔥 确保数据按ID正序排列（应用层过滤可能打乱顺序）
+      allFilteredData.sort((a, b) => (a.id || 0) - (b.id || 0));
+      
       // 手动分页
       const newTotal = allFilteredData.length;
       const startIndex = skip;
@@ -689,6 +725,9 @@ export class TestExecutionService {
         enhancedData = enhancedData.filter(testCase => testCase.executionResult === executionResult);
       }
 
+      // 🔥 确保数据按ID正序排列（筛选可能打乱顺序）
+      enhancedData.sort((a, b) => (a.id || 0) - (b.id || 0));
+
       return {
         data: enhancedData,
         total: enhancedData.length
@@ -707,6 +746,9 @@ export class TestExecutionService {
     if (executionResult && executionResult.trim()) {
       enhancedData = enhancedData.filter(testCase => testCase.executionResult === executionResult);
     }
+
+    // 🔥 确保数据按ID正序排列（筛选可能打乱顺序）
+    enhancedData.sort((a, b) => (a.id || 0) - (b.id || 0));
 
     // 如果应用了执行状态或执行结果筛选，需要重新计算总数
     if ((executionStatus && executionStatus.trim()) || (executionResult && executionResult.trim())) {
@@ -2903,6 +2945,12 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
   public async cancelTest(runId: string): Promise<boolean> {
     const testRun = this.getTestRun(runId);
     if (testRun && ['queued', 'running'].includes(testRun.status)) {
+      // 🔥 修复：先通知队列服务取消任务，确保执行循环能够检测到取消状态
+      if (this.queueService) {
+        await this.queueService.cancelTask(runId);
+        console.log(`⏹️ [${runId}] 已通知队列服务取消任务`);
+      }
+      // 然后更新测试运行状态
       this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
       return true;
     }
@@ -5905,8 +5953,34 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       this.addLog(runId, `📋 步骤推进: ${remainingSteps.trim() ? `还有 ${remainingSteps.split('\n').filter(l => l.trim()).length} 个步骤` : '所有步骤已完成'}`, 'info');
 
       if (remainingSteps.trim()) {
+        // 🔥 修复：在等待前检查取消状态
+        const isCancelledBeforeWait = this.queueService && this.queueService.isCancelled(runId);
+        const isCancelledByStatusBeforeWait = testRun && testRun.status === 'cancelled';
+        
+        if (isCancelledBeforeWait || isCancelledByStatusBeforeWait) {
+          console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex}等待前)`);
+          this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+          if (!isCancelledByStatusBeforeWait) {
+            this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+          }
+          return;
+        }
+        
         this.addLog(runId, `⏳ 等待下一步骤...`, 'info');
         await this.delay(1500);
+        
+        // 🔥 修复：在等待后也检查取消状态
+        const isCancelledAfterWait = this.queueService && this.queueService.isCancelled(runId);
+        const isCancelledByStatusAfterWait = testRun && testRun.status === 'cancelled';
+        
+        if (isCancelledAfterWait || isCancelledByStatusAfterWait) {
+          console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex}等待后)`);
+          this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+          if (!isCancelledByStatusAfterWait) {
+            this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+          }
+          return;
+        }
       }
     }
 
@@ -5927,6 +6001,19 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       }
 
       for (let i = 0; i < aiAssertions.steps.length; i++) {
+        // 🔥 修复：在断言执行循环中也检查取消状态
+        const isCancelledByQueue = this.queueService && this.queueService.isCancelled(runId);
+        const isCancelledByStatus = testRun && testRun.status === 'cancelled';
+        
+        if (isCancelledByQueue || isCancelledByStatus) {
+          console.log(`⏹️ [${runId}] 测试已被取消，停止断言执行 (断言${i + 1})`);
+          this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+          if (!isCancelledByStatus) {
+            this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+          }
+          return;
+        }
+        
         const assertion = aiAssertions.steps[i];
         const assertionStepIndex = stepIndex + i + 1; // 断言步骤序号 = 操作步骤数 + 断言序号
         console.log(`🔍 [${runId}] 执行断言步骤 ${i + 1}: ${assertion.description}`);
@@ -6007,10 +6094,16 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       const step = steps[i];
       const stepIndex = i + 1;
 
-      if (this.queueService && this.queueService.isCancelled(runId)) {
+      // 🔥 修复：双重检查取消状态（队列服务状态 + 测试运行状态），确保能及时停止
+      const isCancelledByQueue = this.queueService && this.queueService.isCancelled(runId);
+      const isCancelledByStatus = testRun && testRun.status === 'cancelled';
+      
+      if (isCancelledByQueue || isCancelledByStatus) {
         console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex})`);
         this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
-        this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        if (!isCancelledByStatus) {
+          this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        }
         return;
       }
 
@@ -6661,8 +6754,34 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         }
       }
 
+      // 🔥 修复：在执行步骤前再次检查取消状态（因为 AI 解析可能耗时较长）
+      const isCancelledBeforeStep = this.queueService && this.queueService.isCancelled(runId);
+      const isCancelledByStatusBeforeStep = testRun && testRun.status === 'cancelled';
+      
+      if (isCancelledBeforeStep || isCancelledByStatusBeforeStep) {
+        console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex})`);
+        this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+        if (!isCancelledByStatusBeforeStep) {
+          this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        }
+        return;
+      }
+
       // 执行步骤
       const result = await this.playwrightRunner.executeStep(enhancedStep, runId, i);
+
+      // 🔥 修复：在执行步骤后也检查取消状态
+      const isCancelledAfterStep = this.queueService && this.queueService.isCancelled(runId);
+      const isCancelledByStatusAfterStep = testRun && testRun.status === 'cancelled';
+      
+      if (isCancelledAfterStep || isCancelledByStatusAfterStep) {
+        console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex}执行后)`);
+        this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+        if (!isCancelledByStatusAfterStep) {
+          this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        }
+        return;
+      }
 
       if (!result.success) {
         // 🔥 注意：失败日志由 updateTestRunStatus 统一添加，这里不重复添加
@@ -6744,7 +6863,33 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
 
       // 步骤间等待
       if (i < steps.length - 1) {
+        // 🔥 修复：在等待前检查取消状态
+        const isCancelledDuringWait = this.queueService && this.queueService.isCancelled(runId);
+        const isCancelledByStatusDuringWait = testRun && testRun.status === 'cancelled';
+        
+        if (isCancelledDuringWait || isCancelledByStatusDuringWait) {
+          console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex}等待后)`);
+          this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+          if (!isCancelledByStatusDuringWait) {
+            this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+          }
+          return;
+        }
+        
         await this.delay(1000);
+        
+        // 🔥 修复：在等待后也检查取消状态
+        const isCancelledAfterWait = this.queueService && this.queueService.isCancelled(runId);
+        const isCancelledByStatusAfterWait = testRun && testRun.status === 'cancelled';
+        
+        if (isCancelledAfterWait || isCancelledByStatusAfterWait) {
+          console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex}等待后)`);
+          this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+          if (!isCancelledByStatusAfterWait) {
+            this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+          }
+          return;
+        }
       }
     }
 

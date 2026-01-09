@@ -34,7 +34,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/Sakura AI/Sakura AI.git
+git clone https://github.com/SakuraTechy/sakura-ai.git
 cd Sakura AI
 
 # 一键启动 (自动安装依赖、配置环境、启动服务)

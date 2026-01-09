@@ -119,7 +119,11 @@ const antdThemeConfig = {
     },
     Select: {
       borderRadius: 8,
-      controlHeight: 32,
+      controlHeight: 40,
+    },
+    DatePicker: {
+      borderRadius: 8,
+      controlHeight: 40,
     },
     Table: {
       borderRadiusLG: 12,

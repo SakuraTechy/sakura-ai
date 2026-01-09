@@ -16,8 +16,17 @@ export const TimelineView: React.FC<ViewProps> = ({
         const allCases = organizedData.flatMap(scenario => (scenario.testPoints || []).flatMap(point => point.testCases || []));
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        
+        // 计算本周第一天（周一）
+        const dayOfWeek = now.getDay(); // 0=周日, 1=周一, ..., 6=周六
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 如果是周日，则距离周一6天
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - daysFromMonday);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        // 计算本月第一天
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        monthStart.setHours(0, 0, 0, 0);
 
         const groups = {
             today: [] as TestCaseItem[],
@@ -28,11 +37,13 @@ export const TimelineView: React.FC<ViewProps> = ({
 
         allCases.forEach(tc => {
             const createdDate = new Date(tc.created_at);
-            if (createdDate >= today) {
+            createdDate.setHours(0, 0, 0, 0); // 重置时间部分，只比较日期
+            
+            if (createdDate.getTime() === today.getTime()) {
                 groups.today.push(tc);
-            } else if (createdDate >= weekAgo) {
+            } else if (createdDate >= weekStart) {
                 groups.thisWeek.push(tc);
-            } else if (createdDate >= monthAgo) {
+            } else if (createdDate >= monthStart) {
                 groups.thisMonth.push(tc);
             } else {
                 groups.earlier.push(tc);

@@ -1854,38 +1854,58 @@ export function TestRuns({
               </button>
             </div>
 
-            {/* 右侧：停止所有按钮 */}
-            <motion.button
-              whileHover={{ scale: stats.running + stats.queued > 0 ? 1.02 : 1 }}
-              whileTap={{ scale: stats.running + stats.queued > 0 ? 0.98 : 1 }}
-              onClick={handleStopAllTests}
-              disabled={stoppingAll || stats.running + stats.queued === 0}
-              className={clsx(
-                "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium",
-                stoppingAll
-                  ? "bg-orange-100 text-orange-700 cursor-not-allowed"
-                  : stats.running + stats.queued > 0
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            {/* 右侧：批量删除和停止所有按钮 */}
+            <div className="flex items-center gap-3">
+              {/* 批量删除按钮 - 仅在有选中项时显示 */}
+              {selectedRunIds.size > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleBatchDelete}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg
+                             hover:bg-red-700 transition-colors shadow-md hover:shadow-lg font-medium"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  批量删除 ({selectedRunIds.size})
+                </motion.button>
               )}
-              title={
-                stoppingAll
-                  ? "正在停止所有测试..."
-                  : stats.running + stats.queued > 0
-                  ? `停止所有运行中的测试 (${stats.running + stats.queued}个)`
-                  : "当前没有正在运行的测试"
-              }
-            >
-              {stoppingAll ? (
-                <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-              ) : (
-                <StopCircle className="h-5 w-5 mr-2" />
-              )}
-              {stoppingAll
-                ? '停止中...'
-                : '停止所有'
-              }
-            </motion.button>
+
+              {/* 停止所有按钮 */}
+              <motion.button
+                whileHover={{ scale: stats.running + stats.queued > 0 ? 1.02 : 1 }}
+                whileTap={{ scale: stats.running + stats.queued > 0 ? 0.98 : 1 }}
+                onClick={handleStopAllTests}
+                disabled={stoppingAll || stats.running + stats.queued === 0}
+                className={clsx(
+                  "inline-flex items-center px-4 py-2 rounded-lg transition-colors font-medium",
+                  stoppingAll
+                    ? "bg-orange-100 text-orange-700 cursor-not-allowed"
+                    : stats.running + stats.queued > 0
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                )}
+                title={
+                  stoppingAll
+                    ? "正在停止所有测试..."
+                    : stats.running + stats.queued > 0
+                    ? `停止所有运行中的测试 (${stats.running + stats.queued}个)`
+                    : "当前没有正在运行的测试"
+                }
+              >
+                {stoppingAll ? (
+                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <StopCircle className="h-5 w-5 mr-2" />
+                )}
+                {stoppingAll
+                  ? '停止中...'
+                  : '停止所有'
+                }
+              </motion.button>
+            </div>
           </div>
         )}
 
@@ -1894,17 +1914,17 @@ export function TestRuns({
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
               <div className="flex items-center">
-                <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse mr-2"></div>
-                <div className="text-sm font-medium text-gray-600">执行中</div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mt-2">{stats.running}</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="flex items-center">
                 <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2"></div>
                 <div className="text-sm font-medium text-gray-600">队列中</div>
               </div>
               <div className="text-2xl font-bold text-gray-900 mt-2">{stats.queued}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse mr-2"></div>
+                <div className="text-sm font-medium text-gray-600">执行中</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-2">{stats.running}</div>
             </div>
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
               <div className="flex items-center">
@@ -1993,11 +2013,11 @@ export function TestRuns({
                      focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               >
                 <option value="">所有状态</option>
+                <option value="queued">队列中</option>
                 <option value="running">执行中</option>
                 <option value="completed">已完成</option>
-                <option value="failed">失败</option>
-                <option value="queued">队列中</option>
                 <option value="cancelled">已取消</option>
+                <option value="failed">失败</option>
               </select>
 
               {/* 结果筛选 */}
@@ -2169,25 +2189,6 @@ export function TestRuns({
         {/* 测试运行列表 */}
         {filteredTestRuns.length > 0 && !loading && (
           <div className="space-y-4">
-            {/* 🔥 批量操作栏 - 仅在有选中项时显示 */}
-            {selectedRunIds.size > 0 && (
-              <div className="flex items-center justify-end">
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleBatchDelete}
-                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg
-                             hover:bg-red-700 transition-colors shadow-md hover:shadow-lg"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  批量删除 ({selectedRunIds.size})
-                </motion.button>
-              </div>
-            )}
-
             {/* 🔥 根据视图模式渲染不同的组件 */}
             {viewMode === 'table' ? (
               // 表格视图

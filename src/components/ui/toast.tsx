@@ -150,10 +150,10 @@ function ToastItem({ toast, onClose }: ToastItemProps) {
         </div>
       )}
       
-      <div className="flex-1 mr-5">
-        <h3 className="font-medium text-gray-900">{title}</h3>
+      <div className="flex-1 mr-5 min-w-0">
+        <h3 className="font-medium text-gray-900 break-words">{title}</h3>
         {description && (
-          <p className="text-sm text-gray-600 mt-1">{description}</p>
+          <p className="text-sm text-gray-600 mt-1 break-words">{description}</p>
         )}
         {action && <div className="mt-2">{action}</div>}
       </div>
