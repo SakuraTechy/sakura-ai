@@ -20,7 +20,7 @@ console.log('🔧 开始更新 DATABASE_URL 配置...\n');
 
 // 检查 .env 文件是否存在
 if (!fs.existsSync(ENV_FILE)) {
-  console.error('❌ 错误：.env 文件不存在！');
+  console.error('❌ 错误：.env 文件不存在');
   console.error('   请先创建 .env 文件，参考 docs/INSTALLATION.md\n');
   process.exit(1);
 }
@@ -43,7 +43,7 @@ for (let i = 0; i < lines.length; i++) {
 }
 
 if (databaseUrlLineIndex === -1) {
-  console.error('❌ 错误：.env 文件中没有找到 DATABASE_URL 配置！');
+  console.error('❌ 错误：.env 文件中没有找到 DATABASE_URL 配置');
   console.error('   请先在 .env 文件中添加 DATABASE_URL 配置\n');
   process.exit(1);
 }
@@ -53,7 +53,7 @@ console.log(`   ${currentDatabaseUrl}\n`);
 
 // 检查是否已经包含时区配置
 if (currentDatabaseUrl.includes('timezone=')) {
-  console.log('✅ DATABASE_URL 已包含时区配置，无需修改！');
+  console.log('✅ DATABASE_URL 已包含时区配置，无需修改');
   console.log('   如果时间仍然不正确，请检查：');
   console.log('   1. 是否重启了应用（后端服务）');
   console.log('   2. 时区参数是否正确（应为 timezone=Asia/Shanghai）');
@@ -98,7 +98,7 @@ try {
   console.log('📚 详细说明请参考：TIMEZONE_FIX_GUIDE.md\n');
   
 } catch (error) {
-  console.error('❌ 错误：更新 DATABASE_URL 失败！');
+  console.error('❌ 错误：更新 DATABASE_URL 失败');
   console.error(`   ${error.message}\n`);
   process.exit(1);
 }

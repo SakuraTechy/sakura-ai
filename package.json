@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node scripts/start.cjs",
-    "dev": "cross-env NODE_NO_WARNINGS=1 concurrently \"npm run dev:server\" \"node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js\"",
+    "dev": "node scripts/start.cjs",
+    "dev1": "cross-env NODE_NO_WARNINGS=1 concurrently \"npm run dev:server\" \"node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js\"",
     "dev-visible": "concurrently \"npm run server-visible\" \"node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js\"",
     "dev:frontend": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js",
     "dev:server": "node scripts/dev-server.cjs",

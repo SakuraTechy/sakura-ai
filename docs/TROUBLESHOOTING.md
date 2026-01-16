@@ -530,7 +530,7 @@ npx prisma studio
 
 ### 问题反馈
 
-- [提交 Bug](https://github.com/Sakura AI/Sakura AI/issues)
+- [提交 Bug](https://github.com/SakuraTechy/sakura-ai/issues)
 
 ---
 

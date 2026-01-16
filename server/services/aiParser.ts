@@ -519,12 +519,18 @@ export class AITestParser {
 
   /**
    * AI根据当前快照和下一条指令生成MCP命令
+   * @param remainingStepsText 剩余步骤文本
+   * @param snapshot 页面快照
+   * @param runId 运行ID
+   * @param logCallback 可选的日志回调函数
+   * @param skipCache 是否跳过缓存（用于重试时强制重新AI解析）
    */
   async parseNextStep(
     remainingStepsText: string, 
     snapshot: any | null, 
     runId: string,
-    logCallback?: (message: string, level: 'info' | 'success' | 'warning' | 'error') => void
+    logCallback?: (message: string, level: 'info' | 'success' | 'warning' | 'error') => void,
+    skipCache: boolean = false
   ): Promise<AINextStepParseResult> {
     try {
       // 🔥 增强日志：打印完整的剩余步骤
@@ -599,8 +605,8 @@ export class AITestParser {
         console.log(`⚠️ [${runId}] 无页面快照可用，将使用默认解析策略`);
       }
 
-      // AI模拟：基于当前步骤文本和快照生成MCP命令，传递 runId 和日志回调
-      const mcpCommand = await this.generateMCPCommand(nextStepText, snapshot, runId, logCallback);
+      // AI模拟：基于当前步骤文本和快照生成MCP命令，传递 runId、日志回调和跳过缓存标志
+      const mcpCommand = await this.generateMCPCommand(nextStepText, snapshot, runId, logCallback, skipCache);
 
       // 🔥 增强日志：打印解析结果
       console.log(`🤖 [${runId}] AI解析结果:`);
@@ -808,14 +814,16 @@ export class AITestParser {
    * @param snapshot 页面快照
    * @param runId 可选的运行ID，用于日志记录
    * @param logCallback 可选的日志回调函数，用于记录到前端日志
+   * @param skipCache 是否跳过缓存（用于重试时强制重新AI解析）
    */
   private async generateMCPCommand(
     stepDescription: string, 
     snapshot: any,
     runId?: string,
-    logCallback?: (message: string, level: 'info' | 'success' | 'warning' | 'error') => void
+    logCallback?: (message: string, level: 'info' | 'success' | 'warning' | 'error') => void,
+    skipCache: boolean = false
   ): Promise<MCPCommand> {
-    console.log(`🤖 使用AI解析操作: "${stepDescription}"`);
+    console.log(`🤖 使用AI解析操作: "${stepDescription}"${skipCache ? ' (跳过缓存)' : ''}`);
 
     try {
       // 🔥 新增：预处理页签切换指令
@@ -825,48 +833,61 @@ export class AITestParser {
         return tabSwitchCommand;
       }
 
-      // 🔥 检查操作缓存（L1内存 + L2数据库）
+      // 🔥 检查操作缓存（L1内存 + L2数据库）- 如果 skipCache 为 true 则跳过
       const pageElements = this.extractPageElements(snapshot);
       const pageElementsStr = typeof pageElements === 'string' ? pageElements : JSON.stringify(pageElements);
       const cacheKey = this.generateOperationCacheKey(stepDescription, pageElementsStr);
       
-      // L1: 检查内存缓存
-      let cachedCommand = this.operationCache.get(cacheKey);
-      
-      // L2: 如果内存没有，检查数据库
-      if (!cachedCommand && this.enablePersistence) {
-        cachedCommand = await this.getOperationFromDatabase(cacheKey);
-        if (cachedCommand) {
-          // 加载到内存缓存
-          this.operationCache.set(cacheKey, cachedCommand);
-          console.log(`💾 从数据库加载操作缓存`);
+      // 🔥 如果跳过缓存，记录日志并直接进行AI解析
+      if (skipCache) {
+        console.log(`🔄 跳过缓存，强制重新AI解析: "${stepDescription}"`);
+        if (logCallback) {
+          logCallback(`🔄 重试模式：跳过缓存，重新AI解析`, 'warning');
         }
-      }
-      
-      if (cachedCommand) {
-        // 🔥 修复：验证缓存的命令是否有效，过滤掉error类型的无效缓存
-        const invalidCommands = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
-        if (invalidCommands.includes(cachedCommand.name?.toLowerCase() || '')) {
-          console.log(`⚠️ 检测到无效的缓存命令 (name=${cachedCommand.name})，跳过缓存，重新AI解析`);
-          if (logCallback) {
-            logCallback(`⚠️ 缓存命令无效，重新AI解析`, 'warning');
+        // 同时删除可能存在的无效缓存
+        this.operationCache.delete(cacheKey);
+        if (this.enablePersistence) {
+          this.deleteOperationCacheFromDatabase(cacheKey).catch(() => {});
+        }
+      } else {
+        // L1: 检查内存缓存
+        let cachedCommand = this.operationCache.get(cacheKey);
+        
+        // L2: 如果内存没有，检查数据库
+        if (!cachedCommand && this.enablePersistence) {
+          cachedCommand = await this.getOperationFromDatabase(cacheKey);
+          if (cachedCommand) {
+            // 加载到内存缓存
+            this.operationCache.set(cacheKey, cachedCommand);
+            console.log(`💾 从数据库加载操作缓存`);
           }
-          // 从缓存中删除无效条目
-          this.operationCache.delete(cacheKey);
-          if (this.enablePersistence) {
-            this.deleteOperationCacheFromDatabase(cacheKey).catch(() => {});
+        }
+        
+        if (cachedCommand) {
+          // 🔥 修复：验证缓存的命令是否有效，过滤掉error类型的无效缓存
+          const invalidCommands = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
+          if (invalidCommands.includes(cachedCommand.name?.toLowerCase() || '')) {
+            console.log(`⚠️ 检测到无效的缓存命令 (name=${cachedCommand.name})，跳过缓存，重新AI解析`);
+            if (logCallback) {
+              logCallback(`⚠️ 缓存命令无效，重新AI解析`, 'warning');
+            }
+            // 从缓存中删除无效条目
+            this.operationCache.delete(cacheKey);
+            if (this.enablePersistence) {
+              this.deleteOperationCacheFromDatabase(cacheKey).catch(() => {});
+            }
+          } else {
+            this.cacheStats.operationHits++;
+            console.log(`⚡ 使用缓存的操作解析结果，跳过AI调用`);
+            if (logCallback) {
+              logCallback(`⚡ 使用缓存的解析结果 (命中${this.cacheStats.operationHits}次)`, 'info');
+            }
+            // 异步更新命中统计
+            if (this.enablePersistence) {
+              this.updateOperationHitCount(cacheKey).catch(() => {});
+            }
+            return cachedCommand;
           }
-        } else {
-          this.cacheStats.operationHits++;
-          console.log(`⚡ 使用缓存的操作解析结果，跳过AI调用`);
-          if (logCallback) {
-            logCallback(`⚡ 使用缓存的解析结果 (命中${this.cacheStats.operationHits}次)`, 'info');
-          }
-          // 异步更新命中统计
-          if (this.enablePersistence) {
-            this.updateOperationHitCount(cacheKey).catch(() => {});
-          }
-          return cachedCommand;
         }
       }
       

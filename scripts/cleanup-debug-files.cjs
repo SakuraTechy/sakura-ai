@@ -147,7 +147,7 @@ function deleteFiles(files) {
     }
   }
   
-  console.log(`\n✅ 删除完成！`);
+  console.log(`\n✅ 删除完成`);
   console.log(`   - 删除文件: ${deletedCount} 个`);
   console.log(`   - 释放空间: ${(totalSize/1024).toFixed(1)}KB`);
 }
@@ -248,7 +248,7 @@ function main() {
   const files = getMatchingFiles();
   
   if (files.length === 0) {
-    console.log('✨ 项目很干净，没有找到需要清理的文件！');
+    console.log('✨ 项目很干净，没有找到需要清理的文件');
     return;
   }
   
@@ -287,7 +287,7 @@ function main() {
       generateRestoreScript();
     }
     
-    console.log('\n🎉 清理完成！项目更加整洁了！');
+    console.log('\n🎉 清理完成！项目更加整洁了');
   }
 }
 

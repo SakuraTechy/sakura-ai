@@ -16,15 +16,22 @@ export class PlaywrightTestRunner {
   private evidenceService: EvidenceService;
   private streamService: StreamService;
   private artifactsDir: string;
+  // 🔥 新增：弹窗文本历史记录（用于捕获快速消失的弹窗）
+  private textHistory: Set<string> = new Set();
+  private textHistoryEnabled: boolean = false;
+  // 🔥 新增：日志回调函数（用于将日志发送到前端）
+  private logCallback?: (message: string, level?: 'info' | 'warning' | 'error' | 'success') => void;
 
   constructor(
     evidenceService: EvidenceService,
     streamService: StreamService,
-    artifactsDir: string
+    artifactsDir: string,
+    logCallback?: (message: string, level?: 'info' | 'warning' | 'error' | 'success') => void // 🔥 新增：日志回调
   ) {
     this.evidenceService = evidenceService;
     this.streamService = streamService;
     this.artifactsDir = artifactsDir;
+    this.logCallback = logCallback; // 🔥 保存日志回调
   }
 
   /**
@@ -91,13 +98,187 @@ export class PlaywrightTestRunner {
     // 创建页面
     this.page = await this.context.newPage();
 
+    // 🔥 新增：启动文本历史记录监听器
+    // 每隔 500ms 扫描页面文本，记录所有出现过的文本
+    this.startTextHistoryMonitor(runId);
+
     console.log(`✅ [${runId}] Playwright Test Runner 初始化完成`);
   }
 
   /**
-   * 执行测试步骤
+   * 🔥 新增：启动文本历史记录监听器
+   * 定期扫描页面文本，记录所有出现过的文本（用于捕获快速消失的弹窗）
    */
-  async executeStep(step: TestStep, runId: string, stepIndex: number): Promise<{ success: boolean; error?: string }> {
+  private startTextHistoryMonitor(runId: string): void {
+    if (!this.page) return;
+    
+    this.textHistoryEnabled = true;
+    console.log(`📝 [${runId}] 启动文本历史记录监听器`);
+    
+    // 每隔 500ms 扫描一次页面文本
+    const monitorInterval = setInterval(async () => {
+      if (!this.page || !this.textHistoryEnabled) {
+        clearInterval(monitorInterval);
+        return;
+      }
+      
+      try {
+        // 获取页面上所有可见文本
+        const texts = await this.page.evaluate(() => {
+          const elements = document.querySelectorAll('div, span, p, li, td, th, label, a, button, h1, h2, h3, h4, h5, h6');
+          const textSet = new Set<string>();
+          
+          elements.forEach(el => {
+            const text = el.textContent?.trim();
+            if (text && text.length > 0 && text.length < 200) { // 限制长度，避免记录过长的文本
+              textSet.add(text);
+            }
+          });
+          
+          return Array.from(textSet);
+        });
+        
+        // 添加到历史记录
+        texts.forEach(text => this.textHistory.add(text));
+        
+      } catch (error) {
+        // 忽略错误（页面可能正在导航）
+      }
+    }, 500);
+  }
+
+  /**
+   * 🔥 新增：停止文本历史记录监听器
+   */
+  private stopTextHistoryMonitor(): void {
+    this.textHistoryEnabled = false;
+  }
+
+  /**
+   * 🔥 新增：在文本历史记录中查找匹配的文本
+   * 使用分层匹配策略：完全匹配 > 包含匹配 > 反向包含匹配 > 关键词匹配
+   * @param searchText 要查找的文本
+   * @param runId 运行ID
+   * @param matchMode 匹配模式：'strict'（严格）| 'auto'（智能，默认）| 'loose'（宽松）
+   */
+  private findInTextHistory(
+    searchText: string, 
+    runId: string, 
+    matchMode: 'strict' | 'auto' | 'loose' = 'auto'
+  ): { found: boolean; matchedText?: string; matchType?: string } {
+    // � 优化：调整日志输出顺序，先输出匹配模式，再输出查找信息
+    console.log(`⚙️ [${runId}] 匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配' : '宽松匹配'}`);
+    console.log(`🔍 [${runId}] 在文本历史记录中查找: "${searchText}"`);
+    console.log(`📊 [${runId}] 历史记录共有 ${this.textHistory.size} 条文本`);
+    
+    // 🔥 新增：将日志发送到前端（优化顺序）
+    if (this.logCallback) {
+      this.logCallback(`⚙️ 匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配' : '宽松匹配'}`, 'info');
+      this.logCallback(`🔍 在文本历史记录中查找: "${searchText}"`, 'info');
+      this.logCallback(`📊 历史记录共有 ${this.textHistory.size} 条文本`, 'info');
+    }
+    
+    // 层级1：完全匹配（所有模式都支持）
+    if (this.textHistory.has(searchText)) {
+      console.log(`✅ [${runId}] 完全匹配成功`);
+      if (this.logCallback) {
+        this.logCallback(`✅ 完全匹配成功`, 'success');
+      }
+      return { found: true, matchedText: searchText, matchType: '完全匹配' };
+    }
+    
+    // 🔥 严格模式：只使用完全匹配
+    if (matchMode === 'strict') {
+      console.log(`❌ [${runId}] 严格模式下未找到完全匹配的文本`);
+      if (this.logCallback) {
+        this.logCallback(`❌ 严格模式下未找到完全匹配的文本`, 'error');
+      }
+      return { found: false };
+    }
+    
+    // 层级2：包含匹配（智能模式和宽松模式支持）
+    // 实际文本包含期望文本
+    for (const text of this.textHistory) {
+      if (text.includes(searchText)) {
+        console.log(`✅ [${runId}] 包含匹配成功: 实际文本 "${text}" 包含期望文本 "${searchText}"`);
+        if (this.logCallback) {
+          this.logCallback(`✅ 包含匹配成功: 实际文本 "${text}" 包含期望文本 "${searchText}"`, 'success');
+        }
+        return { found: true, matchedText: text, matchType: '包含匹配' };
+      }
+    }
+    
+    // 层级3：反向包含匹配（智能模式和宽松模式支持）
+    // 期望文本包含实际文本（可能期望文本有多余字符）
+    for (const text of this.textHistory) {
+      if (searchText.includes(text) && text.length > 5) { // 至少5个字符，避免误匹配
+        console.log(`⚠️ [${runId}] 反向包含匹配: 期望文本 "${searchText}" 包含实际文本 "${text}"`);
+        console.log(`💡 [${runId}] 提示：期望文本可能有多余字符，建议检查测试用例`);
+        if (this.logCallback) {
+          this.logCallback(`⚠️ 反向包含匹配: 期望文本 "${searchText}" 包含实际文本 "${text}"`, 'warning');
+          this.logCallback(`💡 提示：期望文本可能有多余字符，建议检查测试用例`, 'info');
+        }
+        return { found: true, matchedText: text, matchType: '反向包含匹配' };
+      }
+    }
+    
+    // 🔥 智能模式：到此为止，不使用关键词匹配
+    if (matchMode === 'auto') {
+      console.log(`❌ [${runId}] 智能模式下未找到匹配的文本（已尝试：完全匹配、包含匹配、反向包含匹配）`);
+      if (this.logCallback) {
+        this.logCallback(`❌ 智能模式下未找到匹配的文本（已尝试：完全匹配、包含匹配、反向包含匹配）`, 'error');
+      }
+      return { found: false };
+    }
+    
+    // 层级4：关键词匹配（仅宽松模式支持）
+    const words = searchText.split(/[：:，,、\s]+/).filter(w => w.length > 1);
+    console.log(`🔍 [${runId}] 宽松模式：尝试关键词匹配，关键词: ${words.join(', ')}`);
+    if (this.logCallback) {
+      this.logCallback(`🔍 宽松模式：尝试关键词匹配，关键词: ${words.join(', ')}`, 'info');
+    }
+    
+    for (const text of this.textHistory) {
+      // 计算匹配的关键词数量
+      let matchedWords = 0;
+      for (const word of words) {
+        if (text.includes(word)) {
+          matchedWords++;
+        }
+      }
+      
+      // 如果匹配了大部分关键词（>= 50%），认为匹配成功
+      if (matchedWords >= Math.ceil(words.length * 0.5)) {
+        console.log(`⚠️ [${runId}] 关键词匹配成功: "${text}" (匹配 ${matchedWords}/${words.length} 个关键词)`);
+        console.log(`💡 [${runId}] 提示：使用了宽松匹配，建议检查期望文本是否准确`);
+        if (this.logCallback) {
+          this.logCallback(`⚠️ 关键词匹配成功: "${text}" (匹配 ${matchedWords}/${words.length} 个关键词)`, 'warning');
+          this.logCallback(`💡 提示：使用了宽松匹配，建议检查期望文本是否准确`, 'info');
+        }
+        return { found: true, matchedText: text, matchType: `关键词匹配 (${matchedWords}/${words.length})` };
+      }
+    }
+    
+    console.log(`❌ [${runId}] 宽松模式下未找到匹配的文本`);
+    if (this.logCallback) {
+      this.logCallback(`❌ 宽松模式下未找到匹配的文本`, 'error');
+    }
+    return { found: false };
+  }
+
+  /**
+   * 执行测试步骤
+   * @param step 测试步骤
+   * @param runId 运行ID
+   * @param stepIndex 步骤索引
+   * @param matchMode 断言匹配模式（仅用于 expect 操作）：'strict'（严格）| 'auto'（智能，默认）| 'loose'（宽松）
+   */
+  async executeStep(
+    step: TestStep, 
+    runId: string, 
+    stepIndex: number, 
+    matchMode: 'strict' | 'auto' | 'loose' = 'auto'
+  ): Promise<{ success: boolean; error?: string }> {
     if (!this.page) {
       return { success: false, error: '页面未初始化' };
     }
@@ -531,8 +712,141 @@ export class PlaywrightTestRunner {
           let element: any = null;
           let selectorText: string | undefined; // 🔥 记录selector中的文本，用于多种方式查找
           
+          // 🔥 新增：对于弹窗/提示类验证，如果element或description包含"弹窗"、"提示"等关键词，且有value值，优先用value查找
+          // 🔥 关键优化：同时检查 element 和 description，因为 AI 可能修改 element 但 description 保留原始文本
+          const isPopupVerification = (
+            (step.element || '') + ' ' + (step.description || '')
+          ).match(/弹窗|提示|对话框|警告|错误|成功|消息|通知|toast|alert|dialog|message|notification/i);
+          
+          if (isPopupVerification && step.value && typeof step.value === 'string' && step.value.trim()) {
+            console.log(`🔍 [${runId}] 检测到弹窗验证（element="${step.element}", description="${step.description}"）`);
+            console.log(`🔍 [${runId}] 优先使用value值快速查找: "${step.value}"`);
+            
+            // 🔥 新增：先检查文本历史记录（可能弹窗已经消失），使用用户选择的匹配模式
+            const historyResult = this.findInTextHistory(step.value, runId, matchMode);
+            if (historyResult.found) {
+              // 🔥 优化：调整日志输出顺序，先输出匹配结果，再输出详细信息
+              console.log(`✅ [${runId}] 在文本历史记录中找到弹窗: "${historyResult.matchedText}"`);
+              console.log(`📊 [${runId}] 匹配类型: ${historyResult.matchType}`);
+              
+              // 🔥 新增：将日志发送到前端（优化顺序）
+              if (this.logCallback) {
+                this.logCallback(`✅ 在文本历史记录中找到弹窗: "${historyResult.matchedText}"`, 'success');
+                this.logCallback(`📊 匹配类型: ${historyResult.matchType}`, 'info');
+              }
+              
+              // 🔥 如果是宽松匹配（反向包含或关键词匹配），给出警告
+              if (historyResult.matchType?.includes('反向包含') || historyResult.matchType?.includes('关键词')) {
+                console.log(`⚠️ [${runId}] 警告：使用了宽松匹配策略`);
+                console.log(`   期望文本: "${step.value}"`);
+                console.log(`   实际文本: "${historyResult.matchedText}"`);
+                console.log(`💡 [${runId}] 建议：检查测试用例中的期望文本是否准确`);
+                
+                // 🔥 新增：将警告日志发送到前端
+                if (this.logCallback) {
+                  this.logCallback(`⚠️ 警告：使用了宽松匹配策略`, 'warning');
+                  this.logCallback(`   期望文本: "${step.value}"`, 'warning');
+                  this.logCallback(`   实际文本: "${historyResult.matchedText}"`, 'warning');
+                  this.logCallback(`💡 建议：检查测试用例中的期望文本是否准确`, 'info');
+                }
+              }
+              
+              console.log(`💡 [${runId}] 弹窗已消失，但历史记录证明它曾经出现过`);
+              if (this.logCallback) {
+                this.logCallback(`💡 弹窗已消失，但历史记录证明它曾经出现过`, 'info');
+              }
+              // 弹窗已经出现过（即使现在消失了），验证通过
+              return { success: true };
+            }
+            
+            try {
+              // 🔥 弹窗快速捕捉策略：使用短超时时间快速检测
+              // 因为弹窗通常会在几秒内消失，需要立即捕捉
+              const popupElement = this.page.getByText(step.value, { exact: false });
+              
+              // 🔥 方式1：尝试立即查找（不等待）
+              let count = await popupElement.count();
+              if (count > 0) {
+                element = popupElement.first();
+                console.log(`✅ [${runId}] 立即找到弹窗元素: "${step.value}"`);
+              } else {
+                // 🔥 方式2：等待更长时间（10秒）让弹窗出现
+                // 注意：第一次执行时 AI 解析可能花费 5-6 秒，弹窗可能在 AI 解析期间出现并消失
+                // 所以需要更长的等待时间来覆盖这个时间窗口
+                // 第二次执行时会使用缓存，AI 解析几乎是即时的，所以会很快找到
+                console.log(`⚠️ [${runId}] 弹窗未立即出现，等待10秒（覆盖AI解析时间）...`);
+                try {
+                  await popupElement.first().waitFor({ state: 'visible', timeout: 10000 });
+                  element = popupElement.first();
+                  console.log(`✅ [${runId}] 等待后找到弹窗元素: "${step.value}"`);
+                } catch (waitError) {
+                  // 🔥 方式3：尝试查找包含部分文本的弹窗（更宽松的匹配）
+                  console.log(`⚠️ [${runId}] 完整文本未找到，尝试部分匹配...`);
+                  
+                  // 🔥 优化：更智能的文本分割，保留更多有意义的词组
+                  const words = step.value
+                    .split(/[：:，,、\s]+/)
+                    .filter(w => w.length > 1)
+                    .sort((a, b) => b.length - a.length); // 优先尝试较长的词组
+                  
+                  console.log(`🔍 [${runId}] 尝试匹配关键词: ${words.join(', ')}`);
+                  
+                  for (const word of words) {
+                    const partialElement = this.page.getByText(word, { exact: false });
+                    const partialCount = await partialElement.count();
+                    if (partialCount > 0) {
+                      element = partialElement.first();
+                      console.log(`✅ [${runId}] 通过部分文本找到弹窗: "${word}" (共找到 ${partialCount} 个匹配)`);
+                      break;
+                    }
+                  }
+                  
+                  // 🔥 方式4：如果部分匹配也失败，尝试查找页面上所有可见的文本元素
+                  if (!element) {
+                    console.log(`⚠️ [${runId}] 部分匹配失败，尝试在所有可见文本中查找...`);
+                    try {
+                      // 获取页面上所有包含文本的可见元素
+                      const allTextElements = this.page.locator('div, span, p, li, td, th, label, a, button').filter({ hasText: /.+/ });
+                      const textCount = await allTextElements.count();
+                      console.log(`🔍 [${runId}] 页面上共有 ${textCount} 个文本元素`);
+                      
+                      // 遍历查找包含任意关键词的元素
+                      for (let i = 0; i < Math.min(textCount, 50); i++) { // 限制最多检查50个元素
+                        const el = allTextElements.nth(i);
+                        try {
+                          const text = await el.textContent();
+                          if (text) {
+                            // 检查是否包含任意关键词
+                            for (const word of words) {
+                              if (text.includes(word)) {
+                                element = el;
+                                console.log(`✅ [${runId}] 在文本元素中找到关键词 "${word}": "${text.substring(0, 50)}..."`);
+                                break;
+                              }
+                            }
+                          }
+                          if (element) break;
+                        } catch {
+                          // 忽略单个元素的错误
+                        }
+                      }
+                    } catch (scanError: any) {
+                      console.warn(`⚠️ [${runId}] 页面文本扫描失败: ${scanError.message}`);
+                    }
+                  }
+                  
+                  if (!element) {
+                    console.log(`⚠️ [${runId}] 未通过value值找到弹窗，继续尝试其他方式`);
+                  }
+                }
+              }
+            } catch (error: any) {
+              console.warn(`⚠️ [${runId}] 弹窗快速捕捉失败: ${error.message}`);
+            }
+          }
+          
           // 🔥 优先使用 selector（如果它是 role:name 格式，更可靠）
-          if (step.selector) {
+          if (!element && step.selector) {
             try {
               // 检查是否是 role:name 格式（由 AI 解析器生成）
               if (step.selector.includes(':') && !step.selector.startsWith('http')) {
@@ -844,7 +1158,48 @@ export class PlaywrightTestRunner {
                 
                 // 如果所有方式都失败，抛出明确的错误，而不是使用原始选择器
                 if (!found) {
-                  throw new Error(`无法找到元素 "${searchText}"（已尝试: 完整名称"${elementName}", 核心名称"${coreName}"）`);
+                  // 🔥 新增：对于弹窗验证，如果有value值，最后尝试用value快速查找
+                  if (isPopupVerification && step.value && typeof step.value === 'string' && step.value.trim()) {
+                    console.log(`🔍 [${runId}] 最后尝试：使用value值快速查找弹窗 "${step.value}"`);
+                    const popupElement = this.page.getByText(step.value, { exact: false });
+                    
+                    // 立即检查
+                    if (await popupElement.count() > 0) {
+                      element = popupElement.first();
+                      console.log(`✅ [${runId}] 通过value值找到弹窗元素: "${step.value}"`);
+                      found = true;
+                    } else {
+                      // 等待较长时间（3秒）
+                      try {
+                        await popupElement.first().waitFor({ state: 'visible', timeout: 3000 });
+                        element = popupElement.first();
+                        console.log(`✅ [${runId}] 等待后通过value值找到弹窗元素: "${step.value}"`);
+                        found = true;
+                      } catch {
+                        // 尝试部分匹配
+                        const words = step.value
+                          .split(/[：:，,、\s]+/)
+                          .filter(w => w.length > 1)
+                          .sort((a, b) => b.length - a.length);
+                        
+                        console.log(`🔍 [${runId}] 回退策略：尝试匹配关键词: ${words.join(', ')}`);
+                        
+                        for (const word of words) {
+                          const partialElement = this.page.getByText(word, { exact: false });
+                          if (await partialElement.count() > 0) {
+                            element = partialElement.first();
+                            console.log(`✅ [${runId}] 通过部分文本找到弹窗: "${word}"`);
+                            found = true;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  if (!found) {
+                    throw new Error(`无法找到元素 "${searchText}"（已尝试: 完整名称"${elementName}", 核心名称"${coreName}"）`);
+                  }
                 }
               }
             } catch (selectorError: any) {
@@ -993,7 +1348,19 @@ export class PlaywrightTestRunner {
                 }
                 
                 if (!element) {
-                  throw new Error(`无法找到元素: ${step.element || step.selector}（已尝试: "${elementName}", "${coreName}"）`);
+                  // 🔥 新增：对于弹窗验证，如果有value值，最后尝试用value查找
+                  if (isPopupVerification && step.value && typeof step.value === 'string' && step.value.trim()) {
+                    console.log(`🔍 [${runId}] 回退匹配最后尝试：使用value值查找弹窗 "${step.value}"`);
+                    const popupElement = this.page.getByText(step.value, { exact: false });
+                    if (await popupElement.count() > 0) {
+                      element = popupElement.first();
+                      console.log(`✅ [${runId}] 回退匹配成功：通过value值找到弹窗元素: "${step.value}"`);
+                    }
+                  }
+                  
+                  if (!element) {
+                    throw new Error(`无法找到元素: ${step.element || step.selector}（已尝试: "${elementName}", "${coreName}"）`);
+                  }
                 }
               } catch (fallbackError: any) {
                 return { success: false, error: `断言元素查找失败: ${fallbackError.message || selectorError.message}` };
@@ -1082,11 +1449,18 @@ export class PlaywrightTestRunner {
               if (step.value) {
                 // 如果指定了value，检查是否包含
                 if (!text?.includes(String(step.value))) {
-                  // 🔥 对于"存在内容"类型的断言，如果value不匹配但元素有内容，也可以认为通过
-                  // 这是因为"存在内容"的意图是验证是否有内容，而不是验证具体内容
-                  if (isExistenceAssertion && text && text.trim().length > 0) {
+                  // 🔥 修复：只有在非严格模式下，才使用"存在内容"的宽松验证
+                  // 严格模式下，必须完全匹配
+                  if (matchMode !== 'strict' && isExistenceAssertion && text && text.trim().length > 0) {
                     console.log(`✅ [${runId}] 文本包含验证成功（宽松模式）: 元素有内容"${text.substring(0, 30)}..."，虽然不完全匹配"${step.value}"，但符合"存在内容"断言`);
+                    console.log(`💡 [${runId}] 提示：当前使用${matchMode === 'auto' ? '智能' : '宽松'}匹配模式，允许宽松验证`);
                     return { success: true };
+                  }
+                  // 🔥 严格模式或非"存在内容"断言，必须匹配
+                  if (matchMode === 'strict') {
+                    console.log(`❌ [${runId}] 严格模式：文本不匹配`);
+                    console.log(`   期望: "${step.value}"`);
+                    console.log(`   实际: "${text || '(空)'}"`);
                   }
                   return { success: false, error: `期望文本包含 "${step.value}"，实际为 "${text || '(空)'}"` };
                 }
@@ -1278,6 +1652,9 @@ export class PlaywrightTestRunner {
    */
   async close(): Promise<void> {
     try {
+      // 🔥 停止文本历史记录监听器
+      this.stopTextHistoryMonitor();
+      
       if (this.context) {
         await this.context.close();
         this.context = null;
@@ -1287,6 +1664,9 @@ export class PlaywrightTestRunner {
         this.browser = null;
       }
       this.page = null;
+      
+      // 清空文本历史记录
+      this.textHistory.clear();
     } catch (error: any) {
       console.error('关闭浏览器失败:', error.message);
     }

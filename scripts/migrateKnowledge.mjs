@@ -84,7 +84,7 @@ async function main() {
       console.log(`     知识点数: ${info.result.points_count}`);
     }
 
-    console.log('\n✅ 迁移完成！');
+    console.log('\n✅ 迁移完成');
     console.log('\n💡 下一步建议:');
     console.log('   1. 验证 test_knowledge_实物2.0 集合中的数据是否正确');
     console.log('   2. 确认后可以删除旧的 test_knowledge 集合');

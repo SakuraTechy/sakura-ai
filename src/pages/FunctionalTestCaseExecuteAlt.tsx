@@ -689,6 +689,7 @@ export function TestCaseExecutor({
           
           const resultText = finalResult === 'pass' ? '✅ 通过' : finalResult === 'fail' ? '❌ 失败' : '🚫 阻塞';
           showToast.success(`执行结果已提交！最终结果：${resultText}，执行时长：${formatTime(executionTime)}`);
+          onCancel;
         } else {
           throw new Error(result.error || '提交失败');
         }
@@ -831,7 +832,7 @@ export function TestCaseExecutor({
       )}
       
       {/* 悬浮状态窗口 */}
-      <div className="fixed top-0 right-3 z-[1000] bg-white/95 backdrop-blur-xl px-3.5 py-2 rounded-lg shadow-lg border border-gray-200 flex items-center gap-3 transition-all hover:shadow-xl hover:-translate-y-0.5" style={{ marginTop: `${Math.max(isFullscreen ? 1 : 5.3, (isFullscreen ? 0 : 9) - scrollY / 16)}rem`, marginLeft: '0.5rem' }}>
+      <div className="fixed top-0 right-3 z-[1000] bg-white/95 backdrop-blur-xl px-3.5 py-2 rounded-lg shadow-lg border border-gray-200 flex items-center gap-3 transition-all hover:shadow-xl hover:-translate-y-0.5" style={{ marginTop: `${Math.max(isFullscreen ? 1 : 5.3, (isFullscreen ? 0 : 9.5) - scrollY / 16)}rem`, marginLeft: '0.5rem' }}>
         <div className="flex flex-col gap-0.5">
           <div className="text-[9px] uppercase tracking-wider text-gray-500 font-bold">执行时长</div>
           <div className="text-[15px] font-bold font-mono text-gray-900 leading-none">{formatTime(executionTime)}</div>
@@ -848,7 +849,7 @@ export function TestCaseExecutor({
         </div>
       </div>
 
-      <div className={`max-w-[1200px] mx-auto h-full flex flex-col pt-4 ${inTestPlan ? 'ml-[130px]' : ''}`}>
+      <div className={`max-w-[1200px] mx-auto h-full flex flex-col pb-5 ${inTestPlan ? 'ml-[130px]' : ''}`}>
         {/* 用例信息卡片 */}
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full">
           <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-6 flex items-start justify-between gap-5">
@@ -944,7 +945,7 @@ export function TestCaseExecutor({
                 <div className="bg-gray-50 rounded-lg px-3.5 py-3">
                   <div className="text-[11px] text-gray-500 mb-1 font-medium">用例版本</div>
                   <div className="text-xs font-semibold text-gray-900">
-                    {testCase.project_version?.version_code || testCase.project_version?.version_name || 'V1.0'}
+                    {testCase.project_version?.version_name || testCase.project_version?.version_code || 'V1.0'}
                   </div>
                 </div>
                 <div className="bg-gray-50 rounded-lg px-3.5 py-3">

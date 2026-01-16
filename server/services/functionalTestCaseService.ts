@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '../../src/generated/prisma/index.js';
 import { DatabaseService } from './databaseService.js';
 import { getNow } from '../utils/timezone.js';
+import { ConfigVariableService } from './configVariableService.js';
 
 /**
  * 🔧 从【操作】【预期】格式中分离纯操作步骤和预期结果
@@ -27,24 +28,44 @@ function separateStepsAndExpectedResult(combinedSteps: string): { steps: string;
   const stepsList: string[] = [];
   const expectedList: string[] = [];
 
-  // 按步骤分割（匹配 "数字. 【操作】" 开头的模式）
+  // 🔧 改进：按步骤分割（匹配 "数字. 【操作】" 开头的模式）
+  // 使用更精确的分割方式，避免丢失步骤
   const stepBlocks = combinedSteps.split(/(?=\d+\.\s*【操作】)/);
   
   stepBlocks.forEach((block) => {
     if (!block.trim()) return;
     
-    // 提取步骤编号和操作内容
-    const operationMatch = block.match(/(\d+)\.\s*【操作】([^【]+)/);
+    // 🔧 改进：提取步骤编号和操作内容
+    // 使用更宽松的匹配，直到遇到【预期】或下一个步骤
+    const operationMatch = block.match(/(\d+)\.\s*【操作】([\s\S]*?)(?=【预期】|$)/);
     if (operationMatch) {
       const stepNum = operationMatch[1];
-      const operation = operationMatch[2].trim();
-      stepsList.push(`${stepNum}. ${operation}`);
+      // 🔧 清理操作内容：移除多余的换行和空格，但保留有意义的内容
+      const operation = operationMatch[2]
+        .split('\n')
+        .map(line => line.trim())
+        // .filter(line => line && !line.startsWith('密码：') && !line.startsWith('{{CONFIG'))  // 🔥 过滤掉配置变量相关的行
+        .join(' ')
+        .trim();
       
-      // 提取预期结果
-      const expectedMatch = block.match(/【预期】([^【]*)/);
+      if (operation) {
+        stepsList.push(`${stepNum}. ${operation}`);
+      }
+      
+      // 🔧 改进：提取预期结果
+      const expectedMatch = block.match(/【预期】([\s\S]*?)(?=\d+\.\s*【操作】|$)/);
       if (expectedMatch) {
-        const expected = expectedMatch[1].trim();
-        expectedList.push(`${stepNum}. ${expected}`);
+        // 🔧 清理预期结果：移除多余的换行和空格
+        const expected = expectedMatch[1]
+          .split('\n')
+          .map(line => line.trim())
+          // .filter(line => line && !line.startsWith('密码：') && !line.startsWith('{{CONFIG'))  // 🔥 过滤掉配置变量相关的行
+          .join(' ')
+          .trim();
+        
+        if (expected) {
+          expectedList.push(`${stepNum}. ${expected}`);
+        }
       }
     }
   });
@@ -95,9 +116,11 @@ export interface BatchSaveParams {
  */
 export class FunctionalTestCaseService {
   private prisma: PrismaClient;
+  private configVariableService: ConfigVariableService;
 
   constructor() {
     this.prisma = DatabaseService.getInstance().getClient();
+    this.configVariableService = new ConfigVariableService();
   }
 
   /**
@@ -349,7 +372,8 @@ export class FunctionalTestCaseService {
               id: true,
               version_name: true,
               version_code: true,
-              is_main: true
+              is_main: true,
+              project_id: true  // 🆕 需要project_id来替换配置变量
             }
           },
           // 🆕 获取最新的执行记录
@@ -461,6 +485,31 @@ export class FunctionalTestCaseService {
 
       console.log(`✅ 查询结果: 找到 ${total} 条测试用例，返回第 ${page} 页 ${paginatedRows.length} 行`);
 
+      // 🆕 动态替换配置变量占位符为实际值
+      // 按项目ID分组，批量替换
+      const projectGroups = new Map<number, any[]>();
+      paginatedRows.forEach(row => {
+        if (row.project_version?.project_id) {
+          const projectId = row.project_version.project_id;
+          if (!projectGroups.has(projectId)) {
+            projectGroups.set(projectId, []);
+          }
+          projectGroups.get(projectId)!.push(row);
+        }
+      });
+
+      // 批量替换每个项目的测试用例
+      for (const [projectId, rows] of projectGroups.entries()) {
+        const replacedRows = await this.configVariableService.batchReplacePlaceholders(rows, projectId);
+        // 更新原数组中的数据
+        replacedRows.forEach((replacedRow, index) => {
+          const originalIndex = paginatedRows.indexOf(rows[index]);
+          if (originalIndex !== -1) {
+            paginatedRows[originalIndex] = replacedRow;
+          }
+        });
+      }
+
       return {
         data: paginatedRows,
         total,
@@ -484,52 +533,81 @@ export class FunctionalTestCaseService {
     console.log(`✨ 创建功能测试用例: ${data.name}, 用户ID: ${userId}`);
 
     try {
+      // 🆕 如果有项目版本ID，先替换硬编码为配置变量占位符
+      let processedData = data;
+      if (data.projectVersionId) {
+        // 获取项目ID
+        const projectVersion = await this.prisma.project_versions.findUnique({
+          where: { id: data.projectVersionId },
+          select: { project_id: true }
+        });
+        
+        if (projectVersion?.project_id) {
+          console.log(`🔄 [ConfigVariable] 替换手动创建测试用例中的硬编码数据...`);
+          processedData = await this.configVariableService.replaceHardcodedWithPlaceholders(
+            data,
+            projectVersion.project_id
+          );
+        }
+      }
+
       // 🆕 从 testPoints 数组中提取第一个测试点信息（如果有）
-      const firstPoint = data.testPoints?.[0] || {};
-      const testPointName = firstPoint.testPoint || firstPoint.testPointName || data.testPointName || '';
+      const firstPoint = processedData.testPoints?.[0] || {};
+      const testPointName = firstPoint.testPoint || firstPoint.testPointName || processedData.testPointName || '';
       
       // 🔧 统一处理场景名称字段（兼容 testScenario 和 scenarioName）
-      const scenarioName = data.testScenario || data.scenarioName || '';
+      const scenarioName = processedData.testScenario || processedData.scenarioName || '';
       
       // 🔧 优先使用外层的steps和assertions（用例级别），如果没有则使用测试点级别的
-      const rawSteps = data.steps || firstPoint.steps || '';
-      const rawExpectedResult = data.assertions || data.expectedResult || firstPoint.expectedResult || '';
+      const rawSteps = processedData.steps || firstPoint.steps || '';
+      const rawExpectedResult = processedData.assertions || processedData.expectedResult || firstPoint.expectedResult || '';
       
       // 🔧 从【操作】【预期】格式中分离纯操作步骤和预期结果
-      const separated = separateStepsAndExpectedResult(rawSteps);
-      const finalSteps = separated.steps || rawSteps;
-      const finalExpectedResult = separated.expectedResult || rawExpectedResult;
+      let finalSteps = rawSteps;
+      let finalExpectedResult = rawExpectedResult;
+      
+      // 🔥 只有当包含【操作】【预期】格式时才分离，否则直接使用原数据
+      if (typeof rawSteps === 'string' && rawSteps.includes('【操作】')) {
+        const separated = separateStepsAndExpectedResult(rawSteps);
+        // 如果分离成功，使用分离后的数据
+        if (separated.steps) {
+          finalSteps = separated.steps;
+        }
+        if (separated.expectedResult) {
+          finalExpectedResult = separated.expectedResult;
+        }
+      }
       
       // 创建测试用例（测试点信息直接保存在用例表中）
       const testCase = await this.prisma.functional_test_cases.create({
         data: {
-          case_id: data.caseId || null,  // 用例编号
-          name: data.name,
-          description: data.description || '',
-          system: data.system || '',
-          module: data.module || '',
-          priority: data.priority || 'medium',
-          status: data.status || 'DRAFT',
-          tags: data.tags || '',
+          case_id: processedData.caseId || null,  // 用例编号
+          name: processedData.name,
+          description: processedData.description || '',
+          system: processedData.system || '',
+          module: processedData.module || '',
+          priority: processedData.priority || 'medium',
+          status: processedData.status || 'DRAFT',
+          tags: processedData.tags || '',
           source: 'MANUAL',
           creator_id: userId,
-          test_type: data.testType || '',
-          case_type: data.caseType || 'FULL',  // 用例类型枚举
-          preconditions: data.preconditions || '',
-          test_data: data.testData || '',
-          section_name: data.sectionName || '',
-          coverage_areas: data.coverageAreas || '',
+          test_type: processedData.testType || '',
+          case_type: processedData.caseType || 'FULL',  // 用例类型枚举
+          preconditions: processedData.preconditions || '',
+          test_data: processedData.testData || '',
+          section_name: processedData.sectionName || '',
+          coverage_areas: processedData.coverageAreas || '',
           scenario_name: scenarioName,  // 场景名称（兼容多种字段名）
-          scenario_description: data.scenarioDescription || '',  // 场景描述
-          project_version_id: data.projectVersionId || null,  // 项目版本ID
+          scenario_description: processedData.scenarioDescription || '',  // 场景描述
+          project_version_id: processedData.projectVersionId || null,  // 项目版本ID
           // 🆕 测试点信息（直接保存在用例表中）
           test_point_name: testPointName,
-          test_purpose: firstPoint.testPurpose || data.testPurpose || '',
+          test_purpose: firstPoint.testPurpose || processedData.testPurpose || '',
           // 🔧 使用分离后的纯操作步骤
           steps: finalSteps,
           // 🔧 使用分离后的预期结果
           expected_result: finalExpectedResult,
-          risk_level: firstPoint.riskLevel || data.riskLevel || 'medium'
+          risk_level: firstPoint.riskLevel || processedData.riskLevel || 'medium'
         },
         include: {
           users: {
@@ -665,30 +743,77 @@ export class FunctionalTestCaseService {
       sectionDescription: testCases[0]?.sectionDescription,
       scenarioName: testCases[0]?.scenarioName,  // 🔧 新增
       scenarioDescription: testCases[0]?.scenarioDescription,  // 🔧 新增
-      requirementDocId: testCases[0]?.requirementDocId
+      requirementDocId: testCases[0]?.requirementDocId,
+      projectId: testCases[0]?.projectId  // 🆕 项目ID
     });
 
     try {
+      // 🆕 在保存前，替换硬编码的账号密码为配置变量
+      let processedTestCases = testCases;
+      if (testCases.length > 0 && testCases[0].projectId) {
+        console.log(`🔄 [ConfigVariable] 开始替换测试用例中的硬编码数据...`);
+        console.log(`📋 [ConfigVariable] 替换前第一个用例:`, JSON.stringify(testCases[0], null, 2));
+        processedTestCases = await Promise.all(
+          testCases.map(tc => 
+            this.configVariableService.replaceHardcodedWithPlaceholders(tc, tc.projectId)
+          )
+        );
+        console.log(`✅ [ConfigVariable] 硬编码数据替换完成`);
+        console.log(`📋 [ConfigVariable] 替换后第一个用例:`, JSON.stringify(processedTestCases[0], null, 2));
+      }
+
       // 使用事务确保数据一致性
       const result = await this.prisma.$transaction(async (tx) => {
         let savedCount = 0;
 
         // 逐个保存测试用例
-        for (const tc of testCases) {
+        for (const tc of processedTestCases) {
           // 🆕 从 testPoints 数组中提取第一个测试点信息
           const firstPoint = tc.testPoints?.[0] || {};
           const testPointName = firstPoint.testPoint || firstPoint.testPointName || tc.testPointName || '';
           
           // 🔧 获取原始的 steps 和 expectedResult
-          const rawSteps = firstPoint.steps || tc.steps || '';
-          const rawExpectedResult = firstPoint.expectedResult || tc.assertions || tc.expectedResult || '';
+          // 🔥 优先使用用例级别的数据（用户可能已编辑），而不是测试点级别的数据
+          let rawSteps = tc.steps || firstPoint.steps || '';
+          let rawExpectedResult = tc.assertions || tc.expectedResult || firstPoint.expectedResult || '';
+          
+          console.log(`📋 [保存前] 用例级别 tc.steps:`, tc.steps?.substring(0, 100));
+          console.log(`📋 [保存前] 测试点级别 firstPoint.steps:`, firstPoint.steps?.substring(0, 100));
+          console.log(`📋 [保存前] 最终使用 rawSteps:`, rawSteps?.substring(0, 100));
+          
+          console.log(`📋 [保存前] rawSteps类型: ${typeof rawSteps}, 值:`, rawSteps?.substring?.(0, 100));
+          console.log(`📋 [保存前] rawExpectedResult类型: ${typeof rawExpectedResult}, 是数组: ${Array.isArray(rawExpectedResult)}`);
+          
+          // 🔥 处理 expectedResult 是数组的情况
+          if (Array.isArray(rawExpectedResult)) {
+            console.log(`🔄 [数组转换] expectedResult 是数组，包含 ${rawExpectedResult.length} 个元素`);
+            rawExpectedResult = rawExpectedResult.map((item, index) => `${index + 1}. ${item}`).join('\n');
+            console.log(`✅ [数组转换] 转换后:`, rawExpectedResult.substring(0, 100));
+          }
           
           // 🔧 从【操作】【预期】格式中分离纯操作步骤和预期结果
-          const separated = separateStepsAndExpectedResult(rawSteps);
+          let finalSteps = rawSteps;
+          let finalExpectedResult = rawExpectedResult;
           
-          // 🔧 如果分离成功，使用分离后的数据；否则使用原始数据
-          const finalSteps = separated.steps || rawSteps;
-          const finalExpectedResult = separated.expectedResult || rawExpectedResult;
+          // 🔥 关键修复：只有当包含【操作】【预期】格式时才分离，否则直接使用原数据
+          if (typeof rawSteps === 'string' && rawSteps.includes('【操作】')) {
+            console.log(`🔄 [分离步骤] 检测到【操作】【预期】格式，开始分离...`);
+            const separated = separateStepsAndExpectedResult(rawSteps);
+            // 如果分离成功，使用分离后的数据
+            if (separated.steps) {
+              finalSteps = separated.steps;
+              console.log(`✅ [分离步骤] 分离后的steps:`, finalSteps.substring(0, 100));
+            }
+            if (separated.expectedResult) {
+              finalExpectedResult = separated.expectedResult;
+              console.log(`✅ [分离步骤] 分离后的expectedResult:`, finalExpectedResult.substring(0, 100));
+            }
+          } else {
+            console.log(`ℹ️ [分离步骤] 未检测到【操作】【预期】格式，直接使用原数据`);
+          }
+          
+          console.log(`📋 [最终保存] finalSteps:`, finalSteps.substring(0, 100));
+          console.log(`📋 [最终保存] finalExpectedResult:`, finalExpectedResult.substring(0, 100));
           
           // 保存测试用例（测试点信息直接保存在用例表中）
           await tx.functional_test_cases.create({
@@ -783,7 +908,8 @@ export class FunctionalTestCaseService {
               id: true,
               version_name: true,
               version_code: true,
-              is_main: true
+              is_main: true,
+              project_id: true  // 🆕 需要project_id来替换配置变量
             }
           }
         }
@@ -805,10 +931,19 @@ export class FunctionalTestCaseService {
         riskLevel: testCase.risk_level
       }];
 
-      return {
+      let result: any = {
         ...testCase,
         testPoints
       };
+
+      // 🆕 动态替换配置变量占位符为实际值
+      if (testCase.project_version?.project_id) {
+        const projectId = testCase.project_version.project_id;
+        result = await this.configVariableService.batchReplacePlaceholders([result], projectId);
+        result = result[0];  // batchReplacePlaceholders返回数组，取第一个元素
+      }
+
+      return result;
     } catch (error: any) {
       console.error('❌ 查询测试用例详情失败:', error);
       throw new Error(`查询测试用例详情失败: ${error.message}`);
@@ -827,58 +962,88 @@ export class FunctionalTestCaseService {
     });
 
     try {
+      // 🆕 如果有项目版本ID，先替换硬编码为配置变量占位符
+      let processedData = data;
+      if (data.projectVersionId) {
+        // 获取项目ID
+        const projectVersion = await this.prisma.project_versions.findUnique({
+          where: { id: data.projectVersionId },
+          select: { project_id: true }
+        });
+        
+        if (projectVersion?.project_id) {
+          console.log(`🔄 [ConfigVariable] 替换更新测试用例中的硬编码数据...`);
+          processedData = await this.configVariableService.replaceHardcodedWithPlaceholders(
+            data,
+            projectVersion.project_id
+          );
+        }
+      }
+
       // 🆕 从 testPoints 数组中提取第一个测试点信息（如果有）
-      const firstPoint = data.testPoints?.[0] || {};
+      const firstPoint = processedData.testPoints?.[0] || {};
       
       // 🔧 获取原始的 steps 和 expectedResult
-      const rawSteps = firstPoint.steps || data.steps || '';
-      const rawExpectedResult = firstPoint.expectedResult || data.assertions || data.expectedResult || '';
+      // 🔥 优先使用用例级别的数据，与其他方法保持一致
+      const rawSteps = processedData.steps || firstPoint.steps || '';
+      const rawExpectedResult = processedData.assertions || processedData.expectedResult || firstPoint.expectedResult || '';
       
       // 🔧 从【操作】【预期】格式中分离纯操作步骤和预期结果
-      const separated = separateStepsAndExpectedResult(rawSteps);
-      const finalSteps = separated.steps || rawSteps;
-      const finalExpectedResult = separated.expectedResult || rawExpectedResult;
+      let finalSteps = rawSteps;
+      let finalExpectedResult = rawExpectedResult;
+      
+      // 🔥 只有当包含【操作】【预期】格式时才分离，否则直接使用原数据
+      if (typeof rawSteps === 'string' && rawSteps.includes('【操作】')) {
+        const separated = separateStepsAndExpectedResult(rawSteps);
+        // 如果分离成功，使用分离后的数据
+        if (separated.steps) {
+          finalSteps = separated.steps;
+        }
+        if (separated.expectedResult) {
+          finalExpectedResult = separated.expectedResult;
+        }
+      }
       
       // 构建更新数据对象
       const updateData: any = {
-        name: data.name,
-        description: data.description,
-        system: data.system,
-        module: data.module,
-        priority: data.priority,
-        tags: data.tags,
-        test_type: data.testType,
-        preconditions: data.preconditions,
-        test_data: data.testData,
+        name: processedData.name,
+        description: processedData.description,
+        system: processedData.system,
+        module: processedData.module,
+        priority: processedData.priority,
+        tags: processedData.tags,
+        test_type: processedData.testType,
+        preconditions: processedData.preconditions,
+        test_data: processedData.testData,
         updated_at: getNow(),
         // 🆕 测试点信息（直接保存在用例表中）
-        test_point_name: firstPoint.testPoint || firstPoint.testPointName || data.testPointName,
-        test_purpose: firstPoint.testPurpose || data.testPurpose,
+        test_point_name: firstPoint.testPoint || firstPoint.testPointName || processedData.testPointName,
+        test_purpose: firstPoint.testPurpose || processedData.testPurpose,
         // 🔧 使用分离后的纯操作步骤
         steps: finalSteps,
         // 🔧 使用分离后的预期结果
         expected_result: finalExpectedResult,
-        risk_level: firstPoint.riskLevel || data.riskLevel
+        risk_level: firstPoint.riskLevel || processedData.riskLevel
       };
 
       // 🔧 更新用例ID
-      if (data.caseId !== undefined) updateData.case_id = data.caseId;
+      if (processedData.caseId !== undefined) updateData.case_id = processedData.caseId;
       
       // 🔧 更新测试场景信息
-      if (data.testScenario !== undefined) updateData.scenario_name = data.testScenario;
-      if (data.scenarioName !== undefined) updateData.scenario_name = data.scenarioName;
-      if (data.scenarioDescription !== undefined) updateData.scenario_description = data.scenarioDescription;
+      if (processedData.testScenario !== undefined) updateData.scenario_name = processedData.testScenario;
+      if (processedData.scenarioName !== undefined) updateData.scenario_name = processedData.scenarioName;
+      if (processedData.scenarioDescription !== undefined) updateData.scenario_description = processedData.scenarioDescription;
 
-      if (data.sectionId !== undefined) updateData.section_id = data.sectionId;
-      if (data.sectionName !== undefined) updateData.section_name = data.sectionName;
-      if (data.batchNumber !== undefined) updateData.batch_number = data.batchNumber;
-      if (data.coverageAreas !== undefined) updateData.coverage_areas = data.coverageAreas;
-      if (data.caseType !== undefined) updateData.case_type = data.caseType;
+      if (processedData.sectionId !== undefined) updateData.section_id = processedData.sectionId;
+      if (processedData.sectionName !== undefined) updateData.section_name = processedData.sectionName;
+      if (processedData.batchNumber !== undefined) updateData.batch_number = processedData.batchNumber;
+      if (processedData.coverageAreas !== undefined) updateData.coverage_areas = processedData.coverageAreas;
+      if (processedData.caseType !== undefined) updateData.case_type = processedData.caseType;
       
       // 🔧 更新项目版本ID
-      if (data.projectVersionId !== undefined) {
-        updateData.project_version_id = data.projectVersionId !== null && data.projectVersionId !== '' 
-          ? Number(data.projectVersionId) 
+      if (processedData.projectVersionId !== undefined) {
+        updateData.project_version_id = processedData.projectVersionId !== null && processedData.projectVersionId !== '' 
+          ? Number(processedData.projectVersionId) 
           : null;
       }
 
@@ -950,6 +1115,87 @@ export class FunctionalTestCaseService {
    */
   async batchDeleteTestPoints(testPointIds: number[]) {
     return this.batchDeleteTestCases(testPointIds);
+  }
+
+  /**
+   * 🆕 复制测试用例
+   * 创建一个新的测试用例，复制原用例的所有内容，名称添加"(副本)"后缀
+   */
+  async copy(id: number, userId: number) {
+    console.log(`📋 复制功能测试用例 ID: ${id}, 用户ID: ${userId}`);
+
+    try {
+      // 获取原用例
+      const original = await this.prisma.functional_test_cases.findFirst({
+        where: { 
+          id,
+          deleted_at: null
+        }
+      });
+
+      if (!original) {
+        throw new Error('原测试用例不存在或已被删除');
+      }
+
+      // 创建副本，复制所有字段（除了 id、created_at、updated_at）
+      const copiedCase = await this.prisma.functional_test_cases.create({
+        data: {
+          case_id: null,  // 新用例不复制编号
+          name: `${original.name}（副本）`,
+          description: original.description,
+          system: original.system,
+          module: original.module,
+          priority: original.priority,
+          status: 'DRAFT',  // 副本状态重置为草稿
+          tags: original.tags,
+          source: original.source,
+          creator_id: userId,  // 使用当前用户作为创建者
+          test_type: original.test_type,
+          case_type: original.case_type,
+          preconditions: original.preconditions,
+          test_data: original.test_data,
+          section_id: original.section_id,
+          section_name: original.section_name,
+          section_description: original.section_description,
+          scenario_name: original.scenario_name,
+          scenario_description: original.scenario_description,
+          batch_number: original.batch_number,
+          coverage_areas: original.coverage_areas,
+          project_version_id: original.project_version_id,
+          requirement_source: original.requirement_source,
+          requirement_doc_id: original.requirement_doc_id,
+          // 测试点信息
+          test_point_name: original.test_point_name,
+          test_purpose: original.test_purpose,
+          steps: original.steps,
+          expected_result: original.expected_result,
+          risk_level: original.risk_level
+        },
+        include: {
+          users: {
+            select: {
+              username: true,
+              account_name: true,
+              project: true
+            }
+          },
+          project_version: {
+            select: {
+              id: true,
+              version_name: true,
+              version_code: true,
+              is_main: true
+            }
+          }
+        }
+      });
+
+      console.log(`✅ 测试用例复制成功: ${original.id} -> ${copiedCase.id}`);
+      return copiedCase;
+    } catch (error: any) {
+      console.error('❌ 复制测试用例失败:', error);
+      throw new Error(`复制测试用例失败: ${error.message}`);
+    }
   }
 
   /**
@@ -1031,6 +1277,7 @@ export class FunctionalTestCaseService {
 
   /**
    * 🆕 阶段3：为单个测试点生成测试用例（新接口）
+   * @param projectId 项目ID，用于获取项目配置（访问地址、账号密码等）
    */
   async generateTestCaseForTestPoint(
     testPoint: any,
@@ -1040,7 +1287,8 @@ export class FunctionalTestCaseService {
     requirementDoc: string,
     systemName: string,
     moduleName: string,
-    relatedSections: string[]
+    relatedSections: string[],
+    projectId?: number | null
   ) {
     const { FunctionalTestCaseAIService } = await import('./functionalTestCaseAIService.js');
     const aiService = new FunctionalTestCaseAIService();
@@ -1052,7 +1300,8 @@ export class FunctionalTestCaseService {
       requirementDoc,
       systemName,
       moduleName,
-      relatedSections
+      relatedSections,
+      projectId  // 🆕 传递项目ID
     );
   }
 

@@ -116,7 +116,7 @@ async function main() {
     `);
     console.log('✅ username字段设置为NOT NULL');
 
-    console.log('🎉 用户数据迁移完成！');
+    console.log('🎉 用户数据迁移完成');
   } catch (error) {
     console.error('❌ 迁移失败:', error);
     throw error;

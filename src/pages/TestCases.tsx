@@ -29,6 +29,7 @@ import {
   LayoutGrid,
   Table2
 } from 'lucide-react';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { clsx } from 'clsx';
 import { testService } from '../services/testService';
 import * as systemService from '../services/systemService';
@@ -48,6 +49,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getCaseTypeInfo, getCaseTypeLabel } from '../utils/caseTypeHelper';
 import { FunctionalCaseSelectModal } from '../components/FunctionalCaseSelectModal';
 import { TestRuns } from './TestRuns';
+import ExecutionEngineGuide from '../components/ExecutionEngineGuide';
+
 
 // 表单数据接口
 interface CreateTestCaseForm {
@@ -105,8 +108,10 @@ export function TestCases() {
     executionEngine: 'mcp' as 'mcp' | 'playwright',
     enableTrace: true,
     enableVideo: true,
-    environment: 'staging'
+    environment: 'staging',
+    assertionMatchMode: 'auto' as 'strict' | 'auto' | 'loose' // 🔥 新增：断言匹配策略
   });
+  const [showEngineGuide, setShowEngineGuide] = useState(false);
 
   // 🔥 新增：分页状态管理
   const [pagination, setPagination] = useState({
@@ -841,9 +846,9 @@ export function TestCases() {
       // 🔥 修改：显示创建、更新、失败的数量
       if (failCount === 0) {
         if (updatedCount === 0) {
-          showToast.success(`成功创建 ${createdCount} 个测试用例！`);
+          showToast.success(`成功创建 ${createdCount} 个测试用例`);
         } else if (createdCount === 0) {
-          showToast.success(`成功更新 ${updatedCount} 个测试用例！`);
+          showToast.success(`成功更新 ${updatedCount} 个测试用例`);
         } else {
           showToast.success(`导入完成：创建 ${createdCount} 个，更新 ${updatedCount} 个`);
         }
@@ -933,7 +938,7 @@ export function TestCases() {
           await testService.updateTestCase(editingTestCase.id, updatedTestCase);
           await loadTestCases();
           resetForm();
-          showToast.success('测试用例更新成功！');
+          showToast.success('测试用例更新成功');
         } catch (error: any) {
           throw new Error(error.message || '更新失败');
         }
@@ -997,7 +1002,7 @@ export function TestCases() {
             setTimeout(() => nameInputRef.current?.focus(), 0);
           } else {
             resetForm();
-            showToast.success('测试用例创建成功！');
+            showToast.success('测试用例创建成功');
           }
         } catch (error: any) {
           throw new Error(error.message || '创建失败');
@@ -1040,7 +1045,7 @@ export function TestCases() {
           await testService.deleteTestCase(testCase.id);
           // 🔥 软删除：后端只标记deleted_at，重新加载时会自动过滤掉已删除的记录
           await loadTestCases();
-          showToast.success('测试用例删除成功！');
+          showToast.success('测试用例删除成功');
         } catch (error: any) {
           console.error('删除测试用例失败:', error);
           showToast.error(`删除失败: ${error.message}`);
@@ -1098,7 +1103,7 @@ export function TestCases() {
 
           // 显示结果
           if (failCount === 0) {
-            showToast.success(`成功删除 ${successCount} 个测试用例！`);
+            showToast.success(`成功删除 ${successCount} 个测试用例`);
           } else {
             showToast.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`);
           }
@@ -1211,7 +1216,7 @@ export function TestCases() {
           await testService.updateTestSuite(editingTestSuite.id, updatedSuite);
           await loadTestSuites();
           resetSuiteForm();
-          showToast.success('测试套件更新成功！');
+          showToast.success('测试套件更新成功');
         } catch (error: any) {
           throw new Error(error.message || '更新失败');
         }
@@ -1261,7 +1266,7 @@ export function TestCases() {
               tags: '',
               project: ''
             });
-            showToast.success('测试套件创建成功！');
+            showToast.success('测试套件创建成功');
           }
         } catch (error: any) {
           throw new Error(error.message || '创建失败');
@@ -1314,7 +1319,7 @@ export function TestCases() {
           setLoading(true);
           await testService.deleteTestSuite(testSuite.id);
           await loadTestSuites();
-          showToast.success('测试套件删除成功！');
+          showToast.success('测试套件删除成功');
         } catch (error: any) {
           console.error('删除测试套件失败:', error);
           showToast.error(`删除失败: ${error.message}`);
@@ -1707,11 +1712,11 @@ export function TestCases() {
             // 根据状态显示不同消息
             const status = message.data?.status || 'completed';
             if (status === 'failed' || status === 'error') {
-              showToast.error(`❌ 测试执行失败: ${pendingTestCase.name}`);
+              showToast.error(`测试执行失败`);
             } else if (status === 'cancelled') {
-              showToast.warning(`⚠️ 测试执行被取消: ${pendingTestCase.name}`);
+              showToast.warning(`测试执行被取消`);
             } else {
-              showToast.success(`🎉 测试执行完成: ${pendingTestCase.name}`);
+              showToast.success(`测试执行成功`);
             }
             
             // 导航到测试运行页面
@@ -1731,10 +1736,11 @@ export function TestCases() {
           executionEngine: executionConfig.executionEngine,
           enableTrace: executionConfig.enableTrace,
           enableVideo: executionConfig.enableVideo,
-          environment: executionConfig.environment
+          environment: executionConfig.environment,
+          assertionMatchMode: executionConfig.assertionMatchMode // 🔥 新增：传递断言匹配策略
         });
         // showToast.info(`✅ 测试开始执行: ${pendingTestCase.name}\n运行ID: ${response.runId}\n引擎: ${executionConfig.executionEngine === 'playwright' ? 'Playwright Test Runner' : 'MCP 客户端'}`);
-        showToast.info(`✅ 开始执行: ${pendingTestCase.name}`);
+        showToast.info(`✅ 测试执行开始`);
         console.log('测试运行ID:', response.runId);
         navigate(`/test-runs/${response.runId}/detail`, {
           state: { 
@@ -3983,7 +3989,14 @@ export function TestCases() {
 
           <div className="mt-[-20px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              执行引擎
+              <span className="flex items-center gap-2">
+                执行引擎
+                <QuestionCircleOutlined 
+                  className="text-blue-500 cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => setShowEngineGuide(true)}
+                  title="查看执行引擎选择指南"
+                />
+              </span>
             </label>
             <select
               value={executionConfig.executionEngine}
@@ -3992,14 +4005,15 @@ export function TestCases() {
                 executionEngine: e.target.value as 'mcp' | 'playwright' 
               }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              aria-label="执行引擎"
             >
-              <option value="mcp">MCP 客户端（默认）</option>
-              <option value="playwright">Playwright Test Runner</option>
+              <option value="mcp">MCP 客户端（AI驱动，适应性强）</option>
+              <option value="playwright">Playwright Runner（高性能，推荐）</option>
             </select>
             <p className="mt-1 text-xs text-gray-500">
               {executionConfig.executionEngine === 'mcp' 
-                ? '使用 MCP 客户端执行，支持 AI 闭环流程'
-                : '使用 Playwright Test Runner，支持 Trace 和 Video 录制'}
+                ? '🤖 AI实时解析，动态适应页面变化'
+                : '⚡ 原生API执行，速度快5-10倍，成本低95%'}
             </p>
           </div>
 
@@ -4061,6 +4075,30 @@ export function TestCases() {
               <option value="production">Production</option>
               <option value="development">Development</option>
             </select>
+          </div>
+
+          {/* 🔥 新增：断言匹配策略 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              断言匹配策略
+            </label>
+            <select
+              value={executionConfig.assertionMatchMode}
+              onChange={(e) => setExecutionConfig(prev => ({ 
+                ...prev, 
+                assertionMatchMode: e.target.value as 'auto' | 'strict' | 'loose'
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="auto">智能匹配（推荐）</option>
+              <option value="strict">严格匹配</option>
+              <option value="loose">宽松匹配</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              {executionConfig.assertionMatchMode === 'auto' && '自动选择最佳匹配策略，平衡准确性和灵活性'}
+              {executionConfig.assertionMatchMode === 'strict' && '仅完全匹配，适用于精确验证'}
+              {executionConfig.assertionMatchMode === 'loose' && '宽松匹配，包含关键词即可通过'}
+            </p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -4197,6 +4235,12 @@ export function TestCases() {
           },
         ]}
         useSet={false}
+      />
+
+      {/* 执行引擎选择指南 */}
+      <ExecutionEngineGuide 
+        visible={showEngineGuide}
+        onClose={() => setShowEngineGuide(false)}
       />
     </div>
   );

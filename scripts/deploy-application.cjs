@@ -33,7 +33,7 @@ async function deployApplication() {
     console.log('✅ 验证功能...');
     await verifyFunctionality();
 
-    console.log('🎉 应用配置和部署完成！');
+    console.log('🎉 应用配置和部署完成');
 
   } catch (error) {
     console.error('❌ 应用部署失败:', error.message);

@@ -30,7 +30,7 @@ export interface CreateServerInput {
   description?: string;
   status?: 'active' | 'inactive';
   is_default?: boolean;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 export interface UpdateServerInput {
@@ -43,7 +43,7 @@ export interface UpdateServerInput {
   description?: string;
   status?: 'active' | 'inactive';
   is_default?: boolean;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 /**

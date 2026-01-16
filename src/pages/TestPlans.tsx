@@ -244,7 +244,7 @@ export function TestPlans() {
 
           // 显示结果
           if (failCount === 0) {
-            showToast.success(`成功删除 ${successCount} 个测试计划！`);
+            showToast.success(`成功删除 ${successCount} 个测试计划`);
           } else {
             showToast.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`);
           }

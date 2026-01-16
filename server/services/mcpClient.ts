@@ -282,7 +282,7 @@ export class PlaywrightMcpClient {
       }
 
       if (availableTools.length === 0) {
-        throw new Error('MCP服务器没有提供任何工具！');
+        throw new Error('MCP服务器没有提供任何工具');
       }
 
       // 🔥 修复：动态检测工具名称格式
@@ -329,7 +329,7 @@ export class PlaywrightMcpClient {
           console.log('✅ 所有必要工具均可用');
         }
         
-        console.log('✅ MCP工具验证完成！');
+        console.log('✅ MCP工具验证完成');
         
       } catch (verifyError: any) {
         console.error('❌ MCP工具验证失败:', verifyError.message);
@@ -811,7 +811,7 @@ export class PlaywrightMcpClient {
       const matchedElement = await this.aiMatchElement(selector, snapshotData, runId);
 
       if (matchedElement) {
-        console.log(`✅ [${runId}] AI匹配成功！`);
+        console.log(`✅ [${runId}] AI匹配成功`);
         console.log(`   🎯 匹配元素: "${matchedElement.text}"`);
         console.log(`   🔗 元素引用: ${matchedElement.ref}`);
         console.log(`   📊 置信度: ${matchedElement.confidence || 'N/A'}%`);

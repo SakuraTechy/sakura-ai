@@ -157,13 +157,13 @@ export class EvidenceService {
     };
   }
 
-  // 🔥 修正：生成绝对签名URL
+  // 🔥 修正：生成绝对签名URL（支持动态baseUrl）
   async generateSignedUrl(
     runId: string, 
     filename: string, 
-    options: SignedUrlOptions = {}
+    options: SignedUrlOptions & { baseUrl?: string } = {}
   ): Promise<string> {
-    const { ttlSeconds = 600, downloadName } = options;
+    const { ttlSeconds = 600, downloadName, baseUrl } = options;
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
     
     // 创建签名
@@ -176,8 +176,9 @@ export class EvidenceService {
     // 构造相对路径
     const relativePath = `/api/evidence/download/${runId}/${encodeURIComponent(filename)}?expires=${expiresAt}&signature=${signature}`;
     
-    // 🔥 修正：构造绝对URL（用于Trace Viewer）
-    const absoluteUrl = `${this.baseUrl}${relativePath}${downloadName ? `&download=${encodeURIComponent(downloadName)}` : ''}`;
+    // 🔥 优先使用传入的baseUrl，其次使用实例baseUrl
+    const finalBaseUrl = baseUrl || this.baseUrl;
+    const absoluteUrl = `${finalBaseUrl}${relativePath}${downloadName ? `&download=${encodeURIComponent(downloadName)}` : ''}`;
     
     return absoluteUrl;
   }

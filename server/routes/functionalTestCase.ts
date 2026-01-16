@@ -561,6 +561,46 @@ export function createFunctionalTestCaseRoutes(): Router {
   });
 
   /**
+   * POST /api/v1/functional-test-cases/:id/copy
+   * 复制测试用例
+   */
+  router.post('/:id/copy', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          error: '无效的ID'
+        });
+      }
+
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: '未授权'
+        });
+      }
+
+      console.log(`📋 复制测试用例 ID: ${id}, 用户: ${req.user.username}`);
+
+      const copiedCase = await getService().copy(id, req.user.id);
+
+      res.json({
+        success: true,
+        data: copiedCase,
+        message: '复制成功'
+      });
+    } catch (error: any) {
+      console.error('❌ 复制失败:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
    * GET /api/v1/functional-test-cases/test-points/:id
    * 获取测试点详情（含关联用例信息）
    */
@@ -847,7 +887,8 @@ export function createFunctionalTestCaseRoutes(): Router {
         systemName,
         moduleName,
         relatedSections,
-        sessionId
+        sessionId,
+        projectId  // 🆕 项目ID，用于获取项目配置
       } = req.body;
 
       if (!testPoint || !scenarioId || !scenarioName) {
@@ -857,7 +898,7 @@ export function createFunctionalTestCaseRoutes(): Router {
         });
       }
 
-      console.log(`🎯 阶段3：为测试点 "${testPoint.testPoint}" 生成测试用例 - sessionId: ${sessionId}`);
+      console.log(`🎯 阶段3：为测试点 "${testPoint.testPoint}" 生成测试用例 - sessionId: ${sessionId}, projectId: ${projectId}`);
 
       const result = await getService().generateTestCaseForTestPoint(
         testPoint,
@@ -867,7 +908,8 @@ export function createFunctionalTestCaseRoutes(): Router {
         requirementDoc,
         systemName,
         moduleName,
-        relatedSections
+        relatedSections,
+        projectId  // 🆕 传递项目ID
       );
 
       res.json({

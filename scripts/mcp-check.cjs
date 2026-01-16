@@ -101,7 +101,7 @@ async function main() {
     await testMcpServer();
     await checkPlaywrightBrowsers();
     
-    console.log('\n✅ MCP 环境检查完成！');
+    console.log('\n✅ MCP 环境检查完成');
     console.log('🎉 您可以使用以下命令启动：');
     console.log('   npm run mcp:start  - 启动 MCP 服务器');
     console.log('   npm run server     - 启动应用服务器');

@@ -37,7 +37,7 @@ async function clearFunctionalTestData() {
     console.log(`   - ai_generation_sessions: ${remainingSessions} 条记录\n`);
 
     if (remainingTestPoints === 0 && remainingTestCases === 0 && remainingSessions === 0) {
-      console.log('✅ 功能测试用例数据已成功清空！');
+      console.log('✅ 功能测试用例数据已成功清空');
     } else {
       console.log('⚠️  警告：部分数据未清空，请检查');
     }

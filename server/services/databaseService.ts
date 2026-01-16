@@ -82,7 +82,7 @@ export interface CreateDatabaseInput {
   description?: string;
   status?: 'active' | 'inactive';
   is_default?: boolean;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 export interface UpdateDatabaseInput {
@@ -98,7 +98,7 @@ export interface UpdateDatabaseInput {
   description?: string;
   status?: 'active' | 'inactive';
   is_default?: boolean;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 /**

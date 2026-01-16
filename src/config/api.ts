@@ -24,7 +24,6 @@ const getBackendHost = (): string => {
   return window.location.hostname;
 };
 
-
 // 构建 API 基础 URL
 export const getApiBaseUrl = (path: string = '/api'): string => {
   // 🔥 开发环境：强制使用完整URL，确保请求直接到达后端服务器

@@ -88,7 +88,7 @@ async function main() {
     console.log('   - pitfall: 历史踩坑点');
     console.log('   - risk_scenario: 资损风险场景\n');
 
-    console.log('✅ 多系统知识库架构已就绪！');
+    console.log('✅ 多系统知识库架构已就绪');
 
   } catch (error) {
     console.error('❌ 获取状态失败:', error);

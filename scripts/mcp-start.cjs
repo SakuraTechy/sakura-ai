@@ -28,7 +28,7 @@ exec('npm ls @playwright/mcp', (error, stdout, stderr) => {
 
 function startMcpServer() {
   console.log('🎯 启动 MCP 服务器...');
-  console.log('🔥 强制显示浏览器模式启动！');
+  console.log('🔥 强制显示浏览器模式启动');
   
   // 🔥 与配置文件完全一致的启动参数 - 强制stdio模式
   const mcpArgs = [

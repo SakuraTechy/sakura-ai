@@ -15,7 +15,7 @@
 
 所以做了这个项目，用AI来解决这些问题。
 
-**项目地址**: https://github.com/Sakura AI/Sakura AI
+**项目地址**: https://github.com/SakuraTechy/sakura-ai
 **开源协议**: GPL-3.0
 
 ---
@@ -828,7 +828,7 @@ DEEPSEEK_MODEL=deepseek-chat
 
 ## 欢迎试用和反馈
 
-**项目地址**: https://github.com/Sakura AI/Sakura AI
+**项目地址**: https://github.com/SakuraTechy/sakura-ai
 
 目前已经在实际项目中使用，效果还不错。欢迎大家试用，有任何问题或建议都可以提Issue或者回复讨论。
 

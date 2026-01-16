@@ -120,8 +120,8 @@ export function FunctionalTestCaseDetail() {
                       testCase.priority === 'medium' ? '中' : '低';
   
   return (
-    <div className="min-h-screen bg-gray-50 p-0">
-      <div className="max-w-[960px] mx-auto">
+    <div className="min-h-screen bg-gray-50 pb-5">
+      <div className="max-w-[1100px] mx-auto">
         {/* 用例信息卡片 */}
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-500 to-purple-700 text-white px-8 py-6 flex items-start justify-between gap-5">
@@ -218,7 +218,7 @@ export function FunctionalTestCaseDetail() {
                 <div className="bg-gray-50 rounded-lg px-3.5 py-3">
                   <div className="text-xs text-gray-500 mb-1 font-medium">用例版本</div>
                   <div className="text-[13px] font-semibold text-gray-900">
-                    {testCase.project_version?.version_code || testCase.project_version?.version_name || 'V1.0'}
+                    {testCase.project_version?.version_name || testCase.project_version?.version_code || 'V1.0'}
                   </div>
                 </div>
                 <div className="bg-gray-50 rounded-lg px-3.5 py-3">

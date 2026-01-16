@@ -231,6 +231,12 @@ export function TestCaseDetailModal({
 
   const handleSave = () => {
     if (onSave && editedCase) {
+      console.log('🔄 [TestCaseDetailModal] 保存编辑后的测试用例:', {
+        id: editedCase.id,
+        name: editedCase.name,
+        steps: editedCase.steps?.substring(0, 100),
+        assertions: editedCase.assertions?.substring(0, 100)
+      });
       onSave(editedCase);
       setIsEditing(false);
     }
@@ -242,29 +248,36 @@ export function TestCaseDetailModal({
   };
 
   const updateField = (field: string, value: string | number | undefined) => {
+    console.log(`🔄 [TestCaseDetailModal] 更新字段 ${field}:`, value);
     setEditedCase((prev: TestCase | null) => {
       if (!prev) {
         // 如果 prev 为 null，从 testCase 初始化
         if (testCase) {
-          return {
+          const newCase = {
             ...testCase,
             [field]: value
           };
+          console.log(`🔄 [TestCaseDetailModal] 初始化editedCase:`, newCase);
+          return newCase;
         }
         return null;
       }
-      return {
+      const newCase = {
         ...prev,
         [field]: value
       };
+      console.log(`🔄 [TestCaseDetailModal] 更新editedCase:`, newCase);
+      return newCase;
     });
   };
 
   // 🆕 处理测试步骤变化
   const handleStepsChange = (steps: TestStep[]) => {
+    console.log('🔄 [TestCaseDetailModal] 测试步骤变化:', steps);
     setTestSteps(steps);
     // 将步骤数组转换回字符串格式保存
     const stepsStr = formatStepsToString(steps);
+    console.log('🔄 [TestCaseDetailModal] 转换后的steps字符串:', stepsStr);
     updateField('steps', stepsStr);
     
     // 同时更新 assertions 字段（汇总所有预期结果）
@@ -272,6 +285,7 @@ export function TestCaseDetailModal({
       .map((step, index) => step.expected ? `${index + 1}. ${step.expected}` : '')
       .filter(Boolean)
       .join('\n');
+    console.log('🔄 [TestCaseDetailModal] 转换后的assertions字符串:', assertionsStr);
     updateField('assertions', assertionsStr);
   };
 

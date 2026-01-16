@@ -117,7 +117,7 @@ async function main() {
     }
   }
 
-  console.log('\n✅ 集合重建完成！');
+  console.log('\n✅ 集合重建完成');
   console.log('\n💡 下一步: 运行导入脚本');
   console.log('   node scripts/importKnowledgeToAllSystems.mjs');
 }

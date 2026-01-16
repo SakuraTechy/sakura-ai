@@ -393,11 +393,15 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
       }
       
       const signedUrl = data.data.signedUrl;
+      console.log('签名URL:', signedUrl);
       
-      // 检查是否是本地URL（localhost或127.0.0.1）
-      const isLocalUrl = signedUrl.includes('localhost') || signedUrl.includes('127.0.0.1');
+      // 检查是否是本地URL（localhost、127.0.0.1、0.0.0.0）
+      const isLocalUrl = signedUrl.includes('localhost') || 
+                        signedUrl.includes('127.0.0.1') || 
+                        signedUrl.includes('0.0.0.0');
+      console.log('是否本地URL:', isLocalUrl);
       
-      if (!isLocalUrl) {
+      if (isLocalUrl) {
         // 对于本地URL，Playwright trace viewer 可能无法直接访问
         // 提示用户下载文件后手动打开
         const shouldDownload = confirm(

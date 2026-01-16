@@ -2,7 +2,7 @@
 
 一个开源的企业级测试平台，核心功能包括**AI测试用例生成**和**UI自动化测试执行**。
 
-**项目地址**: https://github.com/Sakura AI/Sakura AI
+**项目地址**: https://github.com/SakuraTechy/sakura-ai
 **开源协议**: GPL-3.0
 
 ---
@@ -393,8 +393,8 @@ npm run dev
 ## 联系方式
 
 - 邮箱: support@Sakura AI.dev
-- GitHub: https://github.com/Sakura AI/Sakura AI
-- 问题反馈: https://github.com/Sakura AI/Sakura AI/issues
+- GitHub: https://github.com/SakuraTechy/sakura-ai
+- 问题反馈: https://github.com/SakuraTechy/sakura-ai/issues
 
 ---
 

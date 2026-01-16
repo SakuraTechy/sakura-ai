@@ -71,7 +71,7 @@ async function main() {
       console.log(`      向量维度: ${info.result.config.params.vectors.size}`);
     }
 
-    console.log('\n✅ 清理完成！');
+    console.log('\n✅ 清理完成');
 
   } catch (error) {
     console.error('❌ 清理失败:', error);

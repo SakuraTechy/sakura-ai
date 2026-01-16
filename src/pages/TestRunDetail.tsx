@@ -783,16 +783,25 @@ export function TestRunDetail() {
     // 🔥 步骤2：如果测试用例没有数据，回退到从日志和运行时数据中提取
     if (totalOperationSteps === 0) {
       // 从日志中识别操作步骤执行记录
-      const operationStepLogs = testRun.logs?.filter(log => 
-        log.message?.match(/执行步骤\s*\d+/) && 
-        !log.message?.match(/执行断言/) &&
-        !log.message?.match(/截图/) &&
-        !log.message?.includes('📸')
-      ) || [];
+      // 🔥 修复：匹配多种日志格式：
+      // - "步骤 1: xxx" (MCP执行时的格式)
+      // - "执行步骤 1" (旧格式)
+      // - "🔧 开始执行步骤 1" (详细日志格式)
+      const operationStepLogs = testRun.logs?.filter(log => {
+        const msg = log.message || '';
+        if (msg.includes('断言') || msg.includes('截图') || msg.includes('📸')) return false;
+        return msg.match(/步骤\s*\d+\s*[:：]/) || 
+               msg.match(/执行步骤\s*\d+/) ||
+               msg.match(/开始执行步骤\s*\d+/);
+      }) || [];
       
       const operationStepNumbers = new Set<number>();
       operationStepLogs.forEach(log => {
-        const match = log.message?.match(/执行步骤\s*(\d+)/);
+        const msg = log.message || '';
+        // 🔥 修复：匹配多种格式
+        const match = msg.match(/步骤\s*(\d+)\s*[:：]/) || 
+                      msg.match(/执行步骤\s*(\d+)/) ||
+                      msg.match(/开始执行步骤\s*(\d+)/);
         if (match) {
           operationStepNumbers.add(parseInt(match[1], 10));
         }
@@ -815,13 +824,24 @@ export function TestRunDetail() {
 
     if (totalAssertions === 0) {
       // 从日志中识别断言执行记录
-      const assertionExecutionLogs = testRun.logs?.filter(log => 
-        log.message?.match(/执行断言\s*\d+/)
-      ) || [];
+      // 🔥 修复：匹配多种断言日志格式：
+      // - "🔍 执行断言 1: xxx" (MCP执行时的格式)
+      // - "执行断言 1" (旧格式)
+      // - "✅ 断言 1 通过" (成功日志)
+      const assertionExecutionLogs = testRun.logs?.filter(log => {
+        const msg = log.message || '';
+        // return msg.match(/执行断言\s*\d+/) ||
+        return msg.match(/断言\s*\d+\s*通过/) ||
+               msg.match(/断言\s*\d+\s*失败/);
+      }) || [];
 
       const assertionNumbers = new Set<number>();
       assertionExecutionLogs.forEach(log => {
-        const match = log.message?.match(/执行断言\s*(\d+)/);
+        const msg = log.message || '';
+        // 🔥 修复：匹配多种格式
+        // const match = msg.match(/执行断言\s*\d+/) || 
+        const match = msg.match(/断言\s*(\d+)\s*通过/) ||
+                      msg.match(/断言\s*(\d+)\s*失败/);
         if (match) {
           assertionNumbers.add(parseInt(match[1], 10));
         }
@@ -878,10 +898,11 @@ export function TestRunDetail() {
       // 排除截图和解析相关日志
       if (msg.includes('截图') || msg.includes('解析成功') || msg.includes('匹配成功')) return false;
       // 匹配断言通过的各种格式
-      return msg.match(/断言验证通过/) ||
-             msg.match(/默认断言验证通过/) ||
-             msg.match(/等待文本断言通过/) ||
-             msg.match(/断言\s*\d+\s*通过/);
+      // return msg.match(/断言验证通过/) ||
+      //        msg.match(/默认断言验证通过/) ||
+      //        msg.match(/等待文本断言通过/) ||
+      //        msg.match(/断言\s*\d+\s*通过/);
+      return msg.match(/断言\s*\d+\s*通过/);         
     }) || [];
     
     // 断言失败数 - 匹配各种失败格式:
@@ -891,10 +912,11 @@ export function TestRunDetail() {
     const failedAssertionLogs = testRun.logs?.filter(log => {
       const msg = log.message || '';
       // 匹配断言失败的各种格式
-      return msg.match(/断言验证失败/) ||
-             msg.match(/等待文本断言失败/) ||
-             msg.match(/❌.*断言\s*\d+\s*失败/) ||
-             msg.match(/断言\s*\d+\s*失败/);
+      // return msg.match(/断言验证失败/) ||
+      //        msg.match(/等待文本断言失败/) ||
+      //        msg.match(/❌.*断言\s*\d+\s*失败/) ||
+      //        msg.match(/断言\s*\d+\s*失败/);
+      return msg.match(/断言\s*\d+\s*失败/);   
     }) || [];
 
     const passedOperationSteps = passedOperationStepLogs.length;
@@ -1046,18 +1068,54 @@ export function TestRunDetail() {
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">执行结果</div>
             <div className="flex items-center gap-3">
-              {(stats.passedOperationSteps === stats.totalOperationSteps && stats.passedAssertions === stats.totalAssertions) && (
-                <>
-                  {/* <CheckCircle className="h-4 w-4 text-green-600" /> */}
-                  <span className="text-xl font-bold text-green-600">全部通过</span>
-                </>
-              )}
-              {(stats.passedOperationSteps !== stats.totalOperationSteps || stats.passedAssertions !== stats.totalAssertions) && (
-                <>
-                  {/* <XCircle className="h-4 w-4 text-red-600" /> */}
-                  <span className="text-xl font-bold text-red-600">失败</span>
-                </>
-              )}
+              {/* 🔥 修复：根据测试状态和实际执行结果判断显示 */}
+              {(() => {
+                // 测试还在运行中或排队中，显示"执行中"
+                // if (testRun.status === 'running' || testRun.status === 'queued') {
+                //   return <span className="text-xl font-bold text-blue-600">执行中</span>;
+                // }
+                
+                // 测试已取消
+                if (testRun.status === 'cancelled') {
+                  return <span className="text-xl font-bold text-gray-600">已取消</span>;
+                }
+                
+                // 测试出错
+                if (testRun.status === 'error') {
+                  return <span className="text-xl font-bold text-red-600">执行错误</span>;
+                }
+                
+                // 🔥 关键修复：判断是否全部通过
+                // 条件1：有失败的步骤或断言 -> 失败
+                if (stats.failedOperationSteps > 0 || stats.failedAssertions > 0) {
+                  return <span className="text-xl font-bold text-red-600">失败</span>;
+                }
+                
+                // 条件2：所有步骤和断言都通过（且至少有一个步骤或断言）
+                const hasSteps = stats.totalOperationSteps > 0 || stats.passedOperationSteps > 0;
+                const hasAssertions = stats.totalAssertions > 0 || stats.passedAssertions > 0;
+                const stepsAllPassed = stats.totalOperationSteps === 0 || stats.passedOperationSteps >= stats.totalOperationSteps;
+                const assertionsAllPassed = stats.totalAssertions === 0 || stats.passedAssertions >= stats.totalAssertions;
+                
+                // 如果有步骤/断言且全部通过
+                if ((hasSteps || hasAssertions) && stepsAllPassed && assertionsAllPassed) {
+                  return <span className="text-xl font-bold text-green-600">全部通过</span>;
+                }
+                
+                // 测试完成但没有步骤/断言数据（可能是数据还没同步）
+                if (testRun.status === 'completed') {
+                  // 如果后端状态是 completed，说明测试成功完成
+                  return <span className="text-xl font-bold text-green-600">全部通过</span>;
+                }
+                
+                // 测试失败状态
+                if (testRun.status === 'failed') {
+                  return <span className="text-xl font-bold text-red-600">失败</span>;
+                }
+                
+                // 默认显示
+                return <span className="text-xl font-bold text-gray-600">未知</span>;
+              })()}
             </div>
             {/* <div className="flex items-center gap-3">
               <XCircle className="h-4 w-4 text-red-600" />

@@ -41,12 +41,14 @@ import type { TestCaseType, TestPlan, TestPlanCase, TestPlanExecution, TestPlanS
 import { showToast } from '../utils/toast';
 import { Modal } from '../components/ui/modal';
 import { Modal as AntModal } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { TestPlanExecutionLogModal } from '../components/TestPlanExecutionLogModal';
 import { FunctionalCaseSelectModal } from '../components/FunctionalCaseSelectModal';
 import { getCaseTypeInfo } from '../utils/caseTypeHelper';
 import { Tag, Tooltip } from 'antd';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDateTime } from '../../server/utils/timezone';
+import ExecutionEngineGuide from '../components/ExecutionEngineGuide';
 
 export function TestPlanDetail() {
   const navigate = useNavigate();
@@ -141,8 +143,10 @@ export function TestPlanDetail() {
     executionEngine: 'mcp' as 'mcp' | 'playwright',
     enableTrace: true,
     enableVideo: true,
-    environment: 'staging'
+    environment: 'staging',
+    assertionMatchMode: 'auto' as 'strict' | 'auto' | 'loose' // 🔥 新增：断言匹配策略
   });
+  const [showEngineGuide, setShowEngineGuide] = useState(false);
   
   // 🔥 新增：本地执行状态跟踪（用于离开确认）
   const [isExecutingLocally, setIsExecutingLocally] = useState(false);
@@ -959,7 +963,8 @@ export function TestPlanDetail() {
             executionEngine: executionConfig.executionEngine,
             enableTrace: executionConfig.enableTrace,
             enableVideo: executionConfig.enableVideo,
-            environment: executionConfig.environment
+            environment: executionConfig.environment,
+            assertionMatchMode: executionConfig.assertionMatchMode // 🔥 新增：传递断言匹配策略
           }
         });
 
@@ -972,6 +977,7 @@ export function TestPlanDetail() {
           executionEngine: executionConfig.executionEngine,
           enableTrace: executionConfig.enableTrace,
           enableVideo: executionConfig.enableVideo,
+          assertionMatchMode: executionConfig.assertionMatchMode, // 🔥 新增：传递断言匹配策略
           planExecutionId: planExecution.id, // 🔥 传递测试计划执行记录ID，用于完成后同步
         });
 
@@ -1043,7 +1049,8 @@ export function TestPlanDetail() {
                 executionEngine: executionConfig.executionEngine,
                 enableTrace: executionConfig.enableTrace,
                 enableVideo: executionConfig.enableVideo,
-                environment: executionConfig.environment
+                environment: executionConfig.environment,
+                assertionMatchMode: executionConfig.assertionMatchMode // 🔥 新增：传递断言匹配策略
               },
             });
             
@@ -1110,7 +1117,8 @@ export function TestPlanDetail() {
               executionEngine: executionConfig.executionEngine,
               enableTrace: executionConfig.enableTrace,
               enableVideo: executionConfig.enableVideo,
-              environment: executionConfig.environment
+              environment: executionConfig.environment,
+              assertionMatchMode: executionConfig.assertionMatchMode // 🔥 新增：传递断言匹配策略
             }
           });
 
@@ -1230,7 +1238,8 @@ export function TestPlanDetail() {
           executionEngine: previousConfig.executionEngine || 'mcp',
           enableTrace: previousConfig.enableTrace !== undefined ? previousConfig.enableTrace : false,
           enableVideo: previousConfig.enableVideo !== undefined ? previousConfig.enableVideo : false,
-          environment: previousConfig.environment || 'staging'
+          environment: previousConfig.environment || 'staging',
+          assertionMatchMode: previousConfig.assertionMatchMode || 'auto' // 🔥 新增：恢复断言匹配策略
         });
       }
       
@@ -3631,7 +3640,14 @@ export function TestPlanDetail() {
 
           <div className="mt-[-20px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              执行引擎
+              <span className="flex items-center gap-2">
+                执行引擎
+                <QuestionCircleOutlined 
+                  className="text-blue-500 cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => setShowEngineGuide(true)}
+                  title="查看执行引擎选择指南"
+                />
+              </span>
             </label>
             <select
               value={executionConfig.executionEngine}
@@ -3642,13 +3658,13 @@ export function TestPlanDetail() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               aria-label="执行引擎"
             >
-              <option value="mcp">MCP 客户端（默认）</option>
-              <option value="playwright">Playwright Test Runner</option>
+              <option value="mcp">MCP 客户端（AI驱动，适应性强）</option>
+              <option value="playwright">Playwright Runner（高性能，推荐）</option>
             </select>
             <p className="mt-1 text-xs text-gray-500">
               {executionConfig.executionEngine === 'mcp' 
-                ? '使用 MCP 客户端执行，支持 AI 闭环流程'
-                : '使用 Playwright Test Runner，支持 Trace 和 Video 录制'}
+                ? '🤖 AI实时解析，动态适应页面变化'
+                : '⚡ 原生API执行，速度快5-10倍，成本低95%'}
             </p>
           </div>
 
@@ -3713,6 +3729,30 @@ export function TestPlanDetail() {
             </select>
           </div>
 
+          {/* 🔥 新增：断言匹配策略 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              断言匹配策略
+            </label>
+            <select
+              value={executionConfig.assertionMatchMode}
+              onChange={(e) => setExecutionConfig(prev => ({ 
+                ...prev, 
+                assertionMatchMode: e.target.value as 'auto' | 'strict' | 'loose'
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="auto">智能匹配（推荐）</option>
+              <option value="strict">严格匹配</option>
+              <option value="loose">宽松匹配</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              {executionConfig.assertionMatchMode === 'auto' && '自动选择最佳匹配策略，平衡准确性和灵活性'}
+              {executionConfig.assertionMatchMode === 'strict' && '仅完全匹配，适用于精确验证'}
+              {executionConfig.assertionMatchMode === 'loose' && '宽松匹配，包含关键词即可通过'}
+            </p>
+          </div>
+
           <div className="flex justify-end space-x-3 pt-4 border-t">
             <button
               onClick={() => {
@@ -3734,6 +3774,12 @@ export function TestPlanDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* 执行引擎选择指南 */}
+      <ExecutionEngineGuide 
+        visible={showEngineGuide}
+        onClose={() => setShowEngineGuide(false)}
+      />
 
     </div>
   );

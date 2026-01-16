@@ -637,11 +637,11 @@ export function FunctionalTestCaseEdit() {
       return false;
     }
     
-    if (!formData.caseId) {
-      showToast.error('请填写用例ID');
-      return false;
-    }
-    
+    // if (!formData.caseId) {
+    //   showToast.error('请填写用例ID');
+    //   return false;
+    // }
+
     if (!formData.title) {
       showToast.error('请填写用例标题');
       return false;
@@ -818,7 +818,7 @@ export function FunctionalTestCaseEdit() {
           localStorage.removeItem(`${DRAFT_CACHE_KEY_EDIT}${id}`);
         }
         
-        showToast.success('测试用例已保存！');
+        showToast.success('测试用例已保存');
         setTimeout(() => {
           navigate('/functional-test-cases');
         }, 1000);
@@ -874,7 +874,7 @@ export function FunctionalTestCaseEdit() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 p-0">
+    <div className="min-h-screen bg-gray-50 pb-5">
       <div className="max-w-[1100px] mx-auto">
         {/* 用例信息卡片 */}
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden">
@@ -1102,10 +1102,10 @@ export function FunctionalTestCaseEdit() {
               <div className="grid grid-cols-2 gap-3.5 mb-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    用例ID <span className="text-red-500">*</span>
+                    用例ID
                   </label>
                   <Input
-                    value={`TC_${String(id).padStart(5, '0')}`}
+                    value={formData.caseId}
                     onChange={(e) => handleFieldChange('caseId', e.target.value)}
                     placeholder="格式：TC_模块_序号，例如：TC_LOGIN_001"
                     className="!h-[32px] !py-[7px] !px-2.5 !text-[13px] !rounded-[5px]"

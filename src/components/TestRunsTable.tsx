@@ -81,7 +81,7 @@ export function TestRunsTable({
   selectAll
 }: TestRunsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('actualStartedAt');
+  const [sortField, setSortField] = useState<SortField>('startedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // 状态图标
@@ -344,9 +344,9 @@ export function TestRunsTable({
               </th>
               {/* 开始时间 */}
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 -mx-2 px-2 py-1 rounded" onClick={() => handleSort('actualStartedAt')}>
+                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 -mx-2 px-2 py-1 rounded" onClick={() => handleSort('startedAt')}>
                   <span>开始时间</span>
-                  <SortIcon field="actualStartedAt" />
+                  <SortIcon field="startedAt" />
                 </div>
               </th>
               {/* 结束时间 */}
@@ -423,8 +423,8 @@ export function TestRunsTable({
                     </td>
                     {/* 版本 */}
                     <td className="px-3 py-3">
-                      <div className="flex items-center justify-left">
-                        <span className="text-sm text-gray-700 truncate max-w-22" title={run.projectVersion || '-'}>
+                      <div className="flex items-center justify-left" style={{ minWidth: '55px' }} >
+                        <span className="text-sm text-gray-700 truncate max-w-25" title={run.projectVersion || '-'}>
                           {run.projectVersion || '-'}
                         </span>
                       </div>
@@ -613,8 +613,8 @@ export function TestRunsTable({
                                   )}
                                   <div>执行状态: {run.status === 'completed' ? '已完成' : run.status === 'running' ? '进行中' : run.status === 'failed' ? '失败' : run.status === 'queued' ? '排队中' : '未知'}</div>
                                   <div>执行结果: {resultText}</div>
-                                  {run.actualStartedAt && (
-                                    <div>开始时间: {safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
+                                  {run.startedAt && (
+                                    <div>开始时间: {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
                                   )}
                                   {run.finishedAt && (
                                     <div>结束时间: {safeFormat(run.finishedAt, 'yyyy-MM-dd HH:mm:ss')}</div>
@@ -644,9 +644,9 @@ export function TestRunsTable({
                           {/* <span className="truncate min-w-20 max-w-32" title={safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}>
                             {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}
                           </span> */}
-                          {run.actualStartedAt && (
-                            <span className="truncate min-w-20 max-w-32" title={safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}>
-                            {safeFormat(run.actualStartedAt, 'yyyy-MM-dd HH:mm:ss')}
+                          {run.startedAt && (
+                            <span className="truncate min-w-20 max-w-32" title={safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}>
+                            {safeFormat(run.startedAt, 'yyyy-MM-dd HH:mm:ss')}
                             </span>                    
                           )}
                         </div>

@@ -314,7 +314,7 @@ async function main() {
     }
   }
 
-  console.log('\n✅ 所有数据导入完成！');
+  console.log('\n✅ 所有数据导入完成');
 }
 
 main()

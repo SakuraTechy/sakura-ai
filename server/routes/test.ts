@@ -148,6 +148,7 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
         executionEngine = 'mcp', // 🔥 新增：执行引擎选择
         enableTrace = false,     // 🔥 新增：是否启用 trace（仅 Playwright）
         enableVideo = false,     // 🔥 新增：是否启用 video（仅 Playwright）
+        assertionMatchMode = 'auto', // 🔥 新增：断言匹配模式
         planExecutionId          // 🔥 新增：测试计划执行记录ID，用于完成后同步数据
       } = req.body;
       const actualCaseId = caseId || testCaseId;
@@ -166,10 +167,11 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
         caseId: actualCaseId,
         planExecutionId,
         executionEngine,
+        assertionMatchMode, // 🔥 新增：记录断言匹配模式
         userId
       });
 
-      // 🔥 传递执行引擎选项、用户ID和planExecutionId
+      // 🔥 传递执行引擎选项、用户ID、planExecutionId 和 assertionMatchMode
       const runId = await testExecutionService.runTest(
         actualCaseId, 
         environment,
@@ -179,6 +181,7 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
           executionEngine: executionEngine as 'mcp' | 'playwright',
           enableTrace: enableTrace === true,
           enableVideo: enableVideo === true,
+          assertionMatchMode: assertionMatchMode as 'strict' | 'auto' | 'loose', // 🔥 新增：传递断言匹配模式
           planExecutionId: planExecutionId // 🔥 传递测试计划执行记录ID
         }
       );

@@ -64,7 +64,7 @@ async function fixQdrantCollection() {
       throw new Error('验证失败');
     }
 
-    console.log('✅ Qdrant collection 修复完成！');
+    console.log('✅ Qdrant collection 修复完成');
     console.log('\n💡 现在可以重新导入业务知识了。');
 
   } catch (error) {

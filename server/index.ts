@@ -66,12 +66,15 @@ import serversRouter from './routes/servers.js';
 import databasesRouter from './routes/databases.js';
 // 🔥 新增：知识库管理路由
 import knowledgeRouter from './routes/knowledge.js';
+// 🆕 测试配置管理路由
+import testConfigRouter from './routes/testConfig.js';
 // 🔥 新增：测试计划管理路由
 import createTestPlanRoutes from './routes/testPlan.js';
 // 🔥 新增：初始化功能开关和权限
 import { initializeAllFeatureFlags } from './middleware/featureFlag.js';
 import { PermissionService } from './middleware/auth.js';
 import { AITestParser } from './services/aiParser.js';
+import { aiCacheManager } from './services/aiCacheManager.js'; // 🔥 新增：AI缓存管理器
 import { PlaywrightMcpClient } from './services/mcpClient.js';
 import { ScreenshotService } from './services/screenshotService.js';
 import { PrismaClient } from '../src/generated/prisma/index.js';
@@ -93,6 +96,13 @@ import { getNow } from './utils/timezone.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// 🔥 修复：BigInt 序列化支持（必须在所有路由之前）
+// Prisma 使用 BigInt 类型，但 JSON.stringify 不支持 BigInt
+// 这会导致日期等其他字段也无法正确序列化
+(BigInt.prototype as any).toJSON = function() {
+  return this.toString();
+};
 
 // 🔥 延迟初始化数据库服务（在 startServer 中初始化）
 let databaseService: DatabaseService;
@@ -535,6 +545,8 @@ async function startServer() {
     // 初始化AI解析器（传入MCP客户端）
     console.log('🔧 开始初始化AI解析器...');
     aiParser = new AITestParser(mcpClient);
+    // 注册到缓存管理器
+    aiCacheManager.registerParser(aiParser);
     console.log('✅ AI解析器初始化完成');
 
     // 初始化截图服务
@@ -754,6 +766,10 @@ async function startServer() {
     console.log('🔧 注册数据库配置路由...');
     app.use('/api/v1/databases', authenticate, databasesRouter);
 
+    // 🆕 测试配置管理路由
+    console.log('🔧 注册测试配置管理路由...');
+    app.use('/api/v1/test-config', authenticate, testConfigRouter);
+
     // 🔥 新增：知识库管理路由（移除认证，允许公开搜索）
     console.log('🔧 注册知识库管理路由...');
     app.use('/api/v1/knowledge', knowledgeRouter);
@@ -795,7 +811,7 @@ async function startServer() {
     // 🔥 添加端口占用错误处理
     server.on('error', (error: any) => {
       if (error.code === 'EADDRINUSE') {
-        console.error(`❌ 端口 ${portNumber} 已被占用！`);
+        console.error(`❌ 端口 ${portNumber} 已被占用`);
         console.error('\n💡 解决方案：');
         console.error('   1. 停止其他占用该端口的进程');
         console.error('   2. 或者修改 .env 文件中的 PORT 配置');

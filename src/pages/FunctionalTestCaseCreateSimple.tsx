@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Save, Loader2, Sparkles, Plus, FolderKanban, ChevronDown } from 'lucide-react';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import * as systemService from '../services/systemService';
@@ -77,9 +77,12 @@ interface DraftData {
  */
 export function FunctionalTestCaseCreateSimple() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const copyFromId = searchParams.get('copyFrom');  // 🆕 复制模式：源用例ID
   const { addTab } = useTabs();
   const [saving, setSaving] = useState(false);
   const [generatingData, setGeneratingData] = useState(false);
+  const [loadingCopySource, setLoadingCopySource] = useState(false);  // 🆕 加载源用例状态
   
   // 系统字典列表
   const [systemOptions, setSystemOptions] = useState<SystemOption[]>([]);
@@ -144,6 +147,80 @@ export function FunctionalTestCaseCreateSimple() {
     };
     loadSystems();
   }, []);
+
+  // 🆕 复制模式：加载源用例数据
+  useEffect(() => {
+    const loadCopySource = async () => {
+      if (!copyFromId) return;
+      
+      try {
+        setLoadingCopySource(true);
+        const result: any = await functionalTestCaseService.getById(Number(copyFromId));
+        
+        if (result.success && result.data) {
+          const testCase = result.data;
+          
+          // 反向映射用例类型
+          const reverseCaseTypeMap: { [key: string]: string } = {
+            'SMOKE': 'smoke',
+            'FULL': 'full',
+            'ABNORMAL': 'abnormal',
+            'BOUNDARY': 'boundary',
+            'PERFORMANCE': 'performance',
+            'SECURITY': 'security',
+            'USABILITY': 'usability',
+            'COMPATIBILITY': 'compatibility',
+            'RELIABILITY': 'reliability'
+          };
+          const dbCaseType = testCase.test_type || testCase.case_type || testCase.testType || testCase.caseType || '';
+          const formCaseType = reverseCaseTypeMap[dbCaseType] || '';
+          
+          // 填充表单数据（名称添加"（副本）"后缀）
+          setFormData({
+            project: testCase.system || '',
+            module: testCase.module || '',
+            scenario: testCase.testScenario || testCase.scenarioName || testCase.scenario_name || '',
+            testPoint: testCase.testPoints?.[0]?.testPointName || testCase.testPoints?.[0]?.testPoint || testCase.test_point_name || '',
+            caseType: formCaseType,
+            caseVersion: testCase.project_version?.version_name || testCase.project_version?.version_code || '',
+            caseId: testCase.caseId || testCase.case_id || '',  // 🆕 复制时带出原用例ID
+            priority: testCase.priority || 'medium',
+            title: `${testCase.name || ''}（副本）`,  // 名称添加后缀
+            preconditions: testCase.preconditions || '',
+            testData: testCase.testData || testCase.test_data || '',
+            remarks: testCase.description || ''
+          });
+          
+          // 解析测试步骤
+          if (testCase.steps) {
+            const stepsArray = testCase.steps.split('\n').filter((s: string) => s.trim());
+            const assertionsArray = (testCase.assertions || testCase.expected_result)?.split('\n').filter((s: string) => s.trim()) || [];
+            
+            const parsedSteps: TestStep[] = stepsArray.map((step: string, index: number) => ({
+              id: `step-${Date.now()}-${index}`,
+              step: step.replace(/^\d+\.\s*/, ''),
+              expectedResult: assertionsArray[index]?.replace(/^\d+\.\s*/, '') || ''
+            }));
+            
+            if (parsedSteps.length > 0) {
+              setTestSteps(parsedSteps);
+            }
+          }
+          
+          showToast.success('已加载源数据，可修改后保存');
+        } else {
+          showToast.error('加载源用例失败');
+        }
+      } catch (error) {
+        console.error('加载源用例失败:', error);
+        showToast.error('加载源用例失败');
+      } finally {
+        setLoadingCopySource(false);
+      }
+    };
+    
+    loadCopySource();
+  }, [copyFromId]);
 
   // 根据选择的项目加载版本列表
   useEffect(() => {
@@ -706,10 +783,10 @@ export function FunctionalTestCaseCreateSimple() {
       return false;
     }
     
-    if (!formData.caseId) {
-      showToast.error('请填写用例ID');
-      return false;
-    }
+    // if (!formData.caseId) {
+    //   showToast.error('请填写用例ID');
+    //   return false;
+    // }
     
     if (!formData.title) {
       showToast.error('请填写用例标题');
@@ -878,7 +955,7 @@ export function FunctionalTestCaseCreateSimple() {
         // 清除草稿
         localStorage.removeItem(DRAFT_CACHE_KEY);
         
-        showToast.success('测试用例创建成功！');
+        showToast.success('测试用例创建成功');
         setTimeout(() => {
           navigate('/functional-test-cases');
         }, 1000);
@@ -924,14 +1001,27 @@ export function FunctionalTestCaseCreateSimple() {
   };
   
   return (
-    <div className="min-h-screen bg-gray-50 p-0">
+    <div className="min-h-screen bg-gray-50 pb-5">
+      {/* 🆕 复制模式加载状态 */}
+      {loadingCopySource && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg px-8 py-6 flex items-center gap-3 shadow-xl">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+            <span className="text-gray-700">正在加载源用例数据...</span>
+          </div>
+        </div>
+      )}
       <div className="max-w-[1100px] mx-auto">
         {/* 用例信息卡片 */}
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-500 to-purple-700 text-white px-8 py-6 flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-[28px] font-bold mb-2 tracking-tight">创建测试用例</h1>
-              <p className="text-sm opacity-90">填写完整的测试用例信息</p>
+              <h1 className="text-[28px] font-bold mb-2 tracking-tight">
+                {copyFromId ? '复制测试用例' : '创建测试用例'}
+              </h1>
+              <p className="text-sm opacity-90">
+                {copyFromId ? '基于现有用例创建新用例，请修改后保存' : '填写完整的测试用例信息'}
+              </p>
             </div>
             <button
               onClick={handleCancel}
@@ -1261,7 +1351,7 @@ export function FunctionalTestCaseCreateSimple() {
               <div className="grid grid-cols-2 gap-3.5 mb-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    用例ID <span className="text-red-500">*</span>
+                    用例ID <span className="text-red-500"></span>
                   </label>
                   <Input
                     value={formData.caseId}

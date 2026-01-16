@@ -294,6 +294,31 @@ export class ElementCache {
   }
 
   /**
+   * 🔥 清空所有缓存（包括数据库）
+   */
+  async clearAll(): Promise<number> {
+    // 清空内存缓存
+    const memorySize = this.cache.size;
+    this.cache.clear();
+    console.log(`🗑️ 已清空内存缓存 (${memorySize}条)`);
+    
+    // 清空数据库缓存
+    if (this.enablePersistence) {
+      try {
+        const result = await prisma.ai_element_cache.deleteMany({});
+        console.log(`🗑️ 已清空数据库缓存 (${result.count}条)`);
+        return result.count;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : '未知错误';
+        console.error('❌ 清空数据库缓存失败:', errorMessage);
+        return 0;
+      }
+    }
+    
+    return 0;
+  }
+
+  /**
    * 记录趋势数据
    */
   private recordTrendData(isHit: boolean): void {

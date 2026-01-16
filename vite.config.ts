@@ -20,6 +20,19 @@ export default defineConfig(({ mode }) => {
           target: `http://${backendHost}:${backendPort}`,
           changeOrigin: true,
           secure: false,
+          // 🔥 转发原始请求头，让后端知道真实的客户端地址
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req, res) => {
+              // 转发原始 host 信息
+              const originalHost = req.headers.host;
+              if (originalHost) {
+                proxyReq.setHeader('X-Forwarded-Host', originalHost);
+              }
+              // 转发协议信息
+              const protocol = req.connection.encrypted ? 'https' : 'http';
+              proxyReq.setHeader('X-Forwarded-Proto', protocol);
+            });
+          },
         },
       },
     },

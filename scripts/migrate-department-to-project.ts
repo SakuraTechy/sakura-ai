@@ -68,7 +68,7 @@ async function migrateDepartmentToProject() {
     `);
     console.log(`✅ test_suites 表中有项目的记录数: ${suitesWithProject[0].count}`);
 
-    console.log('\n✅ 数据迁移完成！');
+    console.log('\n✅ 数据迁移完成');
 
   } catch (error: any) {
     console.error('❌ 迁移失败:', error);

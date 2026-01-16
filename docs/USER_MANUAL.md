@@ -1731,7 +1731,7 @@ A:
 **技术支持**:
 
 - 📧 邮箱: support@Sakura AI.dev
-- 🐛 Bug反馈: https://github.com/Sakura AI/Sakura AI/issues
+- 🐛 Bug反馈: https://github.com/SakuraTechy/sakura-ai/issues
 - 📚 在线文档: https://docs.Sakura AI.dev
 
 **反馈渠道**:

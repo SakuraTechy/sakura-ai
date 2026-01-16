@@ -481,7 +481,7 @@ export interface CreateServerInput {
   password: string;
   description?: string;
   status?: SystemStatus;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 export interface UpdateServerInput {
@@ -493,7 +493,7 @@ export interface UpdateServerInput {
   password?: string;
   description?: string;
   status?: SystemStatus;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 // ==================== 数据库配置相关类型 ====================
@@ -531,7 +531,7 @@ export interface CreateDatabaseInput {
   connection_string: string;
   description?: string;
   status?: SystemStatus;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 }
 
 export interface UpdateDatabaseInput {
@@ -546,5 +546,5 @@ export interface UpdateDatabaseInput {
   connection_string?: string;
   description?: string;
   status?: SystemStatus;
-  parameters?: Record<string, string>;
+  parameters?: Record<string, string> | null;
 } 

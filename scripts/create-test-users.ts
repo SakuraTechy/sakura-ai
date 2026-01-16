@@ -66,7 +66,7 @@ async function createTestUsers() {
       console.log(`   用户名: tanheng2, 密码: tanheng2123, 部门: V链2`);
     }
 
-    console.log('\n✅ 测试用户创建/更新完成！');
+    console.log('\n✅ 测试用户创建/更新完成');
     console.log('\n可以使用以下账户测试：');
     console.log('  1. tanheng / tanheng123 (V链部门 - 能看到V链的数据)');
     console.log('  2. tanheng2 / tanheng2123 (V链2部门 - 看不到V链的数据)');

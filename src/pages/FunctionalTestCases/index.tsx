@@ -16,12 +16,14 @@ import { SystemOption } from '../../types/test';
 import { ExecutionLogModal } from './components/ExecutionLogModal';
 import { requirementDocService, RequirementDoc } from '../../services/requirementDocService';
 import { Modal as AntModal, Spin } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { marked } from 'marked';
 import { testService } from '../../services/testService';
 import { getCaseTypeLabel } from '../../utils/caseTypeHelper';
 import { Modal } from '../../components/ui/modal';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';  // 🆕 导入用户认证上下文
+import ExecutionEngineGuide from '../../components/ExecutionEngineGuide';
 
 // LocalStorage key for view preference
 const VIEW_PREFERENCE_KEY = 'functional-test-cases-view-mode';
@@ -105,8 +107,11 @@ export function FunctionalTestCases() {
         executionEngine: 'mcp' as 'mcp' | 'playwright',
         enableTrace: true,
         enableVideo: true,
-        environment: 'staging'
+        environment: 'staging',
+        // 🔥 新增：断言匹配策略
+        assertionMatchMode: 'auto' as 'strict' | 'auto' | 'loose'
     });
+    const [showEngineGuide, setShowEngineGuide] = useState(false);
 
     // 保存视图偏好到 localStorage
     const handleViewChange = (view: ViewMode) => {
@@ -498,6 +503,11 @@ export function FunctionalTestCases() {
         });
     };
 
+    // 🆕 复制测试用例 - 跳转到新建页面，预填充原用例数据
+    const handleCopyCase = (id: number) => {
+        navigate(`/functional-test-cases/create?copyFrom=${id}`);
+    };
+
     const handleEditPoint = (point: TestPointGroup) => {
         // For now, we edit the first case of the point or just open a modal?
         // Since points are tied to cases, maybe we just pick one case to edit context?
@@ -821,11 +831,11 @@ export function FunctionalTestCases() {
                         
                         const status = message.data?.status || 'completed';
                         if (status === 'failed' || status === 'error') {
-                            showToast.error(`❌ 测试执行失败: ${pendingTestCase.name}`);
+                            showToast.error(`测试执行失败`);
                         } else if (status === 'cancelled') {
-                            showToast.warning(`⚠️ 测试执行被取消: ${pendingTestCase.name}`);
+                            showToast.warning(`测试执行被取消`);
                         } else {
-                            showToast.success(`🎉 测试执行完成: ${pendingTestCase.name}`);
+                            showToast.success(`测试执行成功`);
                         }
                         
                         loadData();
@@ -844,11 +854,13 @@ export function FunctionalTestCases() {
                     executionEngine: executionConfig.executionEngine,
                     enableTrace: executionConfig.enableTrace,
                     enableVideo: executionConfig.enableVideo,
-                    environment: executionConfig.environment
+                    environment: executionConfig.environment,
+                    assertionMatchMode: executionConfig.assertionMatchMode // 🔥 新增：传递断言匹配策略
                 });
                 
                 // showToast.info(`✅ 测试开始执行: ${pendingTestCase.name}\n运行ID: ${response.runId}\n引擎: ${executionConfig.executionEngine === 'playwright' ? 'Playwright Test Runner' : 'MCP 客户端'}`);
-                showToast.info(`✅ 开始执行: ${pendingTestCase.name}`);
+                // showToast.info(`✅ 开始执行: ${pendingTestCase.name}`);
+                showToast.info(`✅ 测试执行开始`);
                 console.log('✅ [UI自动化测试] 测试运行ID:', response.runId);
                 console.log(`💡 [UI自动化测试] 提示: 临时测试用例ID ${temporaryTestCaseId} 已创建，执行完成后可在测试用例列表中查看或删除`);
                 
@@ -883,6 +895,7 @@ export function FunctionalTestCases() {
         onViewDetail: handleViewDetail,  // 🆕 查看详情
         onEditCase: handleEditCase,
         onDeleteCase: handleDeleteCase,
+        onCopyCase: handleCopyCase,  // 🆕 复制用例
         onEditPoint: handleEditPoint,
         onDeletePoint: handleDeletePoint,
         onUpdateExecutionStatus: handleUpdateExecutionStatus,
@@ -1164,7 +1177,14 @@ export function FunctionalTestCases() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    执行引擎
+                                    <span className="flex items-center gap-2">
+                                        执行引擎
+                                        <QuestionCircleOutlined 
+                                            className="text-blue-500 cursor-pointer hover:text-blue-600 transition-colors"
+                                            onClick={() => setShowEngineGuide(true)}
+                                            title="查看执行引擎选择指南"
+                                        />
+                                    </span>
                                 </label>
                                 <select
                                     value={executionConfig.executionEngine}
@@ -1174,13 +1194,13 @@ export function FunctionalTestCases() {
                                     }))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
-                                    <option value="mcp">MCP 客户端（默认）</option>
-                                    <option value="playwright">Playwright Test Runner</option>
+                                    <option value="mcp">MCP 客户端（AI驱动，适应性强）</option>
+                                    <option value="playwright">Playwright Runner（高性能，推荐）</option>
                                 </select>
                                 <p className="mt-1 text-xs text-gray-500">
                                     {executionConfig.executionEngine === 'mcp' 
-                                        ? '使用 MCP 客户端执行，支持 AI 闭环流程'
-                                        : '使用 Playwright Test Runner，支持 Trace 和 Video 录制'}
+                                        ? '🤖 AI实时解析，动态适应页面变化'
+                                        : '⚡ 原生API执行，速度快5-10倍，成本低95%'}
                                 </p>
                             </div>
 
@@ -1242,6 +1262,30 @@ export function FunctionalTestCases() {
                                     <option value="production">Production</option>
                                     <option value="development">Development</option>
                                 </select>
+                            </div>
+
+                            {/* 🔥 新增：断言匹配策略 */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    断言匹配策略
+                                </label>
+                                <select
+                                    value={executionConfig.assertionMatchMode}
+                                    onChange={(e) => setExecutionConfig(prev => ({ 
+                                        ...prev, 
+                                        assertionMatchMode: e.target.value as 'auto' | 'strict' | 'loose'
+                                    }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    <option value="auto">智能匹配（推荐）</option>
+                                    <option value="strict">严格匹配</option>
+                                    <option value="loose">宽松匹配</option>
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {executionConfig.assertionMatchMode === 'auto' && '自动选择最佳匹配策略，平衡准确性和灵活性'}
+                                    {executionConfig.assertionMatchMode === 'strict' && '仅完全匹配，适用于精确验证'}
+                                    {executionConfig.assertionMatchMode === 'loose' && '宽松匹配，包含关键词即可通过'}
+                                </p>
                             </div>
 
                             <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -1366,6 +1410,12 @@ export function FunctionalTestCases() {
                             </div>
                         )}
                     </AntModal>
+
+                    {/* 执行引擎选择指南 */}
+                    <ExecutionEngineGuide 
+                        visible={showEngineGuide}
+                        onClose={() => setShowEngineGuide(false)}
+                    />
                 </div>
             </div>
         </div>

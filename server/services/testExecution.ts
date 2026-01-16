@@ -939,6 +939,7 @@ export class TestExecutionService {
       executionEngine?: 'mcp' | 'playwright', // 🔥 新增：执行引擎选择
       enableTrace?: boolean, // 🔥 新增：是否启用 trace（仅 Playwright）
       enableVideo?: boolean, // 🔥 新增：是否启用 video（仅 Playwright）
+      assertionMatchMode?: 'strict' | 'auto' | 'loose', // 🔥 新增：断言匹配模式
       planExecutionId?: string, // 🔥 新增：测试计划执行记录ID，用于完成后同步数据
     } = {}
   ): Promise<string> {
@@ -981,6 +982,7 @@ export class TestExecutionService {
       executor: executorName, // 🔥 修复：设置执行者名称
       ...options,
       executionEngine, // 🔥 保存执行引擎到 testRun
+      assertionMatchMode: options.assertionMatchMode || 'auto', // 🔥 新增：保存断言匹配模式
       planExecutionId: options.planExecutionId, // 🔥 新增：保存测试计划执行记录ID
     };
 
@@ -1142,6 +1144,7 @@ export class TestExecutionService {
     const executionEngine = (testRun as any).executionEngine || 'mcp';
     const enableTrace = (testRun as any).enableTrace !== false;
     const enableVideo = (testRun as any).enableVideo !== false;
+    const assertionMatchMode = (testRun as any).assertionMatchMode || 'auto'; // 🔥 新增：获取断言匹配模式
 
     // 记录当前AI解析器配置信息
     try {
@@ -1204,10 +1207,14 @@ export class TestExecutionService {
       // 🔥 根据执行引擎选择不同的执行流程
       if (executionEngine === 'playwright') {
         // 使用 Playwright Test Runner 执行
-        await this.executeWithPlaywrightRunner(runId, testCase, testRun, { enableTrace, enableVideo });
+        await this.executeWithPlaywrightRunner(runId, testCase, testRun, { 
+          enableTrace, 
+          enableVideo,
+          assertionMatchMode // 🔥 新增：传递断言匹配模式
+        });
       } else {
         // 使用 MCP 客户端执行（原有流程）
-        await this.executeWithMcpClient(runId, testCase, testRun);
+        await this.executeWithMcpClient(runId, testCase, testRun, assertionMatchMode); // 🔥 新增：传递断言匹配模式
       }
 
       // 🔥 修复：最终截图、证据保存、状态更新和数据库同步已在 executeWithMcpClient 或 executeWithPlaywrightRunner 内部完成
@@ -1551,13 +1558,15 @@ export class TestExecutionService {
         // 网络问题：值得重试
         if (error.includes('timeout') || error.includes('network') || error.includes('ERR_')) return true;
         
-        // 元素未找到：值得重试
-        if (error.includes('element not found') || error.includes('Element not found')) return true;
+        // 元素未找到：值得重试（支持中英文错误信息）
+        if (error.includes('element not found') || error.includes('Element not found') || 
+            error.includes('无法找到元素') || error.includes('找不到元素') ||
+            error.includes('点击失败') || error.includes('click failed')) return true;
         
         // 页面加载问题：值得重试
         if (error.includes('navigation') || error.includes('loading')) return true;
         
-        // AI解析错误：不值得重试
+        // AI解析错误：不值得重试（但元素匹配失败应该重试）
         if (error.includes('AI解析失败') || error.includes('AI parsing failed')) return false;
         
         // 参数错误：不值得重试
@@ -1845,8 +1854,17 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
   }
 
   // 🔥 执行MCP命令
-  private async executeMcpCommand(step: TestStep, runId: string, stepIndex: number = 1): Promise<{ success: boolean; error?: string }> {
+  private async executeMcpCommand(step: TestStep, runId: string, stepIndex: number = 1, aiParseDepth: number = 0): Promise<{ success: boolean; error?: string }> {
     try {
+      // 🔥 防止AI解析无限递归
+      const MAX_AI_PARSE_DEPTH = 3;
+      if (aiParseDepth >= MAX_AI_PARSE_DEPTH) {
+        const errorMsg = `AI解析递归深度超限(${aiParseDepth})，可能是步骤描述不清晰或AI无法理解`;
+        console.error(`❌ [${runId}] ${errorMsg}`);
+        this.addLog(runId, `❌ ${errorMsg}`, 'error');
+        return { success: false, error: errorMsg };
+      }
+
       // 🔥 调试：打印步骤详细信息
       console.log(`🔍 [${runId}] executeMcpCommand 调试信息:`);
       console.log(`   action: ${step.action}`);
@@ -2268,8 +2286,17 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         const aiStep = aiResult.step;
         console.log(`🤖 [${runId}] AI重新解析成功: ${aiStep.action} - ${aiStep.description}`);
 
-        // 递归调用自己，但这次使用AI解析的步骤
-        return await this.executeMcpCommand(aiStep, runId);
+        // 🔥 修复：检查AI返回的action是否有效，防止无限循环
+        const invalidActions = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
+        if (invalidActions.includes(aiStep.action?.toLowerCase() || '')) {
+          const errorMsg = `AI解析返回无效的操作类型: ${aiStep.action}`;
+          console.error(`❌ [${runId}] ${errorMsg}`);
+          this.addLog(runId, `❌ ${errorMsg}，请检查步骤描述是否清晰`, 'error');
+          return { success: false, error: errorMsg };
+        }
+
+        // 递归调用自己，但这次使用AI解析的步骤，并增加递归深度计数
+        return await this.executeMcpCommand(aiStep, runId, stepIndex, aiParseDepth + 1);
 
       } catch (aiError: any) {
         // 🔥 修复：不再在这里记录错误，因为 callLLM 已经通过 logCallback 记录过了，避免重复打印
@@ -3930,17 +3957,20 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         return { success: false, error: `断言步骤执行失败: ${step.description}` };
       }
 
-      // 🔥 首先尝试通过AI重新解析步骤
-      console.log(`🔄 [${runId}] 使用AI替代搜索策略重新解析步骤`);
+      // 🔥 首先尝试通过AI重新解析步骤（跳过缓存，强制重新识别）
+      console.log(`🔄 [${runId}] 使用AI替代搜索策略重新解析步骤（跳过缓存）`);
+      this.addLog(runId, `🔄 点击失败，启用AI重新识别（跳过缓存）`, 'warning');
 
       const snapshot = await this.mcpClient.getSnapshot();
+      // 🔥 关键修复：传递 skipCache: true，强制重新AI解析，不使用缓存
       const aiResult = await this.aiParser.parseNextStep(
         step.description, 
         snapshot, 
         runId,
         (message: string, level: 'info' | 'success' | 'warning' | 'error') => {
           this.addLog(runId, message, level);
-        }
+        },
+        true  // 🔥 skipCache = true，跳过缓存强制重新AI解析
       );
 
       if (aiResult.success && aiResult.step) {
@@ -5781,12 +5811,18 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     console.log(`🚀 [${runId}] 正在初始化 Playwright Test Runner...`);
     this.addLog(runId, `🚀 正在初始化 Playwright Test Runner...`, 'info');
 
+    // 🔥 创建日志回调函数，将 PlaywrightTestRunner 的日志发送到前端
+    const logCallback = (message: string, level?: 'info' | 'warning' | 'error' | 'success') => {
+      this.addLog(runId, message, level || 'info');
+    };
+
     // 创建 Playwright Test Runner 实例
     const artifactsDir = this.evidenceService.getArtifactsDir();
     this.playwrightRunner = new PlaywrightTestRunner(
       this.evidenceService,
       this.streamService,
-      artifactsDir
+      artifactsDir,
+      logCallback // 🔥 传递日志回调
     );
 
     await this.playwrightRunner.initialize(runId, {
@@ -5817,7 +5853,17 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
   /**
    * 使用 MCP 客户端执行测试（原有流程）
    */
-  private async executeWithMcpClient(runId: string, testCase: TestCase, testRun: TestRun): Promise<void> {
+  private async executeWithMcpClient(
+    runId: string, 
+    testCase: TestCase, 
+    testRun: TestRun,
+    assertionMatchMode?: 'strict' | 'auto' | 'loose' // 🔥 新增：断言匹配模式
+  ): Promise<void> {
+    // 🔥 新增：获取断言匹配模式，默认为 'auto'（智能匹配）
+    const matchMode = assertionMatchMode || 'auto';
+    console.log(`⚙️ [${runId}] 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`);
+    this.addLog(runId, `⚙️ 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`, 'info');
+    
     let remainingSteps = testCase.steps;
     let stepIndex = 0;
     let previousStepsText = '';
@@ -5916,6 +5962,20 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
             testRun.failedSteps = (testRun.failedSteps || 0) + 1;
             testRun.completedSteps = stepIndex;
             testRun.progress = Math.round((stepIndex / Math.max(estimatedTotalSteps, stepIndex)) * 100);
+            
+            // 🔥 修复：广播进度更新
+            this.wsManager.broadcast({
+              type: 'test_update',
+              runId,
+              data: {
+                status: testRun.status,
+                progress: testRun.progress,
+                completedSteps: testRun.completedSteps,
+                totalSteps: testRun.totalSteps,
+                passedSteps: testRun.passedSteps,
+                failedSteps: testRun.failedSteps
+              }
+            });
           }
         }
       } else {
@@ -5924,6 +5984,20 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           testRun.passedSteps = (testRun.passedSteps || 0) + 1;
           testRun.completedSteps = stepIndex;
           testRun.progress = Math.round((stepIndex / Math.max(estimatedTotalSteps, stepIndex)) * 100);
+          
+          // 🔥 修复：广播进度更新，确保前端能实时看到进度变化
+          this.wsManager.broadcast({
+            type: 'test_update',
+            runId,
+            data: {
+              status: testRun.status,
+              progress: testRun.progress,
+              completedSteps: testRun.completedSteps,
+              totalSteps: testRun.totalSteps,
+              passedSteps: testRun.passedSteps,
+              failedSteps: testRun.failedSteps
+            }
+          });
         }
 
         if (stepIndex === 1) {
@@ -6034,6 +6108,21 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           if (testRun) {
             testRun.passedSteps = (testRun.passedSteps || 0) + 1;
             testRun.completedSteps = assertionStepIndex;
+            testRun.progress = Math.round((assertionStepIndex / Math.max(estimatedTotalSteps, assertionStepIndex)) * 100);
+            
+            // 🔥 修复：广播进度更新
+            this.wsManager.broadcast({
+              type: 'test_update',
+              runId,
+              data: {
+                status: testRun.status,
+                progress: testRun.progress,
+                completedSteps: testRun.completedSteps,
+                totalSteps: testRun.totalSteps,
+                passedSteps: testRun.passedSteps,
+                failedSteps: testRun.failedSteps
+              }
+            });
           }
           this.addLog(runId, `✅ 断言 ${i + 1} 通过`, 'success');
         } catch (error: any) {
@@ -6066,7 +6155,11 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     runId: string,
     testCase: TestCase,
     testRun: TestRun,
-    options: { enableTrace?: boolean; enableVideo?: boolean }
+    options: { 
+      enableTrace?: boolean; 
+      enableVideo?: boolean;
+      assertionMatchMode?: 'strict' | 'auto' | 'loose'; // 🔥 新增：断言匹配模式
+    }
   ): Promise<void> {
     if (!this.playwrightRunner) {
       throw new Error('Playwright Test Runner 未初始化');
@@ -6076,6 +6169,11 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     if (!page) {
       throw new Error('页面未初始化');
     }
+
+    // 🔥 新增：获取断言匹配模式，默认为 'auto'（智能匹配）
+    const matchMode = options.assertionMatchMode || 'auto';
+    console.log(`⚙️ [${runId}] 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`);
+    this.addLog(runId, `⚙️ 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`, 'info');
 
     // 解析测试步骤（从字符串转换为 TestStep 数组）
     const steps = this.parseTestSteps(testCase.steps || '');
@@ -6767,8 +6865,111 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         return;
       }
 
-      // 执行步骤
-      const result = await this.playwrightRunner.executeStep(enhancedStep, runId, i);
+      // 执行步骤（带重试机制）
+      // 🔥 注意：matchMode 仅用于 expect 操作，其他操作会忽略此参数
+      let result = await this.playwrightRunner.executeStep(enhancedStep, runId, i, matchMode);
+
+      // 🔥 新增：如果步骤执行失败且是点击或输入操作，尝试重新AI识别后重试
+      const retryableActions = ['click', 'browser_click', 'fill', 'type', 'input', 'browser_type', 'browser_fill'];
+      if (!result.success && retryableActions.includes(enhancedStep.action)) {
+        const errorMsg = result.error || '';
+        // 检查是否是元素未找到或超时类型的错误，值得重试
+        const shouldRetry = errorMsg.includes('无法找到元素') || 
+                           errorMsg.includes('找不到元素') ||
+                           errorMsg.includes('点击失败') ||
+                           errorMsg.includes('element not found') ||
+                           errorMsg.includes('Element not found') ||
+                           errorMsg.includes('click failed') ||
+                           errorMsg.includes('Timeout') ||  // 🔥 新增：超时错误
+                           errorMsg.includes('timeout') ||
+                           errorMsg.includes('exceeded') ||  // 🔥 新增：超时错误
+                           errorMsg.includes('waiting for locator') ||  // 🔥 新增：等待定位器错误
+                           errorMsg.includes('fill failed') ||  // 🔥 新增：填充失败
+                           errorMsg.includes('输入失败');  // 🔥 新增：中文输入失败
+        
+        if (shouldRetry) {
+          const actionType = enhancedStep.action.includes('click') ? '点击' : '输入';
+          this.addLog(runId, `🔄 ${actionType}失败，启用AI重新识别（跳过缓存）`, 'warning');
+          console.log(`🔄 [${runId}] ${actionType}失败，尝试重新AI识别: ${errorMsg}`);
+          
+          try {
+            // 获取最新的页面快照
+            const page = this.playwrightRunner.getPage();
+            if (page) {
+              // 🔥 使用 Playwright 的 accessibility snapshot（类似 MCP 快照格式）
+              const accessibilitySnapshot = await page.accessibility.snapshot();
+              const pageTitle = await page.title();
+              const pageUrl = page.url();
+              
+              // 构建类似 MCP 格式的快照字符串
+              let snapshot = `Page URL: ${pageUrl}\nPage Title: ${pageTitle}\n\n`;
+              if (accessibilitySnapshot) {
+                snapshot += this.formatAccessibilitySnapshot(accessibilitySnapshot);
+              }
+              
+              // 🔥 重新调用AI解析，跳过缓存
+              const aiRetryResult = await this.aiParser.parseNextStep(
+                step.description,
+                snapshot,
+                runId,
+                (message: string, level: 'info' | 'success' | 'warning' | 'error') => {
+                  this.addLog(runId, message, level);
+                },
+                true  // skipCache = true，强制重新AI解析
+              );
+              
+              if (aiRetryResult.success && aiRetryResult.step) {
+                const retryStep = aiRetryResult.step;
+                console.log(`🤖 [${runId}] AI重新解析成功: ${retryStep.action} - selector: ${retryStep.selector || retryStep.ref}`);
+                this.addLog(runId, `🤖 AI重新识别成功，重试操作`, 'info');
+                
+                // 🔥 修复：将 MCP 格式的操作类型转换为 Playwright 格式
+                // browser_click -> click, browser_type -> fill, browser_navigate -> navigate
+                let convertedAction = retryStep.action;
+                if (convertedAction === 'browser_click') {
+                  convertedAction = 'click';
+                } else if (convertedAction === 'browser_type') {
+                  convertedAction = 'fill';
+                } else if (convertedAction === 'browser_navigate') {
+                  convertedAction = 'navigate';
+                } else if (convertedAction === 'browser_fill') {
+                  convertedAction = 'fill';
+                } else if (convertedAction === 'input') {
+                  convertedAction = 'fill';  // 🔥 新增：input -> fill
+                }
+                
+                // 🔥 使用新的AI解析结果重新执行
+                // 对于输入操作，需要保留原始的 value
+                const enhancedRetryStep = {
+                  ...retryStep,
+                  action: convertedAction,  // 使用转换后的操作类型
+                  description: step.description,
+                  selector: retryStep.selector || retryStep.ref || retryStep.element,
+                  value: retryStep.value || retryStep.text || enhancedStep.value  // 🔥 保留输入值
+                };
+                
+                console.log(`🔄 [${runId}] 转换操作类型: ${retryStep.action} -> ${convertedAction}, selector: ${enhancedRetryStep.selector}, value: ${enhancedRetryStep.value || 'N/A'}`);
+                
+                result = await this.playwrightRunner.executeStep(enhancedRetryStep, runId, i, matchMode);
+                
+                if (result.success) {
+                  this.addLog(runId, `✅ AI重新识别后重试成功`, 'success');
+                  console.log(`✅ [${runId}] AI重新识别后重试成功`);
+                } else {
+                  this.addLog(runId, `❌ AI重新识别后重试仍然失败: ${result.error}`, 'error');
+                  console.log(`❌ [${runId}] AI重新识别后重试仍然失败: ${result.error}`);
+                }
+              } else {
+                console.log(`⚠️ [${runId}] AI重新解析失败: ${aiRetryResult.error}`);
+                this.addLog(runId, `⚠️ AI重新识别失败: ${aiRetryResult.error}`, 'warning');
+              }
+            }
+          } catch (retryError: any) {
+            console.error(`❌ [${runId}] AI重试过程出错: ${retryError.message}`);
+            this.addLog(runId, `❌ AI重试过程出错: ${retryError.message}`, 'error');
+          }
+        }
+      }
 
       // 🔥 修复：在执行步骤后也检查取消状态
       const isCancelledAfterStep = this.queueService && this.queueService.isCancelled(runId);
@@ -7287,7 +7488,8 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         }
       }
 
-      const result = await this.playwrightRunner.executeStep(assertion, runId, assertionIndex - 1);
+      // 🔥 执行断言，传递 matchMode 参数
+      const result = await this.playwrightRunner.executeStep(assertion, runId, assertionIndex - 1, matchMode);
 
       if (!result.success) {
         // 🔥 修复：断言失败时更新 failedSteps 和 completedSteps，确保执行结果计算正确
@@ -7514,6 +7716,64 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     } catch (error: any) {
       console.error(`❌ [${runId}] 处理 Playwright 文件失败:`, error.message);
     }
+  }
+
+  // #endregion
+
+  // #region Accessibility Snapshot Formatting
+
+  /**
+   * 🔥 格式化 Playwright accessibility snapshot 为类似 MCP 快照的文本格式
+   * @param snapshot Playwright accessibility snapshot 对象
+   * @returns 格式化后的快照文本
+   */
+  private formatAccessibilitySnapshot(snapshot: any): string {
+    if (!snapshot) return '';
+    
+    const elements: string[] = [];
+    let elementCounter = 0;
+    
+    // 递归提取可交互元素
+    const extractElements = (node: any, depth = 0): void => {
+      if (!node) return;
+      
+      // 提取元素信息
+      if (node.role && (node.role === 'button' || node.role === 'textbox' || 
+          node.role === 'link' || node.role === 'checkbox' || node.role === 'combobox' ||
+          node.role === 'radio' || node.role === 'menuitem' || node.role === 'tab')) {
+        let name = node.name || '';
+        const role = node.role || '';
+        
+        // 对于没有name的元素，尝试使用description或value
+        if (!name && node.description) {
+          name = node.description;
+        }
+        if (!name && node.value) {
+          name = node.value;
+        }
+        
+        // 即使name为空也要包含元素
+        if (!name) {
+          name = `未命名${role}`;
+        }
+        
+        // 生成稳定的ref
+        const refCounter = elementCounter++;
+        const safeName = name.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
+        const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
+        elements.push(`[ref=${ref}] ${role} "${name}"`);
+      }
+      
+      // 递归处理子元素
+      if (node.children) {
+        for (const child of node.children) {
+          extractElements(child, depth + 1);
+        }
+      }
+    };
+    
+    extractElements(snapshot);
+    return elements.join('\n');
   }
 
   // #endregion

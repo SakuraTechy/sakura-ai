@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Table, Button, Space, Tooltip, Checkbox, Pagination, Tag, Dropdown } from 'antd';
-import { Edit3, Trash2, Eye, FileText, User, Bot, PlayCircle, RotateCcw, Loader2 } from 'lucide-react';
+import { Edit3, Trash2, Eye, FileText, User, Bot, PlayCircle, RotateCcw, Loader2, Copy } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { ViewProps } from '../types';
 import { getCaseTypeInfo } from '../../../utils/caseTypeHelper';
@@ -66,7 +66,7 @@ const defaultColumnWidths: Record<string, number> = {
     creator: 90,
     created_at: 160,
     updated_at: 160,
-    actions: 160,
+    actions: 190,  // 🆕 增加宽度以容纳复制按钮
 };
 
 export const TableView: React.FC<ViewProps> = ({
@@ -78,6 +78,7 @@ export const TableView: React.FC<ViewProps> = ({
     onViewDetail,
     onEditCase,
     onDeleteCase,
+    onCopyCase,
     onViewLogs,
     onExecuteCase,
     pagination,
@@ -233,6 +234,16 @@ export const TableView: React.FC<ViewProps> = ({
             minute: '2-digit',
             second: '2-digit'
         });
+    };
+    const formatDate1 = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        if (date >= today) {
+            return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     };
 
     // 🆕 计算当前页全选状态
@@ -704,7 +715,7 @@ export const TableView: React.FC<ViewProps> = ({
         {
             title: <div style={{ paddingLeft: '4px', textAlign: 'left' }}>操作</div>,
             key: 'actions',
-            width: 160,
+            width: 190,
             fixed: 'right',
             // align: 'center',
             render: (_, record) => (
@@ -725,6 +736,15 @@ export const TableView: React.FC<ViewProps> = ({
                             className="!px-1.5 hover:!bg-indigo-50 hover:!text-indigo-600 transition-all"
                             icon={<Edit3 className="w-4 h-4" />}
                             onClick={() => onEditCase(record.id)}
+                        />
+                    </Tooltip>
+                    <Tooltip title="复制">
+                        <Button
+                            type="text"
+                            size="small"
+                            className="!px-1.5 hover:!bg-purple-50 hover:!text-purple-600 transition-all"
+                            icon={<Copy className="w-4 h-4" />}
+                            onClick={() => onCopyCase(record.id)}
                         />
                     </Tooltip>
                     <Dropdown
@@ -810,6 +830,7 @@ export const TableView: React.FC<ViewProps> = ({
         onToggleSelectPoint,
         onViewDetail,
         onEditCase,
+        onCopyCase,
         onDeleteCase,
         onViewLogs,
         onExecuteCase,

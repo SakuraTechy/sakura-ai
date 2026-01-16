@@ -65,7 +65,7 @@ async function deployDatabase() {
     console.log('⚡ 优化数据库索引...');
     await optimizeIndexes();
 
-    console.log('🎉 数据库部署完成！');
+    console.log('🎉 数据库部署完成');
 
   } catch (error) {
     console.error('❌ 数据库部署失败:', error.message);

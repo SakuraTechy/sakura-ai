@@ -97,6 +97,7 @@ export interface ViewProps {
     onViewDetail: (id: number) => void;  // 🆕 查看详情
     onEditCase: (id: number) => void;
     onDeleteCase: (id: number) => void;  // 🔧 移除name参数
+    onCopyCase: (id: number) => void;  // 🆕 复制用例
     onEditPoint: (point: TestPointGroup) => void;
     onDeletePoint: (pointId: number, pointName: string) => void;
     onUpdateExecutionStatus: (caseId: number, status: ExecutionResult) => void;

@@ -3,7 +3,8 @@ import { BackendSettingsService } from '../services/settingsService.js';
 import { llmConfigManager } from '../../src/services/llmConfigManager.js';
 import { modelRegistry } from '../../src/services/modelRegistry.js';
 import { ProxyAgent } from 'undici';
-import { elementCache } from '../services/elementCache.js'; // 🔥 新增：元素缓存
+import { elementCache } from '../services/elementCache.js';
+import { aiCacheManager } from '../services/aiCacheManager.js'; // 🔥 新增：AI缓存管理器
 
 const router = Router();
 
@@ -750,25 +751,37 @@ router.get('/cache/stats', async (req, res) => {
   }
 });
 
-// 🔥 新增：清空元素缓存
+// 🔥 清空所有AI缓存（元素缓存 + 操作缓存 + 断言缓存 + 数据库）
 router.post('/cache/clear', async (req, res) => {
   try {
     const { url } = req.body;
     
     if (url) {
-      // 清空指定URL的缓存
+      // 清空指定URL的元素缓存
       const count = elementCache.clearByUrl(url);
       res.json({
         success: true,
-        message: `已清理指定URL的缓存`,
+        message: `已清理指定URL的元素缓存`,
         data: { clearedCount: count }
       });
     } else {
-      // 清空所有缓存
-      elementCache.clear();
+      // 清空所有缓存（内存 + 数据库）
+      console.log('🗑️ 开始清空所有AI缓存...');
+      
+      const result = await aiCacheManager.clearAllCaches();
+      
       res.json({
         success: true,
-        message: '已清空所有元素缓存'
+        message: '已清空所有AI缓存（元素缓存、操作缓存、断言缓存及数据库持久化数据）',
+        data: {
+          elementCacheCleared: result.elementCacheCleared,
+          databaseCleared: result.databaseCleared,
+          parserCachesCleared: result.parserCachesCleared,
+          summary: {
+            totalDatabaseRecords: result.databaseCleared.total,
+            details: `元素:${result.databaseCleared.elements}条, 操作:${result.databaseCleared.operations}条, 断言:${result.databaseCleared.assertions}条`
+          }
+        }
       });
     }
   } catch (error: any) {

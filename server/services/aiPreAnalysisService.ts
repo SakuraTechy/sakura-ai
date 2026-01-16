@@ -73,7 +73,7 @@ export class AIPreAnalysisService {
     };
 
     if (!defaultConfig.apiKey || defaultConfig.apiKey === '') {
-      console.error('❌ API Key 未配置！');
+      console.error('❌ API Key 未配置');
       throw new Error('API Key 未配置');
     }
 

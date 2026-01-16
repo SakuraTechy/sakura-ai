@@ -213,6 +213,15 @@ class FunctionalTestCaseService {
   }
 
   /**
+   * 🆕 复制测试用例
+   */
+  async copy(id: number) {
+    return this.request(`${API_BASE_URL}/functional-test-cases/${id}/copy`, {
+      method: 'POST'
+    });
+  }
+
+  /**
    * 批量删除测试点
    */
   async batchDelete(testPointIds: number[]) {
@@ -649,6 +658,7 @@ class FunctionalTestCaseService {
 
   /**
    * 🆕 阶段3：为单个测试点生成测试用例（新接口）
+   * @param projectId 项目ID，用于获取项目配置（访问地址、账号密码等）
    */
   async generateTestCaseForTestPoint(
     testPoint: any,
@@ -659,7 +669,8 @@ class FunctionalTestCaseService {
     systemName: string,
     moduleName: string,
     relatedSections: string[],
-    sessionId: string
+    sessionId: string,
+    projectId?: number | null
   ) {
     const response = await fetch(`${API_BASE_URL}/functional-test-cases/generate-test-case-for-point`, {
       method: 'POST',
@@ -673,7 +684,8 @@ class FunctionalTestCaseService {
         systemName,
         moduleName,
         relatedSections,
-        sessionId
+        sessionId,
+        projectId
       })
     });
 

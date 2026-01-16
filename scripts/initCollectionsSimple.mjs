@@ -86,7 +86,7 @@ async function main() {
       console.log(`     向量维度: ${info.config.params.vectors.size}`);
     }
 
-    console.log('\n✅ 知识库集合初始化完成！');
+    console.log('\n✅ 知识库集合初始化完成');
 
   } catch (error) {
     console.error('❌ 初始化失败:', error);

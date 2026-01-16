@@ -392,7 +392,7 @@ async function startServices() {
   }
   
   // 步骤 5: 所有服务启动完成，输出访问地址
-  console.log('\n🎉 所有服务启动完成！');
+  console.log('\n🎉 所有服务启动完成');
   console.log('====================');
   
   // 🔥 获取所有可用的网络地址

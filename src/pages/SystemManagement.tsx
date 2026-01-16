@@ -1389,6 +1389,18 @@ export default function SystemManagement() {
       showToast.error('主机名称不能为空');
       return;
     }
+    if (!serverFormData.host_port || serverFormData.host_port <= 0) {
+      showToast.error('主机端口不能为空且必须大于0');
+      return;
+    }
+    if (!serverFormData.username.trim()) {
+      showToast.error('用户名不能为空');
+      return;
+    }
+    if (!serverFormData.password.trim()) {
+      showToast.error('密码不能为空');
+      return;
+    }
 
     setSubmitting(true);
 
@@ -1422,7 +1434,7 @@ export default function SystemManagement() {
           password: serverFormData.password,
           description: serverFormData.description.trim() || '',
           status: serverFormData.status,
-          parameters: Object.keys(parameters).length > 0 ? parameters : undefined
+          parameters: Object.keys(parameters).length > 0 ? parameters : null
         };
         await systemService.createServer(input);
         showToast.success('服务器配置创建成功');
@@ -1436,7 +1448,7 @@ export default function SystemManagement() {
           password: serverFormData.password,
           description: serverFormData.description.trim() || '',
           status: serverFormData.status,
-          parameters: Object.keys(parameters).length > 0 ? parameters : undefined
+          parameters: Object.keys(parameters).length > 0 ? parameters : null
         };
         await systemService.updateServer(editingServerId, input);
         showToast.success('服务器配置更新成功');
@@ -1524,7 +1536,7 @@ export default function SystemManagement() {
           server_type: serverFormData.server_type,
           server_version: serverFormData.server_version,
           description: serverFormData.description,
-          parameters: Object.keys(parametersObj).length > 0 ? parametersObj : undefined
+          parameters: Object.keys(parametersObj).length > 0 ? parametersObj : null
         };
         
         // 对于新增模式，传递null作为ID
@@ -1677,12 +1689,36 @@ export default function SystemManagement() {
   const handleDatabaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!databaseFormData.project_id) {
+      showToast.error('请选择所属项目');
+      return;
+    }
     if (!databaseFormData.database_type.trim()) {
       showToast.error('数据库类型不能为空');
       return;
     }
     if (!databaseFormData.database_name.trim()) {
       showToast.error('数据库名称不能为空');
+      return;
+    }
+    if (!databaseFormData.database_port || databaseFormData.database_port <= 0) {
+      showToast.error('数据库端口不能为空且必须大于0');
+      return;
+    }
+    if (!databaseFormData.database_schema.trim()) {
+      showToast.error('数据库/模式不能为空');
+      return;
+    }
+    if (!databaseFormData.username.trim()) {
+      showToast.error('用户名不能为空');
+      return;
+    }
+    if (!databaseFormData.password.trim()) {
+      showToast.error('密码不能为空');
+      return;
+    }
+    if (!databaseFormData.connection_string.trim()) {
+      showToast.error('连接串不能为空');
       return;
     }
 
@@ -1721,7 +1757,7 @@ export default function SystemManagement() {
           connection_string: databaseFormData.connection_string.trim(),
           description: databaseFormData.description.trim() || '',
           status: databaseFormData.status,
-          parameters: Object.keys(parameters).length > 0 ? parameters : undefined
+          parameters: Object.keys(parameters).length > 0 ? parameters : null
         };
         await systemService.createDatabase(input);
         showToast.success('数据库配置创建成功');
@@ -1738,7 +1774,7 @@ export default function SystemManagement() {
           connection_string: databaseFormData.connection_string.trim(),
           description: databaseFormData.description.trim() || '',
           status: databaseFormData.status,
-          parameters: Object.keys(parameters).length > 0 ? parameters : undefined
+          parameters: Object.keys(parameters).length > 0 ? parameters : null
         };
         await systemService.updateDatabase(editingDatabaseId, input);
         showToast.success('数据库配置更新成功');
@@ -1826,7 +1862,7 @@ export default function SystemManagement() {
           database_version: databaseFormData.database_version,
           database_driver: databaseFormData.database_driver,
           connection_string: databaseFormData.connection_string,
-          parameters: Object.keys(parametersObj).length > 0 ? parametersObj : undefined
+          parameters: Object.keys(parametersObj).length > 0 ? parametersObj : null
         };
       }
       

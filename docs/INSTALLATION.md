@@ -35,10 +35,10 @@
 ```bash
 # 克隆项目
 git clone https://github.com/SakuraTechy/sakura-ai.git
-cd Sakura AI
+cd sakura-ai
 
 # 一键启动 (自动安装依赖、配置环境、启动服务)
-npm start
+npm run start
 ```
 
 ### 方式二: 手动安装

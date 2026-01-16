@@ -115,12 +115,42 @@ router.get('/api/evidence/:runId/sign/:filename', async (req, res) => {
       return res.status(500).json({ error: 'EvidenceService未初始化' });
     }
     
+    // 🔥 从请求头自动获取baseUrl
+    // 优先级：Referer > X-Forwarded-Host > Host
+    let baseUrl: string;
+    const referer = req.get('referer');
+    const forwardedHost = req.get('x-forwarded-host');
+    const host = req.get('host');
+    
+    if (referer) {
+      // 从 Referer 提取 origin（最可靠，浏览器请求必带）
+      try {
+        const refererUrl = new URL(referer);
+        baseUrl = refererUrl.origin;
+      } catch {
+        // Referer 解析失败，回退到其他方式
+        baseUrl = forwardedHost 
+          ? `${req.get('x-forwarded-proto') || req.protocol}://${forwardedHost}`
+          : `${req.protocol}://${host}`;
+      }
+    } else if (forwardedHost) {
+      // 代理转发的原始主机名
+      const protocol = req.get('x-forwarded-proto') || req.protocol;
+      baseUrl = `${protocol}://${forwardedHost}`;
+    } else {
+      // 回退到当前 host
+      baseUrl = `${req.protocol}://${host}`;
+    }
+    
+    console.log(`🔍 生成签名URL - baseUrl: ${baseUrl}, referer: ${referer}, forwardedHost: ${forwardedHost}, host: ${host}`);
+    
     const signedUrl = await evidenceService.generateSignedUrl(
       runId, 
       filename, 
       {
         ttlSeconds: ttl ? parseInt(ttl as string) : 600,
-        downloadName: downloadName as string
+        downloadName: downloadName as string,
+        baseUrl // 传递动态获取的baseUrl
       }
     );
     

@@ -89,7 +89,7 @@ async function importKnowledge() {
     });
 
     console.log('========================================');
-    console.log('✅ 知识库导入完成！');
+    console.log('✅ 知识库导入完成');
     console.log('========================================');
     console.log('');
     console.log('💡 下一步:');

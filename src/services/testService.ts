@@ -502,6 +502,7 @@ export class TestService {
       enableTrace?: boolean;
       enableVideo?: boolean;
       environment?: string;
+      assertionMatchMode?: 'strict' | 'auto' | 'loose'; // 🔥 新增：断言匹配策略
       planExecutionId?: string; // 🔥 新增：测试计划执行记录ID，用于完成后同步数据
     }
   ): Promise<{runId: string}> {
@@ -515,6 +516,7 @@ export class TestService {
           enableTrace: options?.enableTrace || false,
           enableVideo: options?.enableVideo || false,
           environment: options?.environment || 'staging',
+          assertionMatchMode: options?.assertionMatchMode || 'auto', // 🔥 新增：传递断言匹配策略
           planExecutionId: options?.planExecutionId, // 🔥 传递测试计划执行记录ID
         })
       });

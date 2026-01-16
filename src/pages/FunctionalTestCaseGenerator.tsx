@@ -17,6 +17,7 @@ import * as systemService from '../services/systemService';
 import { requirementDocService, RequirementDoc } from '../services/requirementDocService';
 import { showToast } from '../utils/toast';
 import { Button } from '../components/ui/button';
+import { ProjectConfigValidator } from '../components/test-config/ProjectConfigValidator';
 import { ProgressIndicator } from '../components/ai-generator/ProgressIndicator';
 import { readFileContent, type FileReadResult } from '../utils/fileReader';
 import { StepCard } from '../components/ai-generator/StepCard';
@@ -212,6 +213,9 @@ export function FunctionalTestCaseGenerator() {
   });
   const [parseResult, setParseResult] = useState<any>(null);
   const [parsing, setParsing] = useState(false);
+  
+  // 🆕 配置验证状态
+  const [configValid, setConfigValid] = useState(false);
 
   // 加载系统字典选项
   useEffect(() => {
@@ -698,7 +702,7 @@ export function FunctionalTestCaseGenerator() {
       );
 
       setRequirementDoc(result.data.requirementDoc);
-      showToast.success('增强需求文档生成成功！');
+      showToast.success('增强需求文档生成成功');
     } catch (error: any) {
       showToast.error('生成需求文档失败：' + error.message);
     } finally {
@@ -838,7 +842,8 @@ export function FunctionalTestCaseGenerator() {
         projectInfo.systemName || '',
         projectInfo.moduleName || '',
         scenario.relatedSections || [],  // 确保不是 undefined
-        sessionId
+        sessionId,
+        projectInfo.projectId  // 🆕 传递项目ID，用于获取项目配置（访问地址、账号密码等）
       );
 
       console.log('✅ 测试用例生成完成:', result.data.testCases);
@@ -857,6 +862,9 @@ export function FunctionalTestCaseGenerator() {
           id: testCaseId,
           caseId: testCaseId,
           selected: false, // 被过滤的用例默认不选中
+          // 🆕 保存状态字段
+          saved: false,     // 初始状态为未保存
+          modified: false,  // 初始状态为未修改
           scenarioId: scenario.id,
           scenarioName: scenario.name,
           testPointId: testPoint.testPoint,
@@ -908,6 +916,9 @@ export function FunctionalTestCaseGenerator() {
           id: testCaseId,  // 🔧 使用格式化的ID
           caseId: testCaseId,  // 🔧 额外保存一份作为显示用的用例编号
           selected: true,
+          // 🆕 保存状态字段
+          saved: false,     // 初始状态为未保存
+          modified: false,  // 初始状态为未修改
           // 场景信息（用于前端显示和分组）
           scenarioId: scenario.id,
           scenarioName: scenario.name,
@@ -1048,7 +1059,8 @@ export function FunctionalTestCaseGenerator() {
     // 🆕 联动更新该场景下所有测试点和测试用例的选中状态
     if (newScenarioSelected) {
       // 勾选场景 -> 勾选所有测试点和用例
-      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && !tc.saved);
+      // 🔧 修复：包括已保存但被修改的用例
+      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && (!tc.saved || tc.modified));
       const newSelectedTestCases = { ...selectedTestCases };
       const newSelectedTestPoints = { ...selectedTestPoints };
 
@@ -1063,7 +1075,8 @@ export function FunctionalTestCaseGenerator() {
       setSelectedTestPoints(newSelectedTestPoints);
     } else {
       // 取消勾选场景 -> 取消所有测试点和用例
-      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && !tc.saved);
+      // 🔧 修复：包括已保存但被修改的用例
+      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && (!tc.saved || tc.modified));
       const newSelectedTestCases = { ...selectedTestCases };
       const newSelectedTestPoints = { ...selectedTestPoints };
 
@@ -1095,7 +1108,7 @@ export function FunctionalTestCaseGenerator() {
     const pointCases = draftCases.filter(tc => 
       tc.scenarioId === scenarioId && 
       (tc.testPointId === testPointName || tc.testPointName === testPointName) &&
-      !tc.saved
+      (!tc.saved || tc.modified)  // 🔥 修复：未保存或已修改的用例
     );
 
     const newSelectedTestCases = { ...selectedTestCases };
@@ -1111,7 +1124,8 @@ export function FunctionalTestCaseGenerator() {
     // 🆕 检查场景是否应该自动勾选/取消勾选
     if (newPointSelected) {
       // 检查该场景的所有用例是否都被勾选了
-      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && !tc.saved);
+      // 🔧 修复：包括已保存但被修改的用例
+      const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && (!tc.saved || tc.modified));
       const allSelected = scenarioCases.every(tc => newSelectedTestCases[tc.id]);
       if (allSelected) {
         setSelectedScenarios(prev => ({ ...prev, [scenarioId]: true }));
@@ -1147,10 +1161,11 @@ export function FunctionalTestCaseGenerator() {
 
     if (newCaseSelected) {
       // 勾选用例时，检查该测试点的所有用例是否都被勾选
+      // 🔧 修复：包括已保存但被修改的用例
       const pointCases = draftCases.filter(tc => 
         tc.scenarioId === scenarioId && 
         (tc.testPointId === testPointName || tc.testPointName === testPointName) &&
-        !tc.saved
+        (!tc.saved || tc.modified)  // 🔥 修复：未保存或已修改的用例
       );
       const allPointCasesSelected = pointCases.every(tc => 
         tc.id === testCase.id ? true : newSelectedTestCases[tc.id]
@@ -1160,7 +1175,8 @@ export function FunctionalTestCaseGenerator() {
         setSelectedTestPoints(prev => ({ ...prev, [pointKey]: true }));
         
         // 检查该场景的所有用例是否都被勾选
-        const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && !tc.saved);
+        // 🔧 修复：包括已保存但被修改的用例
+        const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenarioId && (!tc.saved || tc.modified));
         const allScenarioCasesSelected = scenarioCases.every(tc => 
           tc.id === testCase.id ? true : newSelectedTestCases[tc.id]
         );
@@ -1188,9 +1204,9 @@ export function FunctionalTestCaseGenerator() {
   const selectAllScenarios = () => {
     const newSelections: Record<string, boolean> = {};
     testScenarios.forEach(scenario => {
-      // 🔧 修复：检查该场景是否有已生成的测试用例
-      const hasGeneratedCases = draftCases.some(tc => tc.scenarioId === scenario.id && !tc.saved);
-      if (hasGeneratedCases && !savedScenarios[scenario.id]) {
+      // 🔧 修复：检查该场景是否有可选择的测试用例（未保存或已修改）
+      const hasSelectableCases = draftCases.some(tc => tc.scenarioId === scenario.id && (!tc.saved || tc.modified));
+      if (hasSelectableCases && !savedScenarios[scenario.id]) {
         newSelections[scenario.id] = true;
       }
     });
@@ -1333,18 +1349,39 @@ export function FunctionalTestCaseGenerator() {
 
   // 保存详情修改
   const handleSaveDetail = (updatedTestCase: any) => {
+    console.log('🔄 [FunctionalTestCaseGenerator] 接收到编辑后的测试用例:', {
+      id: updatedTestCase.id,
+      name: updatedTestCase.name,
+      steps: updatedTestCase.steps?.substring(0, 100),
+      assertions: updatedTestCase.assertions?.substring(0, 100)
+    });
+
+    // 🔥 如果用例已保存，标记为已修改（需要重新保存）
+    const updatedCase = {
+      ...updatedTestCase,
+      modified: updatedTestCase.saved ? true : false  // 如果已保存，标记为已修改
+    };
+
+    console.log('🔄 [FunctionalTestCaseGenerator] 标记修改状态后:', {
+      id: updatedCase.id,
+      saved: updatedCase.saved,
+      modified: updatedCase.modified
+    });
+
     // 更新草稿箱中的用例
-    setDraftCases(prev =>
-      prev.map(c => c.id === updatedTestCase.id ? updatedTestCase : c)
-    );
+    setDraftCases(prev => {
+      const newDraftCases = prev.map(c => c.id === updatedCase.id ? updatedCase : c);
+      console.log('🔄 [FunctionalTestCaseGenerator] 更新后的draftCases:', newDraftCases.find(c => c.id === updatedCase.id));
+      return newDraftCases;
+    });
 
     // 更新当前查看的用例
-    setCurrentDetailCase(updatedTestCase);
+    setCurrentDetailCase(updatedCase);
 
     // 如果是在查看全部用例模式下，也要更新 viewingAllCases
     if (viewingAllCases.length > 0) {
       setViewingAllCases(prev =>
-        prev.map(c => c.id === updatedTestCase.id ? updatedTestCase : c)
+        prev.map(c => c.id === updatedCase.id ? updatedCase : c)
       );
     }
 
@@ -1357,7 +1394,7 @@ export function FunctionalTestCaseGenerator() {
               return {
                 ...tp,
                 testCases: tp.testCases.map((tc: any) =>
-                  tc.id === updatedTestCase.id ? updatedTestCase : tc
+                  tc.id === updatedCase.id ? updatedCase : tc
                 )
               };
             }
@@ -1378,9 +1415,17 @@ export function FunctionalTestCaseGenerator() {
     const selectedCases: any[] = [];
     const selectedScenarioIds = new Set<string>();
 
-    // 🔧 从草稿箱中收集被勾选的用例
+    // 🔧 从草稿箱中收集被勾选的用例（包括未保存和已修改的）
     draftCases.forEach(tc => {
-      if (selectedTestCases[tc.id] && !tc.saved) {
+      if (selectedTestCases[tc.id] && (!tc.saved || tc.modified)) {
+        console.log('🔄 [saveSelectedCases] 收集测试用例:', {
+          id: tc.id,
+          name: tc.name,
+          steps: tc.steps?.substring(0, 100),
+          saved: tc.saved,
+          modified: tc.modified
+        });
+        
         const scenario = testScenarios.find(s => s.id === tc.scenarioId);
         if (scenario && !savedScenarios[scenario.id]) {
           // 🆕 构建需求来源信息（直接存储章节信息，不加前缀）
@@ -1476,6 +1521,9 @@ export function FunctionalTestCaseGenerator() {
         requirementDocId: docId,
         system: tc.system || projectInfo.systemName || '',
         module: tc.module || projectInfo.moduleName || '',
+        // 🆕 添加项目ID和项目版本ID（用于配置变量替换）
+        projectId: projectInfo.projectId,
+        projectVersionId: projectInfo.projectVersionId,
         // 🔧 使用需求文档章节信息（关联需求）
         sectionName: tc.sectionName || tc.section_name || '',
         sectionId: tc.sectionId || tc.section_id || '',
@@ -1496,6 +1544,8 @@ export function FunctionalTestCaseGenerator() {
         name: casesWithDocId[0]?.name,
         system: casesWithDocId[0]?.system,
         module: casesWithDocId[0]?.module,
+        projectId: casesWithDocId[0]?.projectId,  // 🆕 新增
+        projectVersionId: casesWithDocId[0]?.projectVersionId,  // 🆕 新增
         sectionName: casesWithDocId[0]?.sectionName,
         sectionId: casesWithDocId[0]?.sectionId,
         scenarioName: casesWithDocId[0]?.scenarioName,  // 🔧 新增
@@ -1539,13 +1589,104 @@ export function FunctionalTestCaseGenerator() {
       setSelectedTestPoints(newSelectedTestPoints);
       setSelectedScenarios(newSelectedScenarios);
 
-      // 6. 🆕 标记草稿箱中的用例为已保存（不移除，只标记）
-      setDraftCases(prev =>
-        prev.map(c => {
-          const isSaved = selectedCases.some(sc => sc.id === c.id);
-          return isSaved ? { ...c, saved: true } : c;
-        })
-      );
+      // 6. 🆕 标记草稿箱中的用例为已保存，清除已修改标记
+      // 🔧 修复：使用name和scenarioId组合来匹配，因为保存后数据库ID会改变
+      console.log('🔍 [saveSelectedCases] 开始更新saved状态...');
+      console.log('📋 [saveSelectedCases] selectedCases数量:', selectedCases.length);
+      if (selectedCases.length > 0) {
+        console.log('📋 [saveSelectedCases] 第一个selectedCase完整数据:', {
+          id: selectedCases[0]?.id,
+          name: selectedCases[0]?.name,
+          scenarioId: selectedCases[0]?.scenarioId,
+          scenarioName: selectedCases[0]?.scenarioName,
+          testPointId: selectedCases[0]?.testPointId,
+          testPointName: selectedCases[0]?.testPointName,
+          saved: selectedCases[0]?.saved,
+          modified: selectedCases[0]?.modified
+        });
+      }
+      
+      setDraftCases(prev => {
+        console.log('📋 [saveSelectedCases] draftCases数量:', prev.length);
+        if (prev.length > 0) {
+          console.log('📋 [saveSelectedCases] 第一个draftCase完整数据:', {
+            id: prev[0]?.id,
+            name: prev[0]?.name,
+            scenarioId: prev[0]?.scenarioId,
+            scenarioName: prev[0]?.scenarioName,
+            testPointId: prev[0]?.testPointId,
+            testPointName: prev[0]?.testPointName,
+            saved: prev[0]?.saved,
+            modified: prev[0]?.modified
+          });
+        }
+        
+        let matchCount = 0;
+        const updated = prev.map(c => {
+          const isSaved = selectedCases.some(sc => {
+            const nameMatch = sc.name === c.name;
+            const scenarioMatch = sc.scenarioId === c.scenarioId;
+            const pointMatch = sc.testPointId === c.testPointId || sc.testPointName === c.testPointName;
+            
+            if (c.name === selectedCases[0]?.name) {
+              console.log('🔍 [saveSelectedCases] 匹配检查:', {
+                caseName: c.name,
+                nameMatch,
+                scenarioMatch,
+                pointMatch,
+                scScenarioId: sc.scenarioId,
+                cScenarioId: c.scenarioId,
+                scTestPointId: sc.testPointId,
+                scTestPointName: sc.testPointName,
+                cTestPointId: c.testPointId,
+                cTestPointName: c.testPointName
+              });
+            }
+            
+            if (nameMatch && scenarioMatch && pointMatch) {
+              matchCount++;
+              console.log('✅ [saveSelectedCases] 匹配成功:', c.name);
+            }
+            
+            return nameMatch && scenarioMatch && pointMatch;
+          });
+          
+          if (isSaved) {
+            console.log('🔄 [saveSelectedCases] 更新用例saved状态:', c.name, '-> saved: true, modified: false');
+          }
+          
+          // 🔥 关键修复：创建新对象而不是修改原对象，确保React检测到变化
+          return isSaved ? { ...c, saved: true, modified: false } : { ...c };
+        });
+        
+        console.log('✅ [saveSelectedCases] 匹配成功数量:', matchCount);
+        const savedCount = updated.filter(c => c.saved).length;
+        console.log('✅ [saveSelectedCases] 更新后的draftCases:', savedCount, '个已保存');
+        
+        // 🔥 输出所有已保存用例的名称
+        const savedCases = updated.filter(c => c.saved);
+        console.log('📋 [saveSelectedCases] 已保存用例列表:', savedCases.map(c => c.name));
+        
+        return updated;
+      });
+
+      // 🔥 关键修复：同时更新 testScenarios 中的测试用例 saved 状态
+      setTestScenarios(prev => prev.map(scenario => ({
+        ...scenario,
+        testPoints: scenario.testPoints?.map((tp: any) => ({
+          ...tp,
+          testCases: tp.testCases?.map((tc: any) => {
+            const isSaved = selectedCases.some(sc => 
+              sc.name === tc.name && 
+              sc.scenarioId === scenario.id &&
+              (sc.testPointId === tp.testPoint || sc.testPointName === tp.testPoint)
+            );
+            return isSaved ? { ...tc, saved: true, modified: false } : { ...tc };
+          })
+        }))
+      })));
+      
+      console.log('✅ [saveSelectedCases] testScenarios 状态也已更新');
     } catch (error: any) {
       showToast.error('保存失败：' + error.message);
     } finally {
@@ -1556,7 +1697,8 @@ export function FunctionalTestCaseGenerator() {
   // 保存到用例库（并跳转）
   const saveToLibrary = async () => {
     // 🔧 使用 selectedTestCases 来收集选中的用例
-    const selectedCases = draftCases.filter(c => selectedTestCases[c.id] && !c.saved);
+    // 🔧 修复：包括已保存但被修改的用例
+    const selectedCases = draftCases.filter(c => selectedTestCases[c.id] && (!c.saved || c.modified));
 
     if (selectedCases.length === 0) {
       showToast.warning('请至少选择一个用例');
@@ -1640,6 +1782,9 @@ export function FunctionalTestCaseGenerator() {
         requirementDocId: docId,
         system: tc.system || projectInfo.systemName || '',
         module: tc.module || projectInfo.moduleName || '',
+        // 🆕 添加项目ID和项目版本ID（用于配置变量替换）
+        projectId: projectInfo.projectId,
+        projectVersionId: projectInfo.projectVersionId,
         // 🔧 使用需求文档章节信息（关联需求）
         sectionName: tc.sectionName || tc.section_name || '',
         sectionId: tc.sectionId || tc.section_id || '',
@@ -1660,6 +1805,8 @@ export function FunctionalTestCaseGenerator() {
         name: casesWithDocId[0]?.name,
         system: casesWithDocId[0]?.system,
         module: casesWithDocId[0]?.module,
+        projectId: casesWithDocId[0]?.projectId,  // 🆕 新增
+        projectVersionId: casesWithDocId[0]?.projectVersionId,  // 🆕 新增
         sectionName: casesWithDocId[0]?.sectionName,
         sectionId: casesWithDocId[0]?.sectionId,
         scenarioName: casesWithDocId[0]?.scenarioName,  // 🔧 新增
@@ -1698,9 +1845,9 @@ export function FunctionalTestCaseGenerator() {
   };
 
   // 计算统计数据（用于底部固定栏 - 测试用例生成模式）
-  // 🔧 修复：根据测试用例的实际勾选状态计算选中的用例数量
+  // 🔧 修复：根据测试用例的实际勾选状态计算选中的用例数量（包括已修改的）
   const selectedCasesCount = Object.keys(selectedTestCases).filter(id => 
-    selectedTestCases[id] && draftCases.some(tc => tc.id === id && !tc.saved)
+    selectedTestCases[id] && draftCases.some(tc => tc.id === id && (!tc.saved || tc.modified))
   ).length;
   const avgQuality = draftCases.length > 0
     ? Math.round(draftCases.reduce((sum, c) => sum + (c.qualityScore || 85), 0) / draftCases.length)
@@ -2525,6 +2672,19 @@ export function FunctionalTestCaseGenerator() {
                 </div>
               )}
 
+              {/* 🆕 配置验证组件 */}
+              {projectInfo.projectId && (
+                <div className="mt-4">
+                  <ProjectConfigValidator
+                    projectId={projectInfo.projectId}
+                    projectName={projectInfo.systemName}
+                    onValidationComplete={setConfigValid}
+                    autoValidate={true}
+                    showWarnings={true}
+                  />
+                </div>
+              )}
+
               {/* 模块名称 */}
               <div>
                 <label className="block text-xs font-semibold text-gray-900 mb-2">
@@ -2691,7 +2851,7 @@ export function FunctionalTestCaseGenerator() {
             system: projectInfo.systemName || undefined,  // 🆕 更新系统名称
             module: projectInfo.moduleName || undefined   // 🆕 更新模块名称
           });
-          showToast.success('需求文档已更新！');
+          showToast.success('需求文档已更新');
         } else {
           // 创建新文档（添加时间戳避免重名）
           const timestamp = new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -2707,7 +2867,7 @@ export function FunctionalTestCaseGenerator() {
             system: projectInfo.systemName || undefined,  // 🆕 保存系统名称
             module: projectInfo.moduleName || undefined   // 🆕 保存模块名称
           });
-          showToast.success('需求文档保存成功！');
+          showToast.success('需求文档保存成功');
         }
       } else {
         // 不存在同名文档，直接创建
@@ -2723,7 +2883,7 @@ export function FunctionalTestCaseGenerator() {
           system: projectInfo.systemName || undefined,  // 🆕 保存系统名称
           module: projectInfo.moduleName || undefined   // 🆕 保存模块名称
         });
-        showToast.success('需求文档保存成功！');
+        showToast.success('需求文档保存成功');
       }
       
       setRequirementDocId(doc.id);
@@ -2954,8 +3114,9 @@ export function FunctionalTestCaseGenerator() {
   // 渲染步骤3：三阶段渐进式生成（新流程：测试场景 → 测试点 → 测试用例）
   const renderStep3 = () => {
     // 🆕 计算实际选中的用例数量（基于单个用例的勾选状态）
+    // 🔧 修复：包括已保存但被修改的用例
     const selectedCaseCount = Object.keys(selectedTestCases).filter(id => 
-      selectedTestCases[id] && draftCases.some(tc => tc.id === id && !tc.saved)
+      selectedTestCases[id] && draftCases.some(tc => tc.id === id && (!tc.saved || tc.modified))
     ).length;
 
     // 🆕 对测试场景进行排序：高优先级在前
@@ -2998,13 +3159,14 @@ export function FunctionalTestCaseGenerator() {
               const isExpanded = expandedScenarios[scenario.id];
               const isGeneratingPointsForScenario = generatingPoints[scenario.id];
               const hasTestPoints = scenario.testPoints && scenario.testPoints.length > 0;
-              // 🔧 修复：检查该场景是否有已生成的测试用例（从草稿箱中查找）
-              const hasGeneratedCases = draftCases.some(tc => tc.scenarioId === scenario.id && !tc.saved);
+              // 🔧 修复：检查该场景是否有可选择的测试用例（未保存或已修改）
+              const hasGeneratedCases = draftCases.some(tc => tc.scenarioId === scenario.id && (!tc.saved || tc.modified));
               const isSelected = selectedScenarios[scenario.id];
               const isSaved = savedScenarios[scenario.id];
               
               // 🆕 计算半选状态（有部分用例被选中但未全选）
-              const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenario.id && !tc.saved);
+              // 🔧 修复：包括已保存但被修改的用例
+              const scenarioCases = draftCases.filter(tc => tc.scenarioId === scenario.id && (!tc.saved || tc.modified));
               const selectedCasesInScenario = scenarioCases.filter(tc => selectedTestCases[tc.id]).length;
               const isIndeterminate = !isSelected && selectedCasesInScenario > 0 && selectedCasesInScenario < scenarioCases.length;
 
@@ -3228,7 +3390,7 @@ export function FunctionalTestCaseGenerator() {
                             const pointCases = draftCases.filter(tc => 
                               tc.scenarioId === scenario.id && 
                               (tc.testPointId === testPoint.testPoint || tc.testPointName === testPoint.testPoint) &&
-                              !tc.saved
+                              (!tc.saved || tc.modified)  // 🔥 修复：未保存或已修改的用例
                             );
                             const selectedCasesInPoint = pointCases.filter(tc => selectedTestCases[tc.id]).length;
                             const isPointIndeterminate = !isTestPointSelected && selectedCasesInPoint > 0 && selectedCasesInPoint < pointCases.length;
@@ -3421,8 +3583,8 @@ export function FunctionalTestCaseGenerator() {
                                           >
                                             <div className="flex items-start justify-between gap-5">
                                               <div className="flex items-start gap-4 flex-1">
-                                                {/* 🆕 勾选框 */}
-                                                {!tc.saved && !isSaved && (
+                                                {/* 🆕 勾选框 - 允许未保存或已修改的用例勾选 */}
+                                                {(!tc.saved || tc.modified) && !isSaved && (
                                                   <div className="pt-1 mr-2">
                                                     <input
                                                       type="checkbox"
@@ -3431,6 +3593,14 @@ export function FunctionalTestCaseGenerator() {
                                                       className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                                                       onClick={(e) => e.stopPropagation()}
                                                     />
+                                                  </div>
+                                                )}
+                                                {/* 🆕 已修改标记 */}
+                                                {tc.saved && tc.modified && (
+                                                  <div className="pt-1">
+                                                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-300">
+                                                      已修改
+                                                    </span>
                                                   </div>
                                                 )}
                                                 {/* 序号 */}
@@ -3482,6 +3652,23 @@ export function FunctionalTestCaseGenerator() {
                                                         {tc.priority === 'high' ? '高优先级' : tc.priority === 'medium' ? '中优先级' : '低优先级'}
                                                       </span>
                                                     )}
+                                                    {/* 🆕 已保存标识 */}
+                                                    {(() => {
+                                                      const shouldShow = tc.saved && !tc.modified;
+                                                      if (tcIndex === 0) {
+                                                        console.log('🔍 [显示逻辑] 第一个用例:', {
+                                                          name: tc.name,
+                                                          saved: tc.saved,
+                                                          modified: tc.modified,
+                                                          shouldShow
+                                                        });
+                                                      }
+                                                      return shouldShow ? (
+                                                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+                                                          ✓ 已保存
+                                                        </span>
+                                                      ) : null;
+                                                    })()}
                                                   </div>
                                                   {tc.description && (
                                                     <p className={clsx(

@@ -147,7 +147,7 @@ http://localhost:5173/functional-test-cases/generator
 - 📖 [完整文档](page-layout-copywriting-test-feature.md)
 - 🧪 [测试指南](TEST-LAYOUT-COPYWRITING-FEATURE.md)
 - 📝 [更新日志](CHANGELOG-layout-copywriting-test.md)
-- 🐛 [问题反馈](https://github.com/Sakura AI/Sakura AI/issues)
+- 🐛 [问题反馈](https://github.com/SakuraTechy/sakura-ai/issues)
 
 ---
 
