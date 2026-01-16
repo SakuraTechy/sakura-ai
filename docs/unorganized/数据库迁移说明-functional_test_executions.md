@@ -17,7 +17,7 @@ The table `functional_test_executions` does not exist in the current database.
 
 ```bash
 # 1. 进入项目根目录
-cd D:\King\Cursor\sakura-ai\test_flow
+cd D:\King\Cursor\sakura-ai\sakura_ai
 
 # 2. 执行数据库迁移
 npx prisma migrate deploy
@@ -30,7 +30,7 @@ npx prisma db pull
 
 ```bash
 # 1. 进入项目根目录
-cd D:\King\Cursor\sakura-ai\test_flow
+cd D:\King\Cursor\sakura-ai\sakura_ai
 
 # 2. 推送 schema 到数据库
 npx prisma db push

@@ -1432,137 +1432,137 @@ export async function testDatabaseConnection(
         }
       }
     } else if (detectedType === 'sqlite') {
-      // SQLite连接测试
-      console.log('🔍 开始SQLite连接测试...');
-      console.log('📋 连接配置:', {
-        dbPath: database.connection_string || database.database_name || database.database_schema,
-        parameters: database.parameters
-      });
+      // // SQLite连接测试
+      // console.log('🔍 开始SQLite连接测试...');
+      // console.log('📋 连接配置:', {
+      //   dbPath: database.connection_string || database.database_name || database.database_schema,
+      //   parameters: database.parameters
+      // });
 
-      // 🎯 根据driverPath参数决定连接模式
-      const driverPath = database.parameters?.driverPath;
-      if (driverPath) {
-        console.log('🚛 检测到driverPath参数，强制使用JDBC连接模式');
-        console.log('📁 驱动路径:', driverPath);
-        return await testJdbcConnection(database);
-      }
+      // // 🎯 根据driverPath参数决定连接模式
+      // const driverPath = database.parameters?.driverPath;
+      // if (driverPath) {
+      //   console.log('🚛 检测到driverPath参数，强制使用JDBC连接模式');
+      //   console.log('📁 驱动路径:', driverPath);
+      //   return await testJdbcConnection(database);
+      // }
 
-      console.log('🔧 未提供driverPath，使用Node.js SQLite包连接');
+      // console.log('🔧 未提供driverPath，使用Node.js SQLite包连接');
 
-      try {
-        // 优先尝试better-sqlite3
-        console.log('📡 尝试使用better-sqlite3包...');
-        const sqlite3Module = await import('better-sqlite3');
-        console.log('✅ better-sqlite3模块导入成功');
+      // try {
+      //   // 优先尝试better-sqlite3
+      //   console.log('📡 尝试使用better-sqlite3包...');
+      //   const sqlite3Module = await import('better-sqlite3');
+      //   console.log('✅ better-sqlite3模块导入成功');
         
-        const Database = sqlite3Module.default || sqlite3Module;
-        console.log('📦 better-sqlite3模块结构:', {
-          hasDefault: !!sqlite3Module.default,
-          hasDatabase: !!Database,
-          isDatabaseConstructor: typeof Database === 'function'
-        });
+      //   const Database = sqlite3Module.default || sqlite3Module;
+      //   console.log('📦 better-sqlite3模块结构:', {
+      //     hasDefault: !!sqlite3Module.default,
+      //     hasDatabase: !!Database,
+      //     isDatabaseConstructor: typeof Database === 'function'
+      //   });
 
-        if (!Database || typeof Database !== 'function') {
-          console.error('❌ better-sqlite3模块缺少Database构造函数');
-          throw new Error('better-sqlite3模块导入异常');
-        }
+      //   if (!Database || typeof Database !== 'function') {
+      //     console.error('❌ better-sqlite3模块缺少Database构造函数');
+      //     throw new Error('better-sqlite3模块导入异常');
+      //   }
         
-        // SQLite使用文件路径作为database_name
-        const dbPath = database.connection_string || database.database_name || database.database_schema;
-        console.log('📁 数据库文件路径:', dbPath);
+      //   // SQLite使用文件路径作为database_name
+      //   const dbPath = database.connection_string || database.database_name || database.database_schema;
+      //   console.log('📁 数据库文件路径:', dbPath);
         
-        connection = Database(dbPath, { timeout: 10000 });
-        console.log('✅ better-sqlite3连接成功');
+      //   connection = Database(dbPath, { timeout: 10000 });
+      //   console.log('✅ better-sqlite3连接成功');
         
-        connection.prepare('SELECT 1').get();
-        console.log('✅ 查询测试成功');
+      //   connection.prepare('SELECT 1').get();
+      //   console.log('✅ 查询测试成功');
         
-        connection.close();
-        console.log('✅ 连接已关闭');
+      //   connection.close();
+      //   console.log('✅ 连接已关闭');
 
-        return {
-          success: true,
-          message: `SQLite连接成功 (Node.js better-sqlite3) (${dbPath})`
-        };
-      } catch (importError: any) {
-        console.error('❌ better-sqlite3连接失败:', importError);
+      //   return {
+      //     success: true,
+      //     message: `SQLite连接成功 (Node.js better-sqlite3) (${dbPath})`
+      //   };
+      // } catch (importError: any) {
+      //   console.error('❌ better-sqlite3连接失败:', importError);
         
-        if (importError.code === 'MODULE_NOT_FOUND') {
-          console.log('⚠️ better-sqlite3未安装，尝试sqlite3包...');
+      //   if (importError.code === 'MODULE_NOT_FOUND') {
+      //     console.log('⚠️ better-sqlite3未安装，尝试sqlite3包...');
           
-          // 回退到sqlite3
-          try {
-            const sqlite3Module = await import('sqlite3');
-            console.log('✅ sqlite3模块导入成功');
+      //     // 回退到sqlite3
+      //     try {
+      //       const sqlite3Module = await import('sqlite3');
+      //       console.log('✅ sqlite3模块导入成功');
             
-            const sqlite3 = sqlite3Module.default || sqlite3Module;
-            console.log('📦 sqlite3模块结构:', {
-              hasDefault: !!sqlite3Module.default,
-              hasDatabase: !!sqlite3.Database,
-              isDatabaseConstructor: typeof sqlite3.Database === 'function'
-            });
+      //       const sqlite3 = sqlite3Module.default || sqlite3Module;
+      //       console.log('📦 sqlite3模块结构:', {
+      //         hasDefault: !!sqlite3Module.default,
+      //         hasDatabase: !!sqlite3.Database,
+      //         isDatabaseConstructor: typeof sqlite3.Database === 'function'
+      //       });
 
-            if (!sqlite3.Database || typeof sqlite3.Database !== 'function') {
-              console.error('❌ sqlite3模块缺少Database构造函数');
-              return {
-                success: false,
-                message: 'SQLite驱动未安装。请运行: npm install better-sqlite3 或 npm install sqlite3，或在参数中添加driverPath使用JDBC连接'
-              };
-            }
+      //       if (!sqlite3.Database || typeof sqlite3.Database !== 'function') {
+      //         console.error('❌ sqlite3模块缺少Database构造函数');
+      //         return {
+      //           success: false,
+      //           message: 'SQLite驱动未安装。请运行: npm install better-sqlite3 或 npm install sqlite3，或在参数中添加driverPath使用JDBC连接'
+      //         };
+      //       }
 
-            const dbPath = database.connection_string || database.database_name || database.database_schema;
-            console.log('📁 数据库文件路径:', dbPath);
+      //       const dbPath = database.connection_string || database.database_name || database.database_schema;
+      //       console.log('📁 数据库文件路径:', dbPath);
             
-            return new Promise((resolve) => {
-              const db = new sqlite3.Database(dbPath, (err: Error | null) => {
-                if (err) {
-                  console.error('❌ sqlite3连接失败:', err.message);
-                  db.close();
-                  resolve({
-                    success: false,
-                    message: `SQLite连接失败：${err.message}`
-                  });
-                } else {
-                  console.log('✅ sqlite3连接成功');
+      //       return new Promise((resolve) => {
+      //         const db = new sqlite3.Database(dbPath, (err: Error | null) => {
+      //           if (err) {
+      //             console.error('❌ sqlite3连接失败:', err.message);
+      //             db.close();
+      //             resolve({
+      //               success: false,
+      //               message: `SQLite连接失败：${err.message}`
+      //             });
+      //           } else {
+      //             console.log('✅ sqlite3连接成功');
                   
-                  // 执行测试查询
-                  db.get('SELECT 1 as test', (queryErr: Error | null) => {
-                    if (queryErr) {
-                      console.error('❌ 查询测试失败:', queryErr.message);
-                      db.close();
-                      resolve({
-                        success: false,
-                        message: `SQLite查询失败：${queryErr.message}`
-                      });
-                    } else {
-                      console.log('✅ 查询测试成功');
-                      db.close();
-                      console.log('✅ 连接已关闭');
-                      resolve({
-                        success: true,
-                        message: `SQLite连接成功 (Node.js sqlite3) (${dbPath})`
-                      });
-                    }
-                  });
-                }
-              });
-            });
-          } catch (sqlite3Error: any) {
-            console.error('❌ sqlite3也不可用:', sqlite3Error);
-            return {
-              success: false,
-              message: 'SQLite驱动未安装。请运行: npm install better-sqlite3 或 npm install sqlite3，或在参数中添加driverPath使用JDBC连接'
-            };
-          }
-        }
+      //             // 执行测试查询
+      //             db.get('SELECT 1 as test', (queryErr: Error | null) => {
+      //               if (queryErr) {
+      //                 console.error('❌ 查询测试失败:', queryErr.message);
+      //                 db.close();
+      //                 resolve({
+      //                   success: false,
+      //                   message: `SQLite查询失败：${queryErr.message}`
+      //                 });
+      //               } else {
+      //                 console.log('✅ 查询测试成功');
+      //                 db.close();
+      //                 console.log('✅ 连接已关闭');
+      //                 resolve({
+      //                   success: true,
+      //                   message: `SQLite连接成功 (Node.js sqlite3) (${dbPath})`
+      //                 });
+      //               }
+      //             });
+      //           }
+      //         });
+      //       });
+      //     } catch (sqlite3Error: any) {
+      //       console.error('❌ sqlite3也不可用:', sqlite3Error);
+      //       return {
+      //         success: false,
+      //         message: 'SQLite驱动未安装。请运行: npm install better-sqlite3 或 npm install sqlite3，或在参数中添加driverPath使用JDBC连接'
+      //       };
+      //     }
+      //   }
         
-        // 如果Node.js连接失败，提示用户可以尝试JDBC方式
-        const errorMessage = `Node.js SQLite连接失败：${importError.message}。💡 提示：可以在参数中添加 driverPath 来使用JDBC连接方式`;
-        return {
-          success: false,
-          message: errorMessage
-        };
-      }
+      //   // 如果Node.js连接失败，提示用户可以尝试JDBC方式
+      //   const errorMessage = `Node.js SQLite连接失败：${importError.message}。💡 提示：可以在参数中添加 driverPath 来使用JDBC连接方式`;
+      //   return {
+      //     success: false,
+      //     message: errorMessage
+      //   };
+      // }
     } else {
       // 不支持的数据库类型或其他数据库
       console.log('🔍 开始通用数据库连接测试...');

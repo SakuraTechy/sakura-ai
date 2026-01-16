@@ -62,7 +62,7 @@ npx prisma generate
 npx prisma db push
 
 # 方式2: 直接执行SQL脚本
-mysql -u root -p sakura_test_flow < prisma/migrations/add_test_plan_tables.sql
+mysql -u root -p sakura_ai < prisma/migrations/add_test_plan_tables.sql
 ```
 
 ### 步骤2: 重启服务器
