@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Tag, Empty, Image, Timeline } from 'antd';
 import { CheckCircle, XCircle, AlertCircle, Clock, FileText } from 'lucide-react';
+import { clsx } from 'clsx';
 import type { TestPlanCaseResult, ExecutionResult } from '../types/testPlan';
 
 interface TestPlanCaseExecutionLogModalProps {
@@ -14,6 +15,8 @@ export const TestPlanCaseExecutionLogModal: React.FC<TestPlanCaseExecutionLogMod
   onClose,
   caseResult,
 }) => {
+  // 🔥 新增：日志格式状态管理（默认简洁模式）
+  const [logFormat, setLogFormat] = useState<'compact' | 'detailed'>('compact');
   const getStatusIcon = (result: ExecutionResult) => {
     switch (result) {
       case 'pass':
@@ -62,9 +65,37 @@ export const TestPlanCaseExecutionLogModal: React.FC<TestPlanCaseExecutionLogMod
   return (
     <Modal
       title={
-        <div className="flex items-center gap-2">
-          <FileText className="w-5 h-5 text-blue-500" />
-          <span className="font-bold">执行日志</span>
+        <div className="flex items-center justify-between w-full pr-6">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-500" />
+            <span className="font-bold">执行日志</span>
+          </div>
+          
+          {/* 🔥 新增：简洁/详细模式切换按钮 */}
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setLogFormat('compact')}
+              className={clsx(
+                'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                logFormat === 'compact'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              📊 简洁
+            </button>
+            <button
+              onClick={() => setLogFormat('detailed')}
+              className={clsx(
+                'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                logFormat === 'detailed'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              📋 详细
+            </button>
+          </div>
         </div>
       }
       open={isOpen}

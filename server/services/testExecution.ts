@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '../../src/generated/prisma/index.js';
+﻿import { PrismaClient, Prisma } from '../../src/generated/prisma/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { WebSocketManager } from './websocket.js';
 import { PlaywrightMcpClient } from './mcpClient.js';
@@ -17,11 +17,21 @@ import { StreamService } from './streamService.js';
 import { EvidenceService } from './evidenceService.js';
 import { TestCaseExecutionService } from './testCaseExecutionService.js';
 import { PlaywrightTestRunner } from './playwrightTestRunner.js';
+import { MidsceneTestRunner } from './midsceneTestRunner.js';
 import sharp from 'sharp';
 // 🔥 导入测试计划状态更新函数
 import { updateTestPlanStatusFromLatestExecution, updateTestPlanExecution } from './testPlanService.js';
+// 🔥 新增：导入断言服务和策略
+import { AssertionService } from './assertion/AssertionService.js';
+import type { Assertion, VerificationContext } from './assertion/types.js';
+import { AssertionType } from './assertion/types.js';
+import { FileDownloadStrategy } from './assertion/strategies/FileDownloadStrategy.js';
+import { PopupStrategy } from './assertion/strategies/PopupStrategy.js';
+import { ElementVisibilityStrategy } from './assertion/strategies/ElementVisibilityStrategy.js';
+import { TextContentStrategy } from './assertion/strategies/TextContentStrategy.js';
+import { PageStateStrategy } from './assertion/strategies/PageStateStrategy.js';
 
-// 重构后的测试执行服务：支持 MCP 和 Playwright Test Runner 两种执行引擎
+// 重构后的测试执行服务：支持 MCP、Playwright Test Runner 和 Midscene Test Runner 三种执行引擎
 export class TestExecutionService {
   private wsManager: WebSocketManager;
   private mcpClient: PlaywrightMcpClient;
@@ -33,7 +43,8 @@ export class TestExecutionService {
   private streamService: StreamService;
   private evidenceService: EvidenceService;
   private executionService: TestCaseExecutionService;
-  private playwrightRunner: PlaywrightTestRunner | null = null; // 🔥 新增：Playwright Test Runner 实例
+  private playwrightRunner: PlaywrightTestRunner | null = null; // 🔥 Playwright Test Runner 实例
+  private midsceneRunner: MidsceneTestRunner | null = null; // 🔥 新增：Midscene Test Runner 实例
 
   // 🚀 Phase 4: 性能监控系统
   private performanceMonitor = {
@@ -136,10 +147,39 @@ export class TestExecutionService {
     // 🔥 初始化测试执行持久化服务
     this.executionService = TestCaseExecutionService.getInstance();
 
+    // 🔥 初始化 AssertionService 并注册所有验证策略
+    this.initializeAssertionService();
+
     console.log(`🗄️ TestExecutionService已连接到数据库服务`);
 
     // 在构造函数中记录AI解析器的模型信息
     this.logAIParserInfo();
+  }
+
+  /**
+   * 初始化断言服务并注册所有验证策略
+   */
+  private initializeAssertionService(): void {
+    try {
+      const assertionService = AssertionService.getInstance({
+        logging: {
+          enabled: true,
+          level: 'info'
+        }
+      });
+
+      // 注册所有验证策略
+      assertionService.registerStrategy(AssertionType.FILE_DOWNLOAD, new FileDownloadStrategy());
+      assertionService.registerStrategy(AssertionType.POPUP, new PopupStrategy());
+      assertionService.registerStrategy(AssertionType.ELEMENT_VISIBILITY, new ElementVisibilityStrategy());
+      assertionService.registerStrategy(AssertionType.TEXT_CONTENT, new TextContentStrategy());
+      assertionService.registerStrategy(AssertionType.PAGE_STATE, new PageStateStrategy());
+
+      console.log(`✅ AssertionService 已初始化，注册了 5 个验证策略`);
+    } catch (error: any) {
+      console.error(`❌ 初始化 AssertionService 失败: ${error.message}`);
+      throw error;
+    }
   }
 
   // 记录AI解析器信息
@@ -936,9 +976,9 @@ export class TestExecutionService {
       suiteId?: string,
       contextState?: any,
       userId?: string,
-      executionEngine?: 'mcp' | 'playwright', // 🔥 新增：执行引擎选择
-      enableTrace?: boolean, // 🔥 新增：是否启用 trace（仅 Playwright）
-      enableVideo?: boolean, // 🔥 新增：是否启用 video（仅 Playwright）
+      executionEngine?: 'mcp' | 'playwright' | 'midscene', // 🔥 新增：执行引擎选择（添加midscene）
+      enableTrace?: boolean, // 🔥 新增：是否启用 trace（仅 Playwright 和 Midscene）
+      enableVideo?: boolean, // 🔥 新增：是否启用 video（仅 Playwright 和 Midscene）
       assertionMatchMode?: 'strict' | 'auto' | 'loose', // 🔥 新增：断言匹配模式
       planExecutionId?: string, // 🔥 新增：测试计划执行记录ID，用于完成后同步数据
     } = {}
@@ -989,8 +1029,11 @@ export class TestExecutionService {
     testRunStore.set(runId, testRun);
     
     // 🔥 记录执行引擎选择
-    console.log(`🎯 [${runId}] 执行引擎: ${executionEngine === 'playwright' ? 'Playwright Test Runner' : 'MCP 客户端'}`);
-    if (executionEngine === 'playwright') {
+    const engineName = executionEngine === 'playwright' ? 'Playwright Test Runner' : 
+                       executionEngine === 'midscene' ? 'Midscene Test Runner' : 
+                       'MCP 客户端';
+    console.log(`🎯 [${runId}] 执行引擎: ${engineName}`);
+    if (executionEngine === 'playwright' || executionEngine === 'midscene') {
       console.log(`   📦 Trace 录制: ${options.enableTrace !== false ? '启用' : '禁用'}`);
       console.log(`   🎥 Video 录制: ${options.enableVideo !== false ? '启用' : '禁用'}`);
     }
@@ -1199,6 +1242,9 @@ export class TestExecutionService {
       if (executionEngine === 'playwright') {
         // 使用 Playwright Test Runner
         await this.initializePlaywrightRunner(runId, { enableTrace, enableVideo });
+      } else if (executionEngine === 'midscene') {
+        // 使用 Midscene Test Runner
+        await this.initializeMidsceneRunner(runId, { enableTrace, enableVideo, testCaseId });
       } else {
         // 使用 MCP 客户端（默认）
         await this.initializeMcpClient(runId);
@@ -1211,6 +1257,13 @@ export class TestExecutionService {
           enableTrace, 
           enableVideo,
           assertionMatchMode // 🔥 新增：传递断言匹配模式
+        });
+      } else if (executionEngine === 'midscene') {
+        // 使用 Midscene Test Runner 执行
+        await this.executeWithMidsceneRunner(runId, testCase, testRun, { 
+          enableTrace, 
+          enableVideo,
+          assertionMatchMode
         });
       } else {
         // 使用 MCP 客户端执行（原有流程）
@@ -1244,6 +1297,9 @@ export class TestExecutionService {
         if (finalExecutionEngine === 'playwright') {
           // 清理 Playwright Test Runner
           await this.cleanupPlaywrightRunner(runId, testRun);
+        } else if (finalExecutionEngine === 'midscene') {
+          // 清理 Midscene Test Runner
+          await this.cleanupMidsceneRunner(runId, testRun);
         } else {
           // 清理 MCP 客户端
           this.streamService.stopStream(runId);
@@ -1285,7 +1341,15 @@ export class TestExecutionService {
     const lines = stepsText.split('\n').filter(line => line.trim());
     return lines.map((line, index) => {
       const description = line.trim();
-      const lowerDesc = description.toLowerCase();
+      
+      // 🔥 关键修复：先分离操作部分和预期结果部分
+      // 格式："操作描述 -> 预期结果"
+      const arrowMatch = description.match(/^(.+?)\s*->\s*(.+)$/);
+      const operationPart = arrowMatch ? arrowMatch[1].trim() : description;
+      const expectedResultPart = arrowMatch ? arrowMatch[2].trim() : '';
+      
+      // 🔥 只对操作部分进行操作类型识别，不要被预期结果误导
+      const lowerDesc = operationPart.toLowerCase();
       
       // 🔥 智能识别操作类型
       let action: TestAction = 'navigate';
@@ -1371,33 +1435,28 @@ export class TestExecutionService {
                lowerDesc.includes('选中') || lowerDesc.includes('取消勾选') ||
                lowerDesc.includes('check') || lowerDesc.includes('uncheck')) {
         action = 'click';
+        // 🔥 修复：使用operationPart而不是description
         // 尝试提取选择器（支持多种格式）
         // 格式1: "点击搜索按钮" -> "搜索按钮"
         // 格式2: "点击：搜索按钮" -> "搜索按钮"
-        // 格式3: "点击搜索按钮 -> 其他描述" -> "搜索按钮"
-        // 格式4: "勾选《协议》" -> "《协议》"
-        let elementMatch = description.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s*[：:]\s*(.+?)(?:\s*->|$)/i) || 
-                          description.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s+(.+?)(?:\s*->|$)/i);
+        // 格式3: "勾选《协议》" -> "《协议》"
+        let elementMatch = operationPart.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s*[：:]\s*(.+?)$/i) || 
+                          operationPart.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s+(.+?)$/i);
         
         if (!elementMatch) {
           // 如果上面没匹配到，尝试更宽松的匹配
-          elementMatch = description.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s+(.+)/i);
+          elementMatch = operationPart.match(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s+(.+)/i);
         }
         
         if (elementMatch) {
           selector = elementMatch[1].trim();
-          // 移除可能的后续描述（如"-> 页面出现..."）
-          selector = selector.split('->')[0].trim();
-          selector = selector.split('，')[0].trim();
-          selector = selector.split(',')[0].trim();
           // 移除可能的书名号、引号等（前后分别处理）
           selector = selector.replace(/^[《『"'「]/, '').replace(/[》』"'」]$/, '');
         } else {
-          // 如果还是没匹配到，尝试从描述中提取（移除编号和操作词）
-          selector = description
+          // 如果还是没匹配到，尝试从操作部分提取（移除编号和操作词）
+          selector = operationPart
             .replace(/^\d+[\.、\)]\s*/, '') // 移除编号
             .replace(/(?:点击|选择|click|勾选|选中|取消勾选|check|uncheck)\s*/i, '') // 移除操作词
-            .split('->')[0] // 移除箭头后的描述
             .trim();
           // 移除可能的书名号、引号等（前后分别处理）
           selector = selector.replace(/^[《『"'「]/, '').replace(/[》』"'」]$/, '');
@@ -1407,36 +1466,31 @@ export class TestExecutionService {
       else if (lowerDesc.includes('输入') || lowerDesc.includes('填写') || 
                lowerDesc.includes('type') || lowerDesc.includes('fill')) {
         action = 'fill';
+        // 🔥 修复：使用operationPart而不是description
         // 尝试提取选择器和值（支持多种格式）
         // 格式1: "输入：用户名：admin" 或 "输入到用户名，值为admin"
-        let fillMatch = description.match(/(?:输入|填写|fill|type)\s*(?:到|到|in|into)?\s*[：:]\s*(.+?)(?:\s*，|,|\s*值为|值为|value\s*[:：]\s*)(.+)/i);
+        let fillMatch = operationPart.match(/(?:输入|填写|fill|type)\s*(?:到|到|in|into)?\s*[：:]\s*(.+?)(?:\s*，|,|\s*值为|值为|value\s*[:：]\s*)(.+)/i);
         
         // 格式2: "在用户名输入框输入'admin'" 或 "在用户名输入'admin'"
         if (!fillMatch) {
-          fillMatch = description.match(/(?:在|向)\s*(.+?)(?:输入框|输入区|文本框)?\s*(?:输入|填写|fill|type)\s*['"'](.+?)['"']/i);
+          fillMatch = operationPart.match(/(?:在|向)\s*(.+?)(?:输入框|输入区|文本框)?\s*(?:输入|填写|fill|type)\s*['"'](.+?)['"']/i);
         }
         
         // 格式3: "输入 用户名 admin" （空格分隔）
         if (!fillMatch) {
-          fillMatch = description.match(/(?:输入|填写|fill|type)\s+(.+?)\s+(.+)/i);
+          fillMatch = operationPart.match(/(?:输入|填写|fill|type)\s+(.+?)\s+(.+)/i);
         }
         
         // 格式4: "在用户名输入admin" （没有引号）
         if (!fillMatch) {
-          fillMatch = description.match(/(?:在|向)\s*(.+?)(?:输入框|输入区|文本框)?\s*(?:输入|填写|fill|type)\s+(.+)/i);
+          fillMatch = operationPart.match(/(?:在|向)\s*(.+?)(?:输入框|输入区|文本框)?\s*(?:输入|填写|fill|type)\s+(.+)/i);
         }
         
         if (fillMatch) {
           selector = fillMatch[1].trim();
           value = fillMatch[2]?.trim();
-          // 清理选择器：移除可能的箭头后描述
-          if (selector) {
-            selector = selector.split('->')[0].trim();
-          }
-          // 清理值：移除可能的箭头后描述
+          // 清理值：移除可能的引号
           if (value) {
-            value = value.split('->')[0].trim();
-            // 移除可能的引号
             value = value.replace(/^['"]|['"]$/g, '');
           }
         }
@@ -1455,11 +1509,11 @@ export class TestExecutionService {
                lowerDesc.includes('应该') || lowerDesc.includes('should') ||
                lowerDesc.includes('出现') || lowerDesc.includes('显示')) {
         action = 'expect';
+        // 🔥 修复：使用operationPart而不是description
         // 提取要验证的元素或文本
-        selector = description
+        selector = operationPart
           .replace(/^\d+[\.、\)]\s*/, '') // 移除编号
           .replace(/(?:验证|检查|断言|expect|应该|should|出现|显示)\s*/i, '') // 移除操作词
-          .split('->')[0] // 移除箭头后的描述
           .trim();
       }
       // 默认：如果是第一个步骤且包含"打开"、"访问"等，视为导航
@@ -2221,6 +2275,27 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
                 console.warn(`⚠️ [${runId}] 新页签检测失败: ${tabResult.error}`);
                 this.addLog(runId, `⚠️ 新页签检测失败，但操作可能仍然成功`, 'warning');
               }
+
+              // 🔥 关键修复：点击操作后立即刷新快照，确保下一步能获取完整的页面内容
+              // 这对菜单点击特别重要，因为菜单展开需要时间
+              console.log(`📸 [${runId}] 点击操作后立即刷新快照，等待页面稳定...`);
+              const snapshotRefreshDelay = this.getSnapshotRefreshDelay(step.action);
+              await this.delay(snapshotRefreshDelay);
+              
+              try {
+                const refreshedSnapshot = await this.mcpClient.getSnapshot();
+                // 将刷新后的快照缓存到testRun中，供下一步使用
+                if (testRun) {
+                  (testRun as any).cachedSnapshot = refreshedSnapshot;
+                  (testRun as any).snapshotRefreshTime = Date.now();
+                  const elementCount = (refreshedSnapshot.match(/\[ref=element_/g) || []).length;
+                  console.log(`✅ [${runId}] 快照已刷新并缓存，包含 ${elementCount} 个元素`);
+                  this.addLog(runId, `✅ 快照已刷新，包含 ${elementCount} 个元素`, 'success');
+                }
+              } catch (snapshotError) {
+                console.warn(`⚠️ [${runId}] 快照刷新失败，但不影响操作继续: ${(snapshotError as Error).message}`);
+                this.addLog(runId, `⚠️ 快照刷新失败，继续执行下一步`, 'warning');
+              }
             }
 
             // 🔥 新增：验证MCP命令是否真正执行
@@ -2696,6 +2771,70 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     }
   }
 
+  /**
+   * 🔥 新增：根据操作类型动态调整快照刷新延迟时间
+   * 不同的操作需要不同的等待时间来确保页面稳定
+   */
+  private getSnapshotRefreshDelay(action: string): number {
+    const delayMap: Record<string, number> = {
+      // 菜单和下拉操作需要较长的等待时间（CSS动画）
+      'click': 800,                    // 通用点击操作
+      'browser_click': 800,
+      'menuitem_click': 1000,          // 菜单项点击需要1秒
+      'menu_click': 1000,              // 菜单点击需要1秒
+      'dropdown_click': 800,           // 下拉框点击需要800ms
+      
+      // 导航操作需要最长的等待时间
+      'navigate': 2500,                // 页面导航需要2.5秒
+      'browser_navigate': 2500,
+      'goto': 2500,
+      
+      // 输入和其他操作需要较短的等待时间
+      'type': 300,                     // 输入文本
+      'browser_type': 300,
+      'fill': 300,
+      'clear': 200,                    // 清空输入框
+      'browser_clear_input': 200,
+      'select': 400,                   // 选择选项
+      'browser_select_option': 400,
+      'hover': 300,                    // 悬停
+      'browser_hover': 300,
+      'double_click': 400,             // 双击
+      'browser_double_click': 400,
+      
+      // 默认等待时间
+      'default': 1500
+    };
+    
+    // 如果action为空或未知，使用默认值
+    if (!action || !action.trim()) {
+      return delayMap['default'];
+    }
+    
+    // 尝试精确匹配
+    if (delayMap[action]) {
+      return delayMap[action];
+    }
+    
+    // 尝试模糊匹配（包含关键词）
+    const lowerAction = action.toLowerCase();
+    if (lowerAction.includes('menu') || lowerAction.includes('dropdown')) {
+      return 1000; // 菜单和下拉操作
+    }
+    if (lowerAction.includes('navigate') || lowerAction.includes('goto')) {
+      return 2500; // 导航操作
+    }
+    if (lowerAction.includes('type') || lowerAction.includes('fill')) {
+      return 300; // 输入操作
+    }
+    if (lowerAction.includes('click')) {
+      return 800; // 点击操作
+    }
+    
+    // 默认返回1.5秒
+    return delayMap['default'];
+  }
+
   // 🚀 Phase 3: 智能动态延迟系统
   private async smartWaitAfterOperation(action: string, context: { runId: string; isFirstStep?: boolean; stepIndex?: number }): Promise<void> {
     const { runId, isFirstStep = false } = context;
@@ -2721,10 +2860,11 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       case 'click':
       case 'browser_click':
         // 🚀 智能点击等待：检查页面是否有响应变化
-        console.log(`👆 [${runId}] 点击后智能等待页面响应...`);
+        // 🔥 修复：增加等待时间到3000ms，确保菜单动画和内容渲染完成
+        console.log(`👆 [${runId}] 点击后智能等待页面响应（包括菜单动画）...`);
         const clickWaitSuccess = await this.waitForCondition(
           () => this.checkPageChanged(),
-          { minWait: 200, maxWait: 1000, checkInterval: 100 }
+          { minWait: 500, maxWait: 3000, checkInterval: 100 }
         );
         console.log(`👆 [${runId}] 点击等待完成: ${clickWaitSuccess ? '页面已响应' : '超时继续'}`);
         break;
@@ -3808,6 +3948,190 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     
     // 如果清理后为空，使用默认名称
     return sanitized || 'unnamed';
+  }
+
+  /**
+   * 检测模糊描述并提供改进建议
+   * 当 AI 解析失败或描述过于模糊时，给出具体的改进建议
+   */
+  private provideFuzzyDescriptionSuggestions(runId: string, description: string): void {
+    if (!description) return;
+
+    const lowerDesc = description.toLowerCase().trim();
+    
+    // 定义模糊描述模式和对应的建议
+    const fuzzyPatterns = [
+      {
+        keywords: ['正常操作', '正常', '操作正常'],
+        suggestions: [
+          '💡 建议改为更具体的描述：',
+          '  • "页面正常加载" - 验证页面是否成功加载',
+          '  • "显示成功提示" - 验证操作后的提示信息',
+          '  • "返回到首页" - 验证页面跳转',
+          '  • "数据保存成功" - 验证数据操作结果'
+        ]
+      },
+      {
+        keywords: ['成功', '操作成功'],
+        suggestions: [
+          '💡 建议改为更具体的描述：',
+          '  • "显示成功提示：操作完成" - 验证具体的提示文本',
+          '  • "页面跳转到列表页" - 验证页面跳转',
+          '  • "数据已保存到数据库" - 验证数据持久化',
+          '  • "按钮变为可用状态" - 验证元素状态变化'
+        ]
+      },
+      {
+        keywords: ['完成', '操作完成'],
+        suggestions: [
+          '💡 建议改为更具体的描述：',
+          '  • "显示完成状态图标" - 验证视觉反馈',
+          '  • "进度条达到100%" - 验证进度状态',
+          '  • "关闭当前对话框" - 验证UI变化',
+          '  • "刷新数据列表" - 验证数据更新'
+        ]
+      },
+      {
+        keywords: ['验证', '检查', '确认'],
+        suggestions: [
+          '💡 建议改为更具体的描述：',
+          '  • "验证用户名显示为：张三" - 指定具体的验证内容',
+          '  • "检查按钮文本为：提交" - 指定元素和期望值',
+          '  • "确认错误提示：用户名不能为空" - 指定错误信息',
+          '  • "验证列表包含3条记录" - 指定数量或条件'
+        ]
+      },
+      {
+        keywords: ['显示', '出现', '展示'],
+        suggestions: [
+          '💡 建议改为更具体的描述：',
+          '  • "显示用户信息卡片" - 指定具体的UI元素',
+          '  • "出现确认对话框" - 指定弹窗类型',
+          '  • "展示搜索结果列表" - 指定内容区域',
+          '  • "显示加载动画" - 指定视觉效果'
+        ]
+      }
+    ];
+
+    // 检查是否匹配模糊模式
+    for (const pattern of fuzzyPatterns) {
+      const matched = pattern.keywords.some(keyword => {
+        // 精确匹配或作为独立词出现
+        return lowerDesc === keyword || 
+               lowerDesc.startsWith(keyword + ' ') ||
+               lowerDesc.endsWith(' ' + keyword) ||
+               lowerDesc.includes(' ' + keyword + ' ') ||
+               (lowerDesc === keyword.replace(/\s/g, ''));
+      });
+
+      if (matched) {
+        this.addLog(runId, `⚠️ 检测到模糊描述："${description}"`, 'warning');
+        // 输出所有建议
+        pattern.suggestions.forEach(suggestion => {
+          this.addLog(runId, suggestion, 'info');
+        });
+        return; // 只输出第一个匹配的建议
+      }
+    }
+
+    // 如果描述太短（少于4个字符），也给出通用建议
+    if (description.length < 4) {
+      this.addLog(runId, `⚠️ 描述过于简短："${description}"`, 'warning');
+      this.addLog(runId, '💡 建议提供更详细的描述，包括：', 'info');
+      this.addLog(runId, '  • 要验证的具体元素（按钮、输入框、文本等）', 'info');
+      this.addLog(runId, '  • 期望的状态或内容（可见、包含文本、等于某值）', 'info');
+      this.addLog(runId, '  • 操作的上下文（在哪个页面、哪个区域）', 'info');
+    }
+  }
+
+  /**
+   * 检测操作步骤的模糊描述并提供改进建议
+   * 针对不同的操作类型提供更具体的建议
+   */
+  private provideStepFuzzyDescriptionSuggestions(runId: string, description: string, action: string): void {
+    if (!description) return;
+
+    const lowerDesc = description.toLowerCase().trim();
+    
+    // 定义操作步骤的模糊描述模式
+    const fuzzyPatterns = [
+      {
+        keywords: ['点击', 'click'],
+        suggestions: [
+          '💡 建议改为更具体的点击描述：',
+          '  • "点击【登录】按钮" - 明确指定按钮名称',
+          '  • "点击页面右上角的【设置】图标" - 指定位置和元素',
+          '  • "点击用户列表中的第一个【编辑】链接" - 指定上下文',
+          '  • "点击导航栏的【产品】菜单项" - 指定所属区域'
+        ]
+      },
+      {
+        keywords: ['输入', '填写', 'fill', 'type'],
+        suggestions: [
+          '💡 建议改为更具体的输入描述：',
+          '  • "在【用户名】输入框输入：admin" - 明确输入框和内容',
+          '  • "在搜索框输入：测试数据" - 指定输入框类型',
+          '  • "在【备注】文本域填写：这是测试备注" - 区分输入框类型',
+          '  • "在登录表单的【密码】字段输入：123456" - 指定表单上下文'
+        ]
+      },
+      {
+        keywords: ['选择', 'select'],
+        suggestions: [
+          '💡 建议改为更具体的选择描述：',
+          '  • "在【城市】下拉框选择：北京" - 明确下拉框和选项',
+          '  • "选中【记住密码】复选框" - 指定复选框名称',
+          '  • "在【性别】单选按钮组选择：男" - 指定单选组和选项',
+          '  • "在日期选择器选择：2024-01-01" - 指定选择器类型'
+        ]
+      },
+      {
+        keywords: ['等待', 'wait'],
+        suggestions: [
+          '💡 建议改为更具体的等待描述：',
+          '  • "等待【加载中】提示消失" - 明确等待的元素状态',
+          '  • "等待页面跳转到用户列表页" - 指定等待的页面',
+          '  • "等待【保存成功】提示出现" - 指定等待的提示',
+          '  • "等待数据加载完成（表格显示数据）" - 指定等待的条件'
+        ]
+      },
+      {
+        keywords: ['操作', '处理', '执行'],
+        suggestions: [
+          '💡 建议改为更具体的操作描述：',
+          '  • "点击【新增】按钮打开新增对话框" - 明确操作和预期结果',
+          '  • "在表单中填写用户信息" - 指定操作范围',
+          '  • "上传测试文件：test.jpg" - 指定操作类型和对象',
+          '  • "滚动页面到底部加载更多数据" - 指定操作目的'
+        ]
+      }
+    ];
+
+    // 检查是否匹配模糊模式
+    for (const pattern of fuzzyPatterns) {
+      const matched = pattern.keywords.some(keyword => {
+        return lowerDesc.includes(keyword);
+      });
+
+      if (matched && description.length < 10) {
+        this.addLog(runId, `⚠️ 检测到模糊的操作步骤："${description}"`, 'warning');
+        // 输出所有建议
+        pattern.suggestions.forEach(suggestion => {
+          this.addLog(runId, suggestion, 'info');
+        });
+        return; // 只输出第一个匹配的建议
+      }
+    }
+
+    // 如果描述太短（少于5个字符），给出通用建议
+    if (description.length < 5) {
+      this.addLog(runId, `⚠️ 操作步骤描述过于简短："${description}"`, 'warning');
+      this.addLog(runId, '💡 建议提供更详细的操作描述，包括：', 'info');
+      this.addLog(runId, '  • 操作类型（点击、输入、选择等）', 'info');
+      this.addLog(runId, '  • 目标元素（按钮名称、输入框标签等）', 'info');
+      this.addLog(runId, '  • 操作内容（输入的文本、选择的选项等）', 'info');
+      this.addLog(runId, '  • 元素位置（页面区域、表单名称等）', 'info');
+    }
   }
 
   // 🔥 新增：确保页面稳定性 - 增强版
@@ -5093,10 +5417,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       // 1. 保存截图证据 - 将screenshots目录中的截图复制到artifacts
       await this.saveScreenshotEvidence(runId);
 
-      // 2. 保存测试日志
-      await this.saveLogEvidence(runId);
-
-      // 3. 尝试保存其他证据（如果存在）
+      // 2. 尝试保存其他证据（如果存在）
       if (testStatus === 'completed') {
         await this.saveAdditionalEvidence(runId);
       }
@@ -5104,9 +5425,14 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       console.log(`✅ [${runId}] 测试证据保存完成`);
       this.addLog(runId, `✅ 测试证据已保存到artifacts目录`, 'success');
 
+      // 3. 🔥 修复：在所有日志添加完成后，最后保存日志文件
+      await this.saveLogEvidence(runId);
+
     } catch (error: any) {
       console.error(`❌ [${runId}] 保存测试证据失败:`, error.message);
       this.addLog(runId, `⚠️ 测试证据保存失败: ${error.message}`, 'warning');
+      // 🔥 即使出错，也要保存日志
+      await this.saveLogEvidence(runId);
       // 不抛出错误，避免影响测试完成流程
     }
   }
@@ -5338,18 +5664,10 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         return;
       }
 
-      // 🔥 修复：检查日志文件是否已存在
+      // 生成日志文件名和路径
       const logFilename = `${runId}-execution.log`;
       const artifactsDir = this.evidenceService.getArtifactsDir();
       const logFilePath = path.join(artifactsDir, runId, logFilename);
-      
-      try {
-        await fsPromises.access(logFilePath);
-        console.log(`⚠️ [${runId}] 日志文件已存在，跳过保存: ${logFilename}`);
-        return;
-      } catch {
-        // 文件不存在，继续保存
-      }
 
       // 生成日志内容
       const logContent = testRun.logs
@@ -5359,7 +5677,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         })
         .join('\n');
 
-      // 保存为日志文件
+      // 保存为日志文件（覆盖已存在的文件）
       const logBuffer = Buffer.from(logContent, 'utf8');
       
       await this.evidenceService.saveBufferArtifact(
@@ -5369,7 +5687,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         logFilename
       );
 
-      console.log(`📝 [${runId}] 已保存测试日志: ${logFilename}`);
+      console.log(`📝 [${runId}] 已保存测试日志: ${logFilename} (共 ${testRun.logs.length} 条)`);
       
     } catch (error: any) {
       console.error(`❌ [${runId}] 保存日志证据失败:`, error.message);
@@ -5851,6 +6169,59 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
   }
 
   /**
+   * 初始化 Midscene Test Runner
+   */
+  private async initializeMidsceneRunner(runId: string, options: {
+    enableTrace?: boolean;
+    enableVideo?: boolean;
+    testCaseId?: number; // 🔥 新增：测试用例ID，用于生成稳定的缓存ID
+  }): Promise<void> {
+    console.log(`🚀 [${runId}] 正在初始化 Midscene Test Runner...`);
+    this.addLog(runId, `🚀 正在初始化 Midscene Test Runner（AI视觉识别引擎）...`, 'info');
+
+    // 🔥 创建日志回调函数，将 MidsceneTestRunner 的日志发送到前端
+    const logCallback = (message: string, level?: 'info' | 'warning' | 'error' | 'success') => {
+      this.addLog(runId, message, level || 'info');
+    };
+
+    // 创建 Midscene Test Runner 实例
+    const artifactsDir = this.evidenceService.getArtifactsDir();
+    this.midsceneRunner = new MidsceneTestRunner(
+      this.evidenceService,
+      this.streamService,
+      artifactsDir,
+      logCallback // 🔥 传递日志回调
+    );
+
+    await this.midsceneRunner.initialize(runId, {
+      headless: false,
+      enableTrace: options.enableTrace !== false,
+      enableVideo: options.enableVideo !== false,
+      testCaseId: options.testCaseId // 🔥 传递测试用例ID用于生成稳定缓存ID
+    });
+
+    console.log(`✅ [${runId}] Midscene Test Runner 初始化成功`);
+    this.addLog(runId, '🤖 Midscene AI Agent 初始化成功', 'success');
+    this.addLog(runId, `✅ Midscene Test Runner 初始化成功，AI视觉识别引擎已启动`, 'success');
+    // this.addLog(runId, '💡 提示：详细的AI执行过程请查看 [Midscene报告] 标签页', 'info');
+    this.addLog(runId, `📦 Trace 录制: ${options.enableTrace !== false ? '已启用' : '禁用'}`, 'info');
+    this.addLog(runId, `🎥 Video 录制: ${options.enableVideo !== false ? '已启用' : '禁用'}`, 'info');
+    
+    // 启动实时流
+    const page = this.midsceneRunner.getPage();
+    if (page) {
+      try {
+        this.streamService.startStream(runId, page);
+        console.log(`📺 [${runId}] 实时流已启动`);
+        this.addLog(runId, `📺 实时流: 已启用`, 'success');
+      } catch (streamError) {
+        console.warn(`⚠️ [${runId}] 启动实时流失败:`, streamError);
+        this.addLog(runId, `⚠️ 启动实时流失败: ${(streamError as Error).message}`, 'warning');
+      }
+    }
+  }
+
+  /**
    * 使用 MCP 客户端执行测试（原有流程）
    */
   private async executeWithMcpClient(
@@ -5911,9 +6282,42 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         this.addLog(runId, `⚡ 第一步：跳过初始快照获取，直接执行导航`, 'info');
         snapshot = '页面准备中，跳过初始快照...';
       } else {
-        this.addLog(runId, `🔍 正在获取页面快照用于AI分析...`, 'info');
-        snapshot = await this.mcpClient.getSnapshot();
-        this.addLog(runId, `📸 页面快照获取成功，开始AI解析`, 'info');
+        // 🔥 关键修复：优先使用上一步点击操作后刷新的缓存快照
+        const cachedSnapshot = (testRun as any)?.cachedSnapshot;
+        const snapshotRefreshTime = (testRun as any)?.snapshotRefreshTime;
+        const now = Date.now();
+        
+        if (cachedSnapshot && snapshotRefreshTime && (now - snapshotRefreshTime) < 10000) {
+          // 缓存快照仍然有效（10秒内）
+          console.log(`✅ [${runId}] 使用缓存的快照（${now - snapshotRefreshTime}ms前刷新）`);
+          this.addLog(runId, `✅ 使用缓存的快照，包含最新的页面内容`, 'success');
+          snapshot = cachedSnapshot;
+          // 清除缓存，避免重复使用
+          (testRun as any).cachedSnapshot = null;
+          (testRun as any).snapshotRefreshTime = null;
+        } else {
+          // 缓存不可用，重新获取快照
+          const lastStepAction = stepIndex > 1 ? (testRun as any)?.lastStepAction : '';
+          const snapshotRefreshDelay = this.getSnapshotRefreshDelay(lastStepAction);
+          
+          this.addLog(runId, `⏳ 获取快照前等待页面稳定（${snapshotRefreshDelay}ms）...`, 'info');
+          await this.delay(snapshotRefreshDelay);
+          
+          this.addLog(runId, `? 正在获取页面快照用于AI分析...`, 'info');
+          snapshot = await this.mcpClient.getSnapshot();
+        }
+        
+        
+        // 🔥 修复：添加调试日志，验证快照是否包含新元素
+        const snapshotLines = snapshot.split('\n');
+        const elementCount = (snapshot.match(/\[ref=element_/g) || []).length;
+        console.log(`📸 [${runId}] 快照包含 ${elementCount} 个元素`);
+        console.log(`📸 [${runId}] 快照前15行内容:`);
+        snapshotLines.slice(0, 15).forEach((line, idx) => {
+          console.log(`   ${idx + 1}. ${line}`);
+        });
+        
+        this.addLog(runId, `📸 页面快照获取成功，包含 ${elementCount} 个元素，开始AI解析`, 'info');
       }
 
       // AI 解析步骤
@@ -5985,6 +6389,32 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           testRun.completedSteps = stepIndex;
           testRun.progress = Math.round((stepIndex / Math.max(estimatedTotalSteps, stepIndex)) * 100);
           
+          // 🔥 新增：记录当前步骤的操作类型，供下一步快照刷新使用
+          (testRun as any).lastStepAction = step.action;
+          console.log(`🔍 [${runId}] DEBUG: 步骤 ${stepIndex} 执行成功，action=${step.action}`);
+          
+          // 🔥 关键修复：点击操作后立即刷新快照
+          if (step.action === 'click' || step.action === 'browser_click') {
+            console.log(`📸 [${runId}] 点击操作后立即刷新快照，等待页面稳定...`);
+            const snapshotRefreshDelay = this.getSnapshotRefreshDelay(step.action);
+            await this.delay(snapshotRefreshDelay);
+            
+            try {
+              const refreshedSnapshot = await this.mcpClient.getSnapshot();
+              // 将刷新后的快照缓存到testRun中，供下一步使用
+              (testRun as any).cachedSnapshot = refreshedSnapshot;
+              (testRun as any).snapshotRefreshTime = Date.now();
+              const elementCount = (refreshedSnapshot.match(/\[ref=element_/g) || []).length;
+              console.log(`✅ [${runId}] 快照已刷新并缓存，包含 ${elementCount} 个元素`);
+              this.addLog(runId, `✅ 快照已刷新，包含 ${elementCount} 个元素`, 'success');
+            } catch (snapshotError) {
+              console.warn(`⚠️ [${runId}] 快照刷新失败，但不影响操作继续: ${(snapshotError as Error).message}`);
+              this.addLog(runId, `⚠️ 快照刷新失败，继续执行下一步`, 'warning');
+            }
+          } else {
+            console.log(`🔍 [${runId}] DEBUG: 步骤 ${stepIndex} 不是点击操作，跳过快照刷新`);
+          }
+          
           // 🔥 修复：广播进度更新，确保前端能实时看到进度变化
           this.wsManager.broadcast({
             type: 'test_update',
@@ -6024,6 +6454,8 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
 
       await this.takeStepScreenshot(runId, stepIndex, 'success', step.description);
       remainingSteps = aiResult.remaining || '';
+      console.log(`🔍 [${runId}] AI返回的remaining值: "${aiResult.remaining}"`);
+      console.log(`🔍 [${runId}] 设置后的remainingSteps: "${remainingSteps}"`);
       this.addLog(runId, `📋 步骤推进: ${remainingSteps.trim() ? `还有 ${remainingSteps.split('\n').filter(l => l.trim()).length} 个步骤` : '所有步骤已完成'}`, 'info');
 
       if (remainingSteps.trim()) {
@@ -6143,6 +6575,9 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     await this.saveTestEvidence(runId, 'completed');
     this.updateTestRunStatus(runId, 'completed', '测试执行完成');
     
+    // 🔥 修复：在所有日志添加完成后，再次保存日志文件
+    await this.saveLogEvidence(runId);
+    
     // 🔥 移除强制同步，避免重复
     // 同步会在 finalizeTestRun() 中自动完成
     console.log(`💾 [${runId}] 测试完成，等待 finalizeTestRun 同步到数据库`);
@@ -6227,11 +6662,124 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
             runId,
             'AI解析器正在匹配元素',
             async () => {
-              // 获取页面快照（使用 Playwright 的 accessibility snapshot）
+              // 🔥 关键修复：优先使用缓存的快照（Playwright路径）
+              const cachedSnapshot = (testRun as any)?.cachedSnapshot;
+              const snapshotRefreshTime = (testRun as any)?.snapshotRefreshTime;
+              const now = Date.now();
+              
+              let snapshot: any;
               const page = this.playwrightRunner.getPage();
-              if (page) {
-                // 获取 Playwright 的 accessibility snapshot（类似 MCP 快照格式）
-                const snapshot = await page.accessibility.snapshot();
+              
+              if (cachedSnapshot && snapshotRefreshTime && (now - snapshotRefreshTime) < 10000) {
+                // 缓存快照仍然有效（10秒内）
+                console.log(`✅ [${runId}] 使用缓存的快照（Playwright路径，${now - snapshotRefreshTime}ms前刷新）`);
+                
+                // 打印缓存快照的所有元素（前端显示前20个，可展开查看更多）
+                let cachedElementCount = 0;
+                const cachedElementsList: string[] = [];
+                
+                const printCachedElements = (node: any, depth = 0): void => {
+                  if (!node) return;
+                  if (node.role) {
+                    cachedElementCount++;
+                    const indent = '  '.repeat(depth);
+                    const name = node.name || '(无名称)';
+                    const elementLine = `${indent}[${cachedElementCount}] ${node.role}: "${name}"`;
+                    cachedElementsList.push(elementLine);
+                    
+                    // 控制台打印所有元素
+                    console.log(elementLine);
+                  }
+                  if (node.children) {
+                    for (const child of node.children) {
+                      printCachedElements(child, depth + 1);
+                    }
+                  }
+                };
+                
+                console.log(`📸 [${runId}] 缓存快照内容（所有元素）：`);
+                printCachedElements(cachedSnapshot);
+                console.log(`📸 [${runId}] 缓存快照总共包含 ${cachedElementCount} 个元素`);
+                
+                // 🔥 修改：将所有内容合并到一条日志中，使用特殊标记分隔
+                if (cachedElementsList.length > 0) {
+                  let logMessage = `📸 缓存快照内容（共 ${cachedElementCount} 个元素）：\n`;
+                  
+                  // 添加前20个元素
+                  logMessage += cachedElementsList.slice(0, 20).join('\n');
+                  
+                  // 如果超过20个，添加展开标记和剩余内容
+                  if (cachedElementsList.length > 20) {
+                    const remaining = cachedElementsList.slice(20).join('\n');
+                    logMessage += `\n[EXPAND_MARKER:${cachedElementsList.length - 20}]\n${remaining}\n[/EXPAND_MARKER]`;
+                  }
+                  
+                  // 发送单条日志
+                  this.addLog(runId, logMessage, 'info');
+                }
+                
+                this.addLog(runId, `✅ 使用缓存的快照，包含最新的页面内容`, 'success');
+                snapshot = cachedSnapshot;
+                // 清除缓存，避免重复使用
+                (testRun as any).cachedSnapshot = null;
+                (testRun as any).snapshotRefreshTime = null;
+              } else {
+                // 缓存不可用，重新获取快照
+                if (page) {
+                  console.log(`📸 [${runId}] 缓存快照不可用，重新获取快照（Playwright路径）`);
+                  // 获取 Playwright 的 accessibility snapshot（类似 MCP 快照格式）
+                  snapshot = await page.accessibility.snapshot();
+                  
+                  // 🔥 新增：打印重新获取的快照内容
+                  if (snapshot) {
+                    let newElementCount = 0;
+                    const newElementsList: string[] = [];
+                    
+                    const collectNewElements = (node: any, depth = 0): void => {
+                      if (!node) return;
+                      if (node.role) {
+                        newElementCount++;
+                        const indent = '  '.repeat(depth);
+                        const name = node.name || '(无名称)';
+                        const elementLine = `${indent}[${newElementCount}] ${node.role}: "${name}"`;
+                        newElementsList.push(elementLine);
+                        
+                        // 控制台打印所有元素
+                        console.log(elementLine);
+                      }
+                      if (node.children) {
+                        for (const child of node.children) {
+                          collectNewElements(child, depth + 1);
+                        }
+                      }
+                    };
+                    
+                    console.log(`📸 [${runId}] 重新获取的快照内容（所有元素）：`);
+                    collectNewElements(snapshot);
+                    console.log(`📸 [${runId}] 重新获取的快照总共包含 ${newElementCount} 个元素`);
+                    
+                    // 🔥 将所有内容合并到一条日志中，使用特殊标记分隔
+                    if (newElementsList.length > 0) {
+                      let logMessage = `📸 重新获取的快照内容（共 ${newElementCount} 个元素）：\n`;
+                      
+                      // 添加前20个元素
+                      logMessage += newElementsList.slice(0, 20).join('\n');
+                      
+                      // 如果超过20个，添加展开标记和剩余内容
+                      if (newElementsList.length > 20) {
+                        const remaining = newElementsList.slice(20).join('\n');
+                        logMessage += `\n[EXPAND_MARKER:${newElementsList.length - 20}]\n${remaining}\n[/EXPAND_MARKER]`;
+                      }
+                      
+                      // 发送单条日志
+                      this.addLog(runId, logMessage, 'info');
+                    }
+                  }
+                }
+              }
+              
+              // 使用获取到的快照（缓存或新获取）
+              if (page && snapshot) {
                 const pageTitle = await page.title();
                 const pageUrl = page.url();
                 
@@ -6243,37 +6791,57 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
                 
                 // 递归提取可交互元素（使用 MCP 快照格式）
                 let elementCounter = 0; // 🔥 修复：使用外部计数器确保唯一性
+                
+                // 🔥 修复：定义完整的可交互元素类型列表（包含text类型）
+                const interactiveRoles = [
+                  'button', 'textbox', 'link', 'checkbox', 'combobox',
+                  'menuitem', 'menu', 'menubar', 'listitem', 'option',
+                  'tab', 'radio', 'searchbox', 'spinbutton',
+                  'text'  // 🔥 新增：text类型元素（可能是可点击的文本）
+                ];
+                
                 const extractElements = (node: any, depth = 0): string[] => {
                   const elements: string[] = [];
                   if (!node) return elements;
                   
-                  // 提取元素信息
-                  if (node.role && (node.role === 'button' || node.role === 'textbox' || 
-                      node.role === 'link' || node.role === 'checkbox' || node.role === 'combobox')) {
+                  // 🔥 修复：提取元素信息 - 检查是否为可交互元素或可点击的generic元素
+                  const isInteractiveRole = node.role && interactiveRoles.includes(node.role);
+                  // 🔥 新增：检查generic类型元素是否可点击（有name且不是纯容器）
+                  const isClickableGeneric = node.role === 'generic' && node.name && node.name.trim().length > 0;
+                  
+                  if (isInteractiveRole || isClickableGeneric) {
                     let name = node.name || '';
                     const role = node.role || '';
                     
+                    // 🔥 清理name：移除空白字符和私有使用区Unicode字符（U+E000-U+F8FF）
+                    name = name.replace(/[\uE000-\uF8FF]/g, '').trim();
+                    
                     // 🔥 增强：对于没有name的元素，尝试使用description或value
                     if (!name && node.description) {
-                      name = node.description;
+                      name = node.description.replace(/[\uE000-\uF8FF]/g, '').trim();
                     }
                     if (!name && node.value) {
-                      name = node.value;
+                      name = node.value.replace(/[\uE000-\uF8FF]/g, '').trim();
                     }
                     
-                    // 🔥 即使name为空也要包含元素（用placeholder或空字符串）
-                    if (!name) {
-                      name = `未命名${role}`;
+                    // 🔥 对于generic元素，如果仍然没有name，则跳过（避免提取纯容器）
+                    if (isClickableGeneric && !name) {
+                      // 跳过没有文本的generic元素
+                    } else {
+                      // 🔥 即使name为空也要包含元素（用placeholder或空字符串）
+                      if (!name) {
+                        name = `未命名${role}`;
+                      }
+                      
+                      // 🔥 修复：使用外部计数器生成稳定的ref
+                      const refCounter = elementCounter++;
+                      const safeName = name.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
+                      const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
+                      elements.push(`[ref=${ref}] ${role} "${name}"`);
+                      
+                      // 🔥 保存映射：ref -> { role, name }
+                      refToElementMap.set(ref, { role, name });
                     }
-                    
-                    // 🔥 修复：使用外部计数器生成稳定的ref
-                    const refCounter = elementCounter++;
-                    const safeName = name.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
-                    const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
-                    elements.push(`[ref=${ref}] ${role} "${name}"`);
-                    
-                    // 🔥 保存映射：ref -> { role, name }
-                    refToElementMap.set(ref, { role, name });
                   }
                   
                   // 递归处理子元素
@@ -6499,6 +7067,41 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
                         
                         // 🔥 方法2: 遍历所有同类型元素，查找包含关键词的
                         if (!matched) {
+                          // 🔥 关键修复：text类型不支持getByRole，直接使用getByText
+                          if (elementInfo.role === 'text') {
+                            try {
+                              // 对于text类型，直接使用getByText查找
+                              const textLocator = page.getByText(descText, { exact: false });
+                              if (await textLocator.count() > 0) {
+                                const aiValue = aiResult.step.text || aiResult.step.value;
+                                enhancedStep = { 
+                                  ...step, 
+                                  selector: `text:${descText}`,
+                                  ...(aiValue !== undefined ? { value: aiValue } : {})
+                                };
+                                this.addLog(runId, `✅ AI 匹配成功，使用 getByText: "${descText}"`, 'success');
+                                matched = true;
+                              } else if (elementInfo.name) {
+                                // 如果descText没找到，尝试使用elementInfo.name
+                                const nameLocator = page.getByText(elementInfo.name, { exact: false });
+                                if (await nameLocator.count() > 0) {
+                                  const aiValue = aiResult.step.text || aiResult.step.value;
+                                  enhancedStep = { 
+                                    ...step, 
+                                    selector: `text:${elementInfo.name}`,
+                                    ...(aiValue !== undefined ? { value: aiValue } : {})
+                                  };
+                                  this.addLog(runId, `✅ AI 匹配成功，使用 getByText: "${elementInfo.name}"`, 'success');
+                                  matched = true;
+                                }
+                              }
+                            } catch (textError: any) {
+                              console.log(`  ⚠️ text元素查找失败: ${textError.message}`);
+                            }
+                          }
+                          
+                          // 对于非text类型，使用原有的遍历逻辑
+                          if (!matched && elementInfo.role !== 'text') {
                           const allElements = page.getByRole(elementInfo.role as any);
                           const count = await allElements.count();
                           
@@ -6592,20 +7195,23 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
                           
                           // 如果遍历后没有匹配，尝试其他回退方案
                           if (!matched && elementInfo.name) {
-                            // 回退：使用 role+name
-                            const roleLocator = page.getByRole(elementInfo.role as any, { name: elementInfo.name, exact: false });
-                            if (await roleLocator.count() > 0) {
-                              const aiValue = aiResult.step.text || aiResult.step.value;
-                              enhancedStep = { 
-                                ...step, 
-                                selector: `${elementInfo.role}:${elementInfo.name}`,
-                                ...(aiValue !== undefined ? { value: aiValue } : {})
-                              };
-                              this.addLog(runId, `✅ AI 匹配成功，使用 role+name: ${elementInfo.role}:${elementInfo.name}`, 'success');
-                              matched = true;
+                            // 回退：使用 role+name（仅对非text类型）
+                            if (elementInfo.role !== 'text') {
+                              const roleLocator = page.getByRole(elementInfo.role as any, { name: elementInfo.name, exact: false });
+                              if (await roleLocator.count() > 0) {
+                                const aiValue = aiResult.step.text || aiResult.step.value;
+                                enhancedStep = { 
+                                  ...step, 
+                                  selector: `${elementInfo.role}:${elementInfo.name}`,
+                                  ...(aiValue !== undefined ? { value: aiValue } : {})
+                                };
+                                this.addLog(runId, `✅ AI 匹配成功，使用 role+name: ${elementInfo.role}:${elementInfo.name}`, 'success');
+                                matched = true;
+                              }
                             }
                           }
-                        }
+                          } // 结束 if (!matched && elementInfo.role !== 'text')
+                        } // 结束 if (!matched)
                           
                         if (!matched) {
                           throw new Error('无法通过任何方式匹配元素');
@@ -6845,10 +7451,14 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
               }
             } else {
               this.addLog(runId, `⚠️ AI 解析未找到精确匹配，使用原始选择器`, 'warning');
+              // 🔥 检测模糊描述并给出建议
+              this.provideStepFuzzyDescriptionSuggestions(runId, step.description, step.action);
             }
         } catch (aiError: any) {
           console.warn(`⚠️ [${runId}] AI 元素匹配失败，使用原始选择器:`, aiError.message);
           this.addLog(runId, `⚠️ AI 匹配失败，使用原始选择器: ${aiError.message}`, 'warning');
+          // 🔥 检测模糊描述并给出建议
+          this.provideStepFuzzyDescriptionSuggestions(runId, step.description, step.action);
         }
       }
 
@@ -6901,10 +7511,55 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
               const pageTitle = await page.title();
               const pageUrl = page.url();
               
-              // 构建类似 MCP 格式的快照字符串
+              // 🔥 关键修复：构建refToElementMap映射表（与第一次AI解析时相同）
+              const refToElementMap = new Map<string, { role: string; name: string }>();
+              
+              // 构建类似 MCP 格式的快照字符串，同时构建映射表
               let snapshot = `Page URL: ${pageUrl}\nPage Title: ${pageTitle}\n\n`;
               if (accessibilitySnapshot) {
-                snapshot += this.formatAccessibilitySnapshot(accessibilitySnapshot);
+                // 🔥 使用formatWithMapping函数，同时构建快照和映射表
+                let elementCounter = 0; // 🔥 关键修复：elementCounter必须在外部定义
+                
+                const formatWithMapping = (node: any, depth = 0): string[] => {
+                  const elements: string[] = [];
+                  if (!node) return elements;
+                  
+                  const role = node.role || 'generic';
+                  let name = node.name || '';
+                  
+                  // 🔥 关键修复：去除所有类型的空白字符和不可见字符
+                  // 包括私有使用区字符（U+E000-U+F8FF，如0xE6EF即59103）
+                  let cleanName = name.trim();
+                  cleanName = cleanName.replace(/[\x00-\x1F\x7F-\x9F\uE000-\uF8FF\uFEFF\u200B-\u200D\u2028\u2029]/g, '');
+                  cleanName = cleanName.trim();
+                  
+                  // 生成ref
+                  const refCounter = elementCounter++; // ✅ 使用外部计数器
+                  const safeName = cleanName.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
+                  const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
+                  
+                  // ✅ 保存到映射表（使用清理后的name）
+                  if (cleanName || role !== 'generic') {
+                    refToElementMap.set(ref, { role, name: cleanName });
+                  }
+                  
+                  // 构建快照文本（使用清理后的name）
+                  elements.push(`[ref=${ref}] ${role} "${cleanName}"`);
+                  
+                  if (node.children) {
+                    for (const child of node.children) {
+                      elements.push(...formatWithMapping(child, depth + 1));
+                    }
+                  }
+                  
+                  return elements;
+                };
+                
+                const elements = formatWithMapping(accessibilitySnapshot);
+                snapshot += elements.join('\n');
+                
+                console.log(`📸 [${runId}] AI重新识别快照包含 ${elements.length} 个元素`);
+                console.log(`🗺️ [${runId}] 映射表大小: ${refToElementMap.size}`);
               }
               
               // 🔥 重新调用AI解析，跳过缓存
@@ -6920,7 +7575,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
               
               if (aiRetryResult.success && aiRetryResult.step) {
                 const retryStep = aiRetryResult.step;
-                console.log(`🤖 [${runId}] AI重新解析成功: ${retryStep.action} - selector: ${retryStep.selector || retryStep.ref}`);
+                console.log(`🤖 [${runId}] AI重新解析成功: ${retryStep.action} - selector: ${retryStep.selector || 'N/A'}, ref: ${retryStep.ref || 'N/A'}`);
                 this.addLog(runId, `🤖 AI重新识别成功，重试操作`, 'info');
                 
                 // 🔥 修复：将 MCP 格式的操作类型转换为 Playwright 格式
@@ -6938,17 +7593,28 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
                   convertedAction = 'fill';  // 🔥 新增：input -> fill
                 }
                 
+                // 🔥 关键修复：如果AI返回了ref，通过映射表转换为role:name格式
+                let finalSelector = retryStep.selector || retryStep.element;
+                if (retryStep.ref && refToElementMap.has(retryStep.ref)) {
+                  const elementInfo = refToElementMap.get(retryStep.ref)!;
+                  if (elementInfo.name) {
+                    // ✅ 转换为role:name格式
+                    finalSelector = `${elementInfo.role}:${elementInfo.name}`;
+                    console.log(`🔄 [${runId}] 转换ref为role:name格式: ${retryStep.ref} -> ${finalSelector}`);
+                  }
+                }
+                
                 // 🔥 使用新的AI解析结果重新执行
-                // 对于输入操作，需要保留原始的 value
                 const enhancedRetryStep = {
                   ...retryStep,
                   action: convertedAction,  // 使用转换后的操作类型
                   description: step.description,
-                  selector: retryStep.selector || retryStep.ref || retryStep.element,
+                  selector: finalSelector,  // ✅ 使用转换后的选择器
+                  ref: undefined,  // ✅ 清除ref，因为已经转换为selector
                   value: retryStep.value || retryStep.text || enhancedStep.value  // 🔥 保留输入值
                 };
                 
-                console.log(`🔄 [${runId}] 转换操作类型: ${retryStep.action} -> ${convertedAction}, selector: ${enhancedRetryStep.selector}, value: ${enhancedRetryStep.value || 'N/A'}`);
+                console.log(`🔄 [${runId}] 转换操作类型: ${retryStep.action} -> ${convertedAction}, selector: ${enhancedRetryStep.selector || 'N/A'}, value: ${enhancedRetryStep.value || 'N/A'}`);
                 
                 result = await this.playwrightRunner.executeStep(enhancedRetryStep, runId, i, matchMode);
                 
@@ -7027,6 +7693,90 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
       }
 
       this.addLog(runId, `✅ 步骤 ${stepIndex} 执行成功`, 'success');
+      
+      // 🔥 关键修复：点击操作后立即刷新快照（Playwright Test Runner路径）
+      if (step.action === 'click' && testRun) {
+        console.log(`📸 [${runId}] 点击操作后立即刷新快照（Playwright路径），等待页面稳定...`);
+        const snapshotRefreshDelay = this.getSnapshotRefreshDelay(step.action);
+        await this.delay(snapshotRefreshDelay);
+        
+        try {
+          const page = this.playwrightRunner?.getPage();
+          if (page) {
+            // 获取刷新后的快照
+            const refreshedSnapshot = await page.accessibility.snapshot();
+            const pageTitle = await page.title();
+            const pageUrl = page.url();
+            
+            // 构建快照文本
+            let snapshotText = `Page URL: ${pageUrl}\nPage Title: ${pageTitle}\n\n`;
+            let elementCount = 0;
+            
+            const extractElements = (node: any, depth = 0): void => {
+              if (!node) return;
+              if (node.role) {
+                elementCount++;
+                // 打印所有元素的详细信息
+                const indent = '  '.repeat(depth);
+                const name = node.name || '(无名称)';
+                console.log(`${indent}[${elementCount}] ${node.role}: "${name}"`);
+              }
+              if (node.children) {
+                for (const child of node.children) {
+                  extractElements(child, depth + 1);
+                }
+              }
+            };
+            
+            console.log(`📸 [${runId}] 刷新后的快照内容（所有元素）：`);
+            const elementsList: string[] = [];
+            
+            // 收集所有元素用于发送到前端
+            const collectElements = (node: any, depth = 0): void => {
+              if (!node) return;
+              if (node.role) {
+                const indent = '  '.repeat(depth);
+                const name = node.name || '(无名称)';
+                elementsList.push(`${indent}[${elementsList.length + 1}] ${node.role}: "${name}"`);
+              }
+              if (node.children) {
+                for (const child of node.children) {
+                  collectElements(child, depth + 1);
+                }
+              }
+            };
+            
+            extractElements(refreshedSnapshot);
+            collectElements(refreshedSnapshot);
+            
+            // 🔥 修改：将所有内容合并到一条日志中，使用特殊标记分隔
+            if (elementsList.length > 0) {
+              let logMessage = `📸 刷新后的快照内容（共 ${elementCount} 个元素）：\n`;
+              
+              // 添加前20个元素
+              logMessage += elementsList.slice(0, 20).join('\n');
+              
+              // 如果超过20个，添加展开标记和剩余内容
+              if (elementsList.length > 20) {
+                const remaining = elementsList.slice(20).join('\n');
+                logMessage += `\n[EXPAND_MARKER:${elementsList.length - 20}]\n${remaining}\n[/EXPAND_MARKER]`;
+              }
+              
+              // 发送单条日志
+              this.addLog(runId, logMessage, 'info');
+            }
+            
+            // 缓存快照供下一步使用
+            (testRun as any).cachedSnapshot = refreshedSnapshot;
+            (testRun as any).snapshotRefreshTime = Date.now();
+            console.log(`✅ [${runId}] 快照已刷新并缓存（Playwright路径），包含 ${elementCount} 个元素`);
+            this.addLog(runId, `✅ 快照已刷新，包含 ${elementCount} 个元素`, 'success');
+          }
+        } catch (snapshotError) {
+          console.warn(`⚠️ [${runId}] 快照刷新失败，但不影响操作继续: ${(snapshotError as Error).message}`);
+          this.addLog(runId, `⚠️ 快照刷新失败，继续执行下一步`, 'warning');
+        }
+      }
       
       // 🔥 等待操作完全完成后再截图
       await this.delay(500);
@@ -7477,22 +8227,72 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
               }
             } else {
               this.addLog(runId, `⚠️ AI 断言解析失败，尝试使用描述文本作为选择器`, 'warning');
+              // 🔥 检测模糊描述并给出建议
+              this.provideFuzzyDescriptionSuggestions(runId, assertion.description);
               // 回退：使用断言描述作为选择器（智能查找会处理）
               assertion = { ...assertion, selector: assertion.description };
             }
         } catch (aiError: any) {
           console.warn(`⚠️ [${runId}] AI 断言解析失败: ${aiError.message}`);
           this.addLog(runId, `⚠️ AI 断言解析失败，使用描述文本: ${aiError.message}`, 'warning');
+          // 🔥 检测模糊描述并给出建议
+          this.provideFuzzyDescriptionSuggestions(runId, assertion.description);
           // 回退：使用断言描述作为选择器
           assertion = { ...assertion, selector: assertion.description };
         }
       }
 
-      // 🔥 执行断言，传递 matchMode 参数
-      const result = await this.playwrightRunner.executeStep(assertion, runId, assertionIndex - 1, matchMode);
+      // 🔥 执行断言，优先使用 AssertionService
+      // 🔥 新增：尝试使用 AssertionService 进行统一验证
+      let result: { success: boolean; error?: string } | null = null;
+      
+      try {
+        // 构建 Assertion 对象
+        const assertionObj: Assertion = {
+          id: `${runId}-assertion-${i}`,
+          description: assertion.description || '',
+          selector: assertion.selector,
+          ref: assertion.ref,
+          value: assertion.value,
+          condition: assertion.condition as any,
+          timeout: assertion.timeout || 10000
+        };
+        
+        // 构建验证上下文
+        const context: VerificationContext = {
+          page: this.playwrightRunner!.getPage()!,
+          runId,
+          artifactsDir: path.join(process.cwd(), 'artifacts', runId),
+          logCallback: (message: string, level: 'info' | 'success' | 'warning' | 'error') => {
+            this.addLog(runId, message, level);
+          },
+          textHistory: this.playwrightRunner!.getTextHistory()
+        };
+        
+        // 🔥 使用 AssertionService 进行验证
+        const assertionService = AssertionService.getInstance();
+        const verificationResult = await assertionService.verify(assertionObj, context);
+        
+        if (verificationResult.success) {
+          // AssertionService 验证成功
+          result = { success: true };
+          this.addLog(runId, `✅ 断言 ${i + 1} 通过 (使用 AssertionService)`, 'success');
+        } else {
+          // AssertionService 验证失败
+          result = { success: false, error: verificationResult.error };
+          // 🔥 注意：失败日志会在后续的 updateTestRunStatus 中统一添加，这里不重复
+        }
+      } catch (assertionServiceError: any) {
+        // AssertionService 无法处理，回退到旧逻辑
+        console.warn(`⚠️ [${runId}] AssertionService 验证失败，回退到旧逻辑: ${assertionServiceError.message}`);
+        this.addLog(runId, `⚠️ 回退到传统验证方式`, 'warning');
+        
+        // 回退：使用 playwrightRunner.executeStep
+        result = await this.playwrightRunner.executeStep(assertion, runId, assertionIndex - 1, matchMode);
+      }
 
       if (!result.success) {
-        // 🔥 修复：断言失败时更新 failedSteps 和 completedSteps，确保执行结果计算正确
+        // 🔥 修复：断言言失败时更新 failedSteps 和 completedSteps，确保执行结果计算正确
         if (testRun) {
           testRun.failedSteps = (testRun.failedSteps || 0) + 1;
           testRun.completedSteps = assertionIndex;
@@ -7504,7 +8304,8 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         return;
       }
 
-      this.addLog(runId, `✅ 断言 ${i + 1} 通过`, 'success');
+      // 🔥 注意：成功日志已在 AssertionService 验证时输出，这里不重复添加
+      // this.addLog(runId, `✅ 断言 ${i + 1} 通过`, 'success');
 
       // 🔥 断言成功后更新 passedSteps（修复 passedSteps 少计1的bug）
       if (testRun) {
@@ -7575,9 +8376,174 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     await this.saveTestEvidence(runId, 'completed');
     this.updateTestRunStatus(runId, 'completed', '测试执行完成');
     
+    // 🔥 修复：在所有日志添加完成后，再次保存日志文件
+    await this.saveLogEvidence(runId);
+    
     // 🔥 移除强制同步，避免重复
     // 同步会在 finalizeTestRun() 中自动完成
     console.log(`💾 [${runId}] 测试完成，等待 finalizeTestRun 同步到数据库`);
+  }
+
+  /**
+   * 使用 Midscene Test Runner 执行测试
+   */
+  private async executeWithMidsceneRunner(
+    runId: string,
+    testCase: TestCase,
+    testRun: TestRun,
+    options: { 
+      enableTrace?: boolean; 
+      enableVideo?: boolean;
+      assertionMatchMode?: 'strict' | 'auto' | 'loose';
+    }
+  ): Promise<void> {
+    if (!this.midsceneRunner) {
+      throw new Error('Midscene Test Runner 未初始化');
+    }
+
+    const page = this.midsceneRunner.getPage();
+    if (!page) {
+      throw new Error('页面未初始化');
+    }
+
+    // 获取断言匹配模式
+    const matchMode = options.assertionMatchMode || 'auto';
+    console.log(`⚙️ [${runId}] 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`);
+    this.addLog(runId, `⚙️ 断言匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配（推荐）' : '宽松匹配'}`, 'info');
+
+    // 解析测试步骤
+    const steps = this.parseTestSteps(testCase.steps || '');
+    const assertions = this.parseAssertions(testCase.assertions || '');
+    
+    const totalSteps = steps.length + assertions.length;
+    if (testRun) {
+      testRun.totalSteps = totalSteps;
+    }
+
+    console.log(`📊 [${runId}] 总步骤数: ${totalSteps} (操作: ${steps.length}, 断言: ${assertions.length})`);
+    this.addLog(runId, `📊 总步骤数: ${totalSteps} (操作: ${steps.length}, 断言: ${assertions.length})`, 'info');
+
+    // 执行操作步骤
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const stepIndex = i + 1;
+
+      // 检查取消状态
+      const isCancelledByQueue = this.queueService && this.queueService.isCancelled(runId);
+      const isCancelledByStatus = testRun && testRun.status === 'cancelled';
+      
+      if (isCancelledByQueue || isCancelledByStatus) {
+        console.log(`⏹️ [${runId}] 测试已被取消，停止执行 (步骤${stepIndex})`);
+        this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+        if (!isCancelledByStatus) {
+          this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        }
+        return;
+      }
+
+      // 更新状态（不输出日志，由midsceneRunner输出）
+      this.updateTestRunStatus(runId, 'running', `🔧 执行步骤 ${stepIndex}/${totalSteps}: ${step.description}`);
+
+      // 使用Midscene执行步骤
+      const result = await this.midsceneRunner.executeStep(step, runId, i, matchMode);
+
+      if (!result.success) {
+        if (testRun) {
+          testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+          testRun.completedSteps = stepIndex;
+          testRun.progress = Math.round((stepIndex / totalSteps) * 100);
+        }
+        // 🔥 错误日志由midsceneRunner输出，这里不再重复输出
+        // 只更新状态，不传递message参数避免重复日志
+        testRun.status = 'failed';
+        this.wsManager.broadcast({
+          type: 'test_update',
+          runId,
+          data: {
+            status: 'failed',
+            progress: testRun?.progress || 0,
+            completedSteps: testRun?.completedSteps || 0,
+            totalSteps: testRun?.totalSteps || 0,
+            passedSteps: testRun?.passedSteps || 0,
+            failedSteps: testRun?.failedSteps || 0
+          }
+        });
+        return;
+      }
+
+      if (testRun) {
+        testRun.passedSteps = (testRun.passedSteps || 0) + 1;
+        testRun.completedSteps = stepIndex;
+        testRun.progress = Math.round((stepIndex / totalSteps) * 100);
+        
+        this.wsManager.broadcast({
+          type: 'test_update',
+          runId,
+          data: {
+            status: testRun.status,
+            progress: testRun.progress,
+            completedSteps: testRun.completedSteps,
+            totalSteps: testRun.totalSteps,
+            passedSteps: testRun.passedSteps,
+            failedSteps: testRun.failedSteps
+          }
+        });
+      }
+
+      // 🔥 修复：输出步骤执行成功日志
+      console.log(`✅ [${runId}] 步骤 ${stepIndex} 执行成功`);
+      this.addLog(runId, `✅ 步骤 ${stepIndex} 执行成功`, 'success');
+    }
+
+    // 执行断言步骤
+    for (let i = 0; i < assertions.length; i++) {
+      const assertion = assertions[i];
+      const assertionIndex = steps.length + i + 1;
+
+      // 检查取消状态
+      const isCancelledByQueue = this.queueService && this.queueService.isCancelled(runId);
+      const isCancelledByStatus = testRun && testRun.status === 'cancelled';
+      
+      if (isCancelledByQueue || isCancelledByStatus) {
+        console.log(`⏹️ [${runId}] 测试已被取消，停止断言执行 (断言${i + 1})`);
+        this.addLog(runId, `⏹️ 测试已被用户取消`, 'warning');
+        if (!isCancelledByStatus) {
+          this.updateTestRunStatus(runId, 'cancelled', '测试已被用户取消');
+        }
+        return;
+      }
+
+      // 断言日志由midsceneRunner输出，这里不重复
+
+      const result = await this.midsceneRunner.executeStep(assertion, runId, assertionIndex - 1, matchMode, i + 1);
+
+      if (!result.success) {
+        if (testRun) {
+          testRun.failedSteps = (testRun.failedSteps || 0) + 1;
+          testRun.completedSteps = assertionIndex;
+          testRun.progress = Math.round((assertionIndex / totalSteps) * 100);
+        }
+        // 🔥 修复：详细错误已经在midsceneRunner中输出，这里只输出汇总信息
+        // 不再重复输出result.error（避免第三次输出相同错误）
+        this.updateTestRunStatus(runId, 'failed', `❌ 断言 ${i + 1} 失败`);
+        return;
+      }
+
+      if (testRun) {
+        testRun.passedSteps = (testRun.passedSteps || 0) + 1;
+        testRun.completedSteps = assertionIndex;
+        testRun.progress = Math.round((assertionIndex / totalSteps) * 100);
+      }
+
+      this.addLog(runId, `✅ 断言 ${i + 1} 通过`, 'success');
+    }
+
+    // 测试完成
+    console.log(`✅ [${runId}] 完成 [${testCase.name}]`);
+    await this.saveTestEvidence(runId, 'completed');
+    // 🔥 修复：延迟打印"测试执行完成"，等待资源清理完成后再打印
+    // this.updateTestRunStatus(runId, 'completed', '测试执行完成');
+    console.log(`💾 [${runId}] 测试完成，等待资源清理和数据库同步...`);
   }
 
   /**
@@ -7718,6 +8684,166 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     }
   }
 
+  /**
+   * 清理 Midscene Test Runner 资源
+   */
+  private async cleanupMidsceneRunner(runId: string, testRun: TestRun | null): Promise<void> {
+    console.log(`🧹 [${runId}] 清理资源...`);
+    
+    try {
+      this.streamService.stopStream(runId);
+      console.log(`📺 [${runId}] 实时流已停止`);
+
+      if (this.midsceneRunner) {
+        console.log(`🧹 [${runId}] 正在清理 Midscene Test Runner...`);
+        
+        // 🔥 获取报告文件路径
+        const reportFile = this.midsceneRunner.getReportFile();
+        if (reportFile) {
+          console.log(`📊 [${runId}] Midscene报告路径: ${reportFile}`);
+          // 保存报告路径到测试运行记录
+          if (testRun) {
+            try {
+              await this.prisma.test_case_executions.update({
+                where: { id: runId },
+                data: { 
+                  midscene_report_path: reportFile,
+                  execution_engine: 'midscene'
+                }
+              });
+              console.log(`✅ [${runId}] 报告路径已保存到数据库`);
+            } catch (dbError) {
+              console.warn(`⚠️ [${runId}] 保存报告路径失败:`, dbError);
+            }
+          }
+        }
+        
+        // 🔥 修复：先关闭浏览器（资源清理）
+        await this.midsceneRunner.close(runId);
+        
+        // 等待文件写入完成
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 处理Midscene生成的文件（trace和video）
+        await this.processMidsceneArtifacts(runId);
+        
+        // 🔥 修复：资源清理完成后，输出统计信息
+        await this.midsceneRunner.printStatistics(runId);
+        
+        this.midsceneRunner = null;
+        console.log(`✅ [${runId}] Midscene Test Runner 已关闭`);
+      }
+      
+      // 🔥 修复：在统计日志之后打印"测试执行完成"
+      console.log(`\n✅ [${runId}] 测试执行完成\n`);
+      this.updateTestRunStatus(runId, 'completed', '测试执行完成');
+      
+      // 🔥 修复：在所有日志添加完成后，再次保存日志文件（包含统计信息）
+      await this.saveLogEvidence(runId);
+      
+    } catch (cleanupError) {
+      console.warn(`⚠️ [${runId}] 清理 Midscene Test Runner 时出错:`, cleanupError);
+    }
+  }
+
+  /**
+   * 处理 Midscene 生成的原始文件
+   */
+  private async processMidsceneArtifacts(runId: string): Promise<void> {
+    try {
+      const artifactsDir = this.evidenceService.getArtifactsDir();
+      const runArtifactsDir = path.join(artifactsDir, runId);
+      
+      if (!(await this.fileExists(runArtifactsDir))) {
+        return;
+      }
+
+      const files = await fsPromises.readdir(runArtifactsDir, { withFileTypes: true });
+      
+      // 处理 trace.zip 文件
+      const traceFile = files.find(f => f.isFile() && f.name === 'trace.zip');
+      if (traceFile) {
+        const tracePath = path.join(runArtifactsDir, 'trace.zip');
+        const newTracePath = path.join(runArtifactsDir, `${runId}-trace.zip`);
+        
+        try {
+          await fsPromises.access(newTracePath);
+          await fsPromises.unlink(tracePath);
+          console.log(`🗑️ [${runId}] 已删除重复的 trace.zip 文件`);
+        } catch {
+          await fsPromises.rename(tracePath, newTracePath);
+          console.log(`📦 [${runId}] Trace 文件已重命名: ${runId}-trace.zip`);
+          
+          await this.evidenceService.saveBufferArtifact(
+            runId,
+            'trace',
+            await fsPromises.readFile(newTracePath),
+            `${runId}-trace.zip`
+          );
+        }
+      }
+
+      // 处理视频文件
+      const videoFiles = files.filter(f => 
+        f.isFile() && 
+        (f.name.endsWith('.webm') || f.name.endsWith('.mp4')) &&
+        !f.name.includes(runId) &&
+        f.name.match(/^[a-f0-9]{32,}\.(webm|mp4)$/i)
+      );
+      
+      if (videoFiles.length > 0) {
+        const videoFilesWithStats = await Promise.all(
+          videoFiles.map(async (file) => {
+            const filePath = path.join(runArtifactsDir, file.name);
+            const stats = await fsPromises.stat(filePath);
+            return { file, path: filePath, stats };
+          })
+        );
+        
+        videoFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+        
+        const { file: videoFile, path: videoPath, stats: videoStats } = videoFilesWithStats[0];
+        
+        if (videoStats.size > 0) {
+          const ext = videoFile.name.split('.').pop() || 'webm';
+          const newVideoPath = path.join(runArtifactsDir, `${runId}-video.${ext}`);
+          
+          try {
+            await fsPromises.access(newVideoPath);
+            const existingStats = await fsPromises.stat(newVideoPath);
+            
+            if (existingStats.size === 0) {
+              await fsPromises.unlink(newVideoPath);
+              await fsPromises.rename(videoPath, newVideoPath);
+              console.log(`🎥 [${runId}] 视频文件已重命名（替换空文件）: ${runId}-video.${ext}`);
+            } else {
+              await fsPromises.unlink(videoPath);
+              console.log(`🗑️ [${runId}] 已删除重复的视频文件: ${videoFile.name}`);
+              return;
+            }
+          } catch {
+            await fsPromises.rename(videoPath, newVideoPath);
+            console.log(`🎥 [${runId}] 视频文件已重命名: ${runId}-video.${ext}`);
+          }
+          
+          const finalStats = await fsPromises.stat(newVideoPath);
+          await this.evidenceService.saveBufferArtifact(
+            runId,
+            'video',
+            await fsPromises.readFile(newVideoPath),
+            `${runId}-video.${ext}`
+          );
+          console.log(`✅ [${runId}] 视频文件已保存到数据库: ${runId}-video.${ext} (${finalStats.size} bytes)`);
+        } else {
+          console.warn(`⚠️ [${runId}] 视频文件大小为 0，跳过: ${videoFile.name}`);
+        }
+      }
+    } catch (error: any) {
+      console.error(`❌ [${runId}] 处理 Midscene 文件失败:`, error.message);
+    }
+  }
+
+
   // #endregion
 
   // #region Accessibility Snapshot Formatting
@@ -7733,14 +8859,52 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
     const elements: string[] = [];
     let elementCounter = 0;
     
-    // 递归提取可交互元素
+    // 🔥 第一遍：构建节点映射和父子关系
+    const nodeMap = new Map<any, { parent: any; siblings: any[] }>();
+    const buildNodeMap = (node: any, parent: any = null, siblings: any[] = []): void => {
+      if (!node) return;
+      nodeMap.set(node, { parent, siblings });
+      if (node.children) {
+        for (const child of node.children) {
+          buildNodeMap(child, node, node.children);
+        }
+      }
+    };
+    buildNodeMap(snapshot);
+    
+    // 🔥 辅助函数：查找兄弟节点中的文本
+    const findTextInSiblings = (node: any): string => {
+      const nodeInfo = nodeMap.get(node);
+      if (!nodeInfo || !nodeInfo.siblings) return '';
+      
+      // 在兄弟节点中查找文本
+      for (const sibling of nodeInfo.siblings) {
+        if (sibling !== node && sibling.name) {
+          return sibling.name;
+        }
+      }
+      return '';
+    };
+    
+    // 🔥 第二遍：递归提取可交互元素
     const extractElements = (node: any, depth = 0): void => {
       if (!node) return;
       
-      // 提取元素信息
-      if (node.role && (node.role === 'button' || node.role === 'textbox' || 
-          node.role === 'link' || node.role === 'checkbox' || node.role === 'combobox' ||
-          node.role === 'radio' || node.role === 'menuitem' || node.role === 'tab')) {
+      // 🔥 修复：提取所有可交互元素类型，与之前的修复保持一致
+      const interactiveRoles = [
+        'button', 'textbox', 'link', 'checkbox', 'combobox',
+        'menuitem', 'menu', 'menubar',  // 菜单相关
+        'listitem', 'option',  // 列表和选项
+        'tab', 'radio',  // 标签页和单选框
+        'searchbox', 'spinbutton'  // 搜索框和数字输入
+      ];
+      
+      // 🔥 修复：提取元素信息 - 检查是否为可交互元素或可点击的generic元素
+      const isInteractiveRole = node.role && interactiveRoles.includes(node.role);
+      // 🔥 新增：检查generic类型元素是否可点击（有name且不是纯容器）
+      const isClickableGeneric = node.role === 'generic' && node.name && node.name.trim().length > 0;
+      
+      if (isInteractiveRole || isClickableGeneric) {
         let name = node.name || '';
         const role = node.role || '';
         
@@ -7752,16 +8916,35 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           name = node.value;
         }
         
-        // 即使name为空也要包含元素
-        if (!name) {
-          name = `未命名${role}`;
+        // 🔥 关键修复：对于checkbox，如果没有name，尝试从兄弟节点中查找文本
+        if (!name && role === 'checkbox') {
+          const siblingText = findTextInSiblings(node);
+          if (siblingText) {
+            name = siblingText;
+            console.log(`🔗 [formatAccessibilitySnapshot] 为checkbox关联兄弟节点文本: "${name}"`);
+          }
         }
         
-        // 生成稳定的ref
-        const refCounter = elementCounter++;
-        const safeName = name.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
-        const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
-        elements.push(`[ref=${ref}] ${role} "${name}"`);
+        // 🔥 对于generic元素，如果仍然没有name，则跳过（避免提取纯容器）
+        if (isClickableGeneric && !name) {
+          // 跳过没有文本的generic元素
+        } else {
+          // 即使name为空也要包含元素
+          if (!name) {
+            name = `未命名${role}`;
+          }
+          
+          // 🔥 修复：去除所有类型的空白字符和不可见字符（包括私有使用区字符）
+          let cleanName = name.trim();
+          cleanName = cleanName.replace(/[\x00-\x1F\x7F-\x9F\uE000-\uF8FF\uFEFF\u200B-\u200D\u2028\u2029]/g, '');
+          cleanName = cleanName.trim();
+          
+          // 生成稳定的ref
+          const refCounter = elementCounter++;
+          const safeName = cleanName.replace(/\s+/g, '_').replace(/[^\w]/g, '').substring(0, 10);
+          const ref = node.id || `element_${refCounter}_${role}_${safeName || 'unnamed'}`;
+          elements.push(`[ref=${ref}] ${role} "${cleanName}"`);
+        }
       }
       
       // 递归处理子元素

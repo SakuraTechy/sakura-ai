@@ -1,0 +1,560 @@
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+/**
+ * Midscene日志解析器
+ * 解析 ./midscene_run/log/ 目录下的官方日志文件
+ * 
+ * 官方日志文件：
+ * - ai-profile-detail.log: 详细的token使用情况（JSON格式）
+ * - ai-profile-stats.log: 统计信息，包含模型名称和耗时（CSV格式）
+ */
+
+// 🔥 模型价格配置（单位：美元/1K tokens）
+// 价格来源：各大模型官方定价（2026年1月）
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // OpenAI
+  'gpt-4o': { input: 0.0025, output: 0.01 },
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'gpt-4-turbo': { input: 0.01, output: 0.03 },
+  'gpt-4': { input: 0.03, output: 0.06 },
+  'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+  
+  // Anthropic Claude
+  'claude-3.5-sonnet': { input: 0.003, output: 0.015 },
+  'claude-3-opus': { input: 0.015, output: 0.075 },
+  'claude-3-sonnet': { input: 0.003, output: 0.015 },
+  'claude-3-haiku': { input: 0.00025, output: 0.00125 },
+  
+  // Google Gemini
+  'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+  'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-pro-vision': { input: 0.00025, output: 0.0005 },
+  
+  // 字节跳动 Doubao（豆包）
+  'doubao-seed-1-8': { input: 0.0001, output: 0.0002 },
+  'doubao-seed-1-8-251228': { input: 0.0001, output: 0.0002 },
+  'doubao-pro': { input: 0.0008, output: 0.002 },
+  'doubao-lite': { input: 0.0003, output: 0.0006 },
+  
+  // 阿里通义千问
+  'qwen-vl-max': { input: 0.0002, output: 0.0006 },
+  'qwen-vl-max-latest': { input: 0.0002, output: 0.0006 },
+  'qwen2.5-vl': { input: 0.0002, output: 0.0006 },
+  'qwen-vl-plus': { input: 0.0001, output: 0.0003 },
+  
+  // 智谱 GLM
+  'glm-4v': { input: 0.0005, output: 0.0005 },
+  'glm-4v-plus': { input: 0.001, output: 0.001 },
+  
+  // 默认价格（未知模型）
+  'default': { input: 0.001, output: 0.002 }
+};
+
+/**
+ * 🔥 根据模型和 Token 数量计算成本
+ * @param model 模型名称
+ * @param inputTokens 输入 Token 数量
+ * @param outputTokens 输出 Token 数量
+ * @returns 成本（美元）
+ */
+function calculateCost(model: string | undefined, inputTokens: number, outputTokens: number): number {
+  if (!model) {
+    // 未知模型，使用默认价格
+    const pricing = MODEL_PRICING['default'];
+    return (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
+  }
+  
+  // 查找模型价格（支持模糊匹配）
+  let pricing = MODEL_PRICING[model];
+  
+  if (!pricing) {
+    // 尝试模糊匹配（例如：gpt-4o-2024-05-13 匹配 gpt-4o）
+    const modelLower = model.toLowerCase();
+    for (const [key, value] of Object.entries(MODEL_PRICING)) {
+      if (modelLower.includes(key.toLowerCase()) || key.toLowerCase().includes(modelLower)) {
+        pricing = value;
+        break;
+      }
+    }
+  }
+  
+  // 如果还是找不到，使用默认价格
+  if (!pricing) {
+    console.warn(`⚠️ 未找到模型 "${model}" 的价格配置，使用默认价格`);
+    pricing = MODEL_PRICING['default'];
+  }
+  
+  // 计算成本：(输入Token数 / 1000) * 输入价格 + (输出Token数 / 1000) * 输出价格
+  const cost = (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
+  return cost;
+}
+
+export interface MidsceneTokenStats {
+  timestamp: string;
+  operation: string;
+  duration: number; // 毫秒
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cost: number;
+  model?: string;
+  requestId?: string;
+}
+
+export interface MidsceneCacheStats {
+  totalCalls: number;
+  cacheHits: number;
+  cacheMisses: number;
+  cacheHitRate: number; // 百分比
+}
+
+export interface MidsceneLogSummary {
+  tokenStats: MidsceneTokenStats[];
+  cacheStats: MidsceneCacheStats;
+  totalCost: number;
+  totalDuration: number; // 毫秒
+  totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
+export class MidsceneLogParser {
+  private logDir: string;
+
+  constructor(logDir: string = './midscene_run/log') {
+    this.logDir = logDir;
+  }
+
+  /**
+   * 解析指定runId的日志文件
+   * @param runId 测试运行ID（可选，如果不提供则解析所有最新日志）
+   * @param startTime 执行开始时间（用于过滤日志，只统计此时间之后的记录）
+   * @returns 日志摘要
+   */
+  async parseLogForRun(runId?: string, startTime?: Date): Promise<MidsceneLogSummary | null> {
+    try {
+      // 查找日志文件
+      const logFiles = await this.findLogFiles();
+      
+      if (logFiles.length === 0) {
+        console.warn(`⚠️ 未找到Midscene日志文件`);
+        console.warn(`   日志目录: ${this.logDir}`);
+        return null;
+      }
+
+      console.log(`🔍 找到 ${logFiles.length} 个官方日志文件`);
+      logFiles.forEach(file => console.log(`   - ${path.basename(file)}`));
+
+      if (startTime) {
+        console.log(`⏰ 过滤时间: ${startTime.toISOString()} 之后的记录`);
+      }
+
+      // 解析所有相关日志文件
+      const tokenStats: MidsceneTokenStats[] = [];
+      let cacheHits = 0;
+      let cacheMisses = 0;
+
+      for (const logFile of logFiles) {
+        const fileName = path.basename(logFile);
+        const content = await fs.readFile(logFile, 'utf-8');
+        console.log(`📄 解析日志文件: ${fileName} (${content.length} 字节)`);
+        
+        if (fileName === 'ai-profile-detail.log') {
+          // 解析详细token统计
+          const tokens = this.parseDetailLog(content, startTime);
+          console.log(`   - 提取到 ${tokens.length} 条token统计`);
+          tokenStats.push(...tokens);
+        } else if (fileName === 'ai-profile-stats.log') {
+          // 解析统计信息（模型名称、耗时等）
+          const stats = this.parseStatsLog(content, startTime);
+          console.log(`   - 提取到 ${stats.length} 条统计信息`);
+          // 合并到tokenStats中
+          this.mergeStats(tokenStats, stats);
+        } else if (fileName === 'cache.log') {
+          // 解析缓存统计
+          const cache = this.parseCacheStats(content, startTime);
+          console.log(`   - 缓存命中: ${cache.hits}, 未命中: ${cache.misses}`);
+          cacheHits += cache.hits;
+          cacheMisses += cache.misses;
+        }
+      }
+
+      // 计算汇总数据
+      const totalInputTokens = tokenStats.reduce((sum, stat) => sum + stat.inputTokens, 0);
+      const totalOutputTokens = tokenStats.reduce((sum, stat) => sum + stat.outputTokens, 0);
+      const totalTokens = tokenStats.reduce((sum, stat) => sum + stat.totalTokens, 0);
+      const totalDuration = tokenStats.reduce((sum, stat) => sum + stat.duration, 0);
+      const totalCost = tokenStats.reduce((sum, stat) => sum + stat.cost, 0);
+      
+      // 🔥 修复：缓存命中数 = 总调用数 - 缓存未命中数
+      const totalCalls = tokenStats.length; // 总调用数从 ai-profile-detail.log 获取
+      cacheHits = Math.max(0, totalCalls - cacheMisses); // 缓存命中数 = 总调用数 - 未命中数
+      const cacheHitRate = totalCalls > 0 ? (cacheHits / totalCalls) * 100 : 0;
+
+      console.log(`📊 汇总统计: ${tokenStats.length} 条记录`);
+      console.log(`   - 总Token: ${totalTokens.toLocaleString()} (输入: ${totalInputTokens.toLocaleString()}, 输出: ${totalOutputTokens.toLocaleString()})`);
+      console.log(`   - 总耗时: ${(totalDuration / 1000).toFixed(1)}秒`);
+      console.log(`   - 总成本: $${totalCost.toFixed(4)}`);
+      console.log(`   - 缓存统计: 总调用${totalCalls}次, 命中${cacheHits}次, 未命中${cacheMisses}次, 命中率${cacheHitRate.toFixed(1)}%`);
+
+      return {
+        tokenStats,
+        cacheStats: {
+          totalCalls,
+          cacheHits,
+          cacheMisses,
+          cacheHitRate
+        },
+        totalCost,
+        totalDuration,
+        totalTokens,
+        totalInputTokens,
+        totalOutputTokens
+      };
+    } catch (error: any) {
+      console.error(`❌ 解析Midscene日志失败:`, error.message);
+      console.error(error.stack);
+      return null;
+    }
+  }
+
+  /**
+   * 查找官方日志文件
+   */
+  private async findLogFiles(): Promise<string[]> {
+    try {
+      // 检查日志目录是否存在
+      try {
+        await fs.access(this.logDir);
+      } catch {
+        return [];
+      }
+
+      const logFiles: string[] = [];
+
+      // 官方统计日志文件（按优先级排序）
+      const officialLogFiles = [
+        'ai-profile-detail.log',  // 详细的token使用情况
+        'ai-profile-stats.log',   // 统计信息（包含耗时、模型名称）
+        'cache.log',              // 缓存统计
+      ];
+
+      for (const logFile of officialLogFiles) {
+        const filePath = path.join(this.logDir, logFile);
+        try {
+          await fs.access(filePath);
+          logFiles.push(filePath);
+        } catch {
+          // 文件不存在，跳过
+        }
+      }
+
+      return logFiles;
+    } catch (error: any) {
+      console.error(`❌ 查找日志文件失败:`, error.message);
+      return [];
+    }
+  }
+
+  /**
+   * 解析 ai-profile-detail.log
+   * 格式：[2026-01-21T10:46:58.432+08:00] model usage detail: {"prompt_tokens":4228,"completion_tokens":105,"total_tokens":4333,...}
+   */
+  private parseDetailLog(content: string, startTime?: Date): MidsceneTokenStats[] {
+    const stats: MidsceneTokenStats[] = [];
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // 匹配格式：[时间戳] model usage detail: {JSON}
+      const match = trimmed.match(/\[([^\]]+)\]\s+model usage detail:\s*(\{.+\})/);
+      if (match) {
+        try {
+          const timestamp = match[1];
+          
+          // 🔥 如果提供了开始时间，过滤掉之前的记录
+          if (startTime) {
+            const logTime = new Date(timestamp);
+            if (logTime < startTime) {
+              continue; // 跳过此记录
+            }
+          }
+          
+          const jsonData = JSON.parse(match[2]);
+          
+          const stat: MidsceneTokenStats = {
+            timestamp,
+            operation: 'ai-call',
+            duration: 0, // detail.log中没有耗时，需要从stats.log合并
+            inputTokens: jsonData.prompt_tokens || 0,
+            outputTokens: jsonData.completion_tokens || 0,
+            totalTokens: jsonData.total_tokens || 0,
+            cost: calculateCost(undefined, jsonData.prompt_tokens || 0, jsonData.completion_tokens || 0), // 🔥 自动计算成本
+            model: undefined,
+            requestId: undefined
+          };
+          
+          stats.push(stat);
+        } catch (error) {
+          console.warn(`      ⚠️ 解析JSON失败: ${trimmed.substring(0, 100)}`);
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  /**
+   * 解析 ai-profile-stats.log
+   * 格式：[2026-01-21T10:46:58.432+08:00] model, qwen-vl-max-latest, mode, qwen2.5-vl, ..., prompt-tokens, 4228, completion-tokens, 105, total-tokens, 4333, cost-ms, 4877, requestId, xxx, ...
+   */
+  private parseStatsLog(content: string, startTime?: Date): Array<{
+    timestamp: string;
+    model?: string;
+    duration: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    requestId?: string;
+  }> {
+    const stats: Array<any> = [];
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // 匹配格式：[时间戳] CSV数据
+      const match = trimmed.match(/\[([^\]]+)\]\s+(.+)/);
+      if (match) {
+        const timestamp = match[1];
+        
+        // 🔥 如果提供了开始时间，过滤掉之前的记录
+        if (startTime) {
+          const logTime = new Date(timestamp);
+          if (logTime < startTime) {
+            continue; // 跳过此记录
+          }
+        }
+        
+        const csvData = match[2];
+        
+        // 解析CSV格式的键值对
+        const parts = csvData.split(',').map(p => p.trim());
+        const data: Record<string, string> = {};
+        
+        for (let j = 0; j < parts.length - 1; j += 2) {
+          const key = parts[j];
+          const value = parts[j + 1];
+          if (key && value) {
+            data[key] = value;
+          }
+        }
+        
+        // 提取统计信息
+        const promptTokens = parseInt(data['prompt-tokens'] || '0');
+        const completionTokens = parseInt(data['completion-tokens'] || '0');
+        const totalTokens = parseInt(data['total-tokens'] || '0');
+        const costMs = parseInt(data['cost-ms'] || '0');
+        const model = data['model'];
+        const requestId = data['requestId'];
+        
+        if (totalTokens > 0) {
+          stats.push({
+            timestamp,
+            model,
+            duration: costMs,
+            inputTokens: promptTokens,
+            outputTokens: completionTokens,
+            totalTokens,
+            requestId
+          });
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  /**
+   * 合并 detail.log 和 stats.log 的数据
+   * 通过时间戳（秒级）和token数量匹配
+   */
+  private mergeStats(
+    detailStats: MidsceneTokenStats[],
+    statsData: Array<{
+      timestamp: string;
+      model?: string;
+      duration: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      requestId?: string;
+    }>
+  ): void {
+    // 为每个detail记录找到对应的stats记录
+    for (const detail of detailStats) {
+      // 提取秒级时间戳（忽略毫秒差异）
+      const detailTimeSeconds = detail.timestamp.substring(0, 19); // 2026-01-21T19:40:13
+      
+      // 通过时间戳（秒级）和token数量匹配
+      const matchingStat = statsData.find(stat => {
+        const statTimeSeconds = stat.timestamp.substring(0, 19);
+        return statTimeSeconds === detailTimeSeconds &&
+               stat.totalTokens === detail.totalTokens;
+      });
+      
+      if (matchingStat) {
+        detail.duration = matchingStat.duration;
+        detail.model = matchingStat.model;
+        detail.requestId = matchingStat.requestId;
+        // 🔥 重新计算成本（使用实际的模型名称）
+        detail.cost = calculateCost(detail.model, detail.inputTokens, detail.outputTokens);
+      }
+    }
+  }
+
+  /**
+   * 解析缓存统计信息
+   * cache.log 格式示例：
+   * [时间戳] no cache file found, path: xxx (首次执行，无缓存文件)
+   * [时间戳] no unused cache found, type: xxx, prompt: xxx (清理未使用的缓存，不是缓存未命中)
+   * [时间戳] will append cache {...} (准备写入新缓存，表示缓存未命中)
+   * [时间戳] cache flushed to file: xxx (缓存写入)
+   * 
+   * 🔥 重要发现："no unused cache found" 不是缓存未命中！
+   * - "no unused cache found" 是缓存清理机制的日志，表示没有找到需要清理的旧缓存
+   * - "will append cache" 才是真正的缓存未命中标志，表示需要写入新缓存
+   * 
+   * 🔥 正确的统计方法：
+   * - 缓存未命中数 = "will append cache" 的次数
+   * - 缓存命中数 = 总调用数 - 缓存未命中数
+   */
+  private parseCacheStats(content: string, startTime?: Date): { hits: number; misses: number } {
+    const lines = content.split('\n');
+    let misses = 0;
+    let cacheFileNotFound = false;
+
+    for (const line of lines) {
+      // 提取时间戳
+      const timestampMatch = line.match(/\[([^\]]+)\]/);
+      if (timestampMatch && startTime) {
+        const logTime = new Date(timestampMatch[1]);
+        if (logTime < startTime) {
+          continue; // 跳过此记录
+        }
+      }
+      
+      // 首次执行，没有缓存文件
+      if (line.includes('no cache file found')) {
+        cacheFileNotFound = true;
+      }
+      
+      // 🔥 修复：统计 "will append cache" 而不是 "no unused cache found"
+      // "will append cache" 表示需要写入新缓存，即缓存未命中
+      if (line.includes('will append cache')) {
+        misses++;
+      }
+    }
+
+    // 🔥 缓存命中数在 parseLogForRun 中计算：总调用数 - 缓存未命中数
+    return { hits: 0, misses };
+  }
+
+  /**
+   * 格式化数字，添加千分位分隔符
+   * @param num 要格式化的数字
+   * @returns 格式化后的字符串
+   */
+  private formatNumber(num: number): string {
+    return num.toLocaleString();
+  }
+
+  /**
+   * 生成可视化进度条
+   * @param percentage 百分比（0-100）
+   * @param length 进度条总长度，默认 20
+   * @returns 进度条字符串（使用 █ 和 ░ 字符）
+   */
+  private generateProgressBar(percentage: number, length: number = 20): string {
+    const filled = Math.round(percentage / 5); // 每 5% 一个字符
+    const empty = length - filled;
+    return '█'.repeat(filled) + '░'.repeat(empty);
+  }
+
+  /**
+   * 计算数组的中位数
+   * @param numbers 数字数组
+   * @returns 中位数
+   */
+  private calculateMedian(numbers: number[]): number {
+    if (numbers.length === 0) return 0;
+    
+    const sorted = [...numbers].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    
+    if (sorted.length % 2 === 0) {
+      // 偶数个元素，取中间两个的平均值
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      // 奇数个元素，取中间的元素
+      return sorted[mid];
+    }
+  }
+
+  /**
+   * 格式化日志摘要为可读文本
+   */
+  formatSummary(summary: MidsceneLogSummary): string {
+    const lines: string[] = [];
+
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('📊 Midscene AI 调用统计');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Token统计
+    lines.push(`💰 总成本: $${summary.totalCost.toFixed(4)}`);
+    lines.push(`⏱️ 总耗时: ${(summary.totalDuration / 1000).toFixed(1)}秒`);
+    lines.push(`🎯 总Token: ${summary.totalTokens.toLocaleString()}`);
+    lines.push(`   - 输入Token: ${summary.totalInputTokens.toLocaleString()}`);
+    lines.push(`   - 输出Token: ${summary.totalOutputTokens.toLocaleString()}`);
+    
+    // 缓存统计
+    if (summary.cacheStats.totalCalls > 0) {
+      lines.push('');
+      lines.push(`📦 缓存统计:`);
+      lines.push(`   - 总调用: ${summary.cacheStats.totalCalls}次`);
+      lines.push(`   - 缓存命中: ${summary.cacheStats.cacheHits}次`);
+      lines.push(`   - 缓存未命中: ${summary.cacheStats.cacheMisses}次`);
+      lines.push(`   - 命中率: ${summary.cacheStats.cacheHitRate.toFixed(1)}%`);
+    }
+    
+    // 详细统计
+    if (summary.tokenStats.length > 0) {
+      lines.push('');
+      lines.push(`📋 详细调用记录 (${summary.tokenStats.length}次):`);
+      
+      // 按模型分组统计
+      const modelStats = new Map<string, { count: number; tokens: number; duration: number }>();
+      for (const stat of summary.tokenStats) {
+        const model = stat.model || 'unknown';
+        const existing = modelStats.get(model) || { count: 0, tokens: 0, duration: 0 };
+        existing.count++;
+        existing.tokens += stat.totalTokens;
+        existing.duration += stat.duration;
+        modelStats.set(model, existing);
+      }
+      
+      for (const [model, stats] of modelStats) {
+        lines.push(`   - ${model}: ${stats.count}次调用, ${stats.tokens.toLocaleString()} tokens, ${(stats.duration / 1000).toFixed(1)}秒`);
+      }
+    }
+    
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    return lines.join('\n');
+  }
+}

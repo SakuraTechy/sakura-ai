@@ -21,21 +21,81 @@ import { testService } from '../services/testService';
 import { showToast } from '../utils/toast';
 import { LiveView } from '../components/LiveView';
 import { EvidenceViewerNew } from '../components/EvidenceViewerNew';
+import { MidsceneReportViewer } from '../components/MidsceneReportViewer';
+import { filterLogLines } from '../utils/logFilter';
 
 // 使用统一的 TestRun 类型，从 types/test.ts 导入
 import type { TestRun as TestRunType, TestCase } from '../types/test';
 
-// 🔥 可折叠的日志消息组件 - 用于处理过长的MCP返回内容
+// 🔥 可折叠的日志消息组件 - 用于处理过长的MCP返回内容和快照日志
 const CollapsibleLogMessage: React.FC<{ message: string; maxLength?: number }> = ({ 
   message, 
   maxLength = 300 
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // 🔥 检测是否是 Midscene 统计信息
+  const isMidsceneStatsMessage = message.includes('📊 Midscene AI 调用详细统计');
+  
+  // 🔥 Midscene 统计信息默认展开
+  const [isExpanded, setIsExpanded] = useState(isMidsceneStatsMessage);
+  
+  // 🔥 当消息变化时，如果是 Midscene 统计信息，重新设置为展开状态
+  useEffect(() => {
+    if (isMidsceneStatsMessage) {
+      setIsExpanded(true);
+    }
+  }, [isMidsceneStatsMessage]);
+  
+  // 🔥 新增：检测是否包含展开标记
+  const expandMarkerRegex = /\[EXPAND_MARKER:(\d+)\]([\s\S]*?)\[\/EXPAND_MARKER\]/;
+  const expandMarkerMatch = message.match(expandMarkerRegex);
+  const hasExpandMarker = !!expandMarkerMatch;
+  
+  // 🔥 新增：如果包含展开标记，提取前20个元素和剩余元素
+  if (hasExpandMarker) {
+    const remainingCount = parseInt(expandMarkerMatch![1], 10);
+    const hiddenContent = expandMarkerMatch![2];
+    const visibleContent = message.substring(0, expandMarkerMatch!.index);
+    
+    return (
+      <span className="text-gray-300 break-all whitespace-pre-wrap">
+        {visibleContent}
+        {isExpanded ? (
+          <>
+            {hiddenContent}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(false);
+              }}
+              className="ml-2 inline-flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+            >
+              <ChevronUp className="w-4 h-4" />
+              收起剩余 {remainingCount} 个元素
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(true);
+            }}
+            className="ml-2 inline-flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+          >
+            <ChevronDown className="w-4 h-4" />
+            展开查看剩余 {remainingCount} 个元素
+          </button>
+        )}
+      </span>
+    );
+  }
   
   // 判断是否需要折叠（内容过长或包含特定关键词）
-  const needsCollapse = message.length > maxLength || 
+  // 🔥 Midscene 统计信息不折叠，直接展开显示
+  const needsCollapse = !isMidsceneStatsMessage && (
+    message.length > maxLength || 
     (message.includes('🔍') && message.length > 200) ||
-    message.includes('MCP返回');
+    message.includes('MCP返回')
+  );
   
   if (!needsCollapse) {
     return <span className="text-gray-300 break-all whitespace-pre-wrap">{message}</span>;
@@ -77,7 +137,7 @@ const CollapsibleLogMessage: React.FC<{ message: string; maxLength?: number }> =
             }}
             className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-blue-400 rounded transition-colors"
           >
-            <ChevronDown className="w-3 h-3" />
+            <ChevronDown className="w-4 h-4" />
             展开 ({message.length}字符)
           </button>
         </>
@@ -99,11 +159,19 @@ export function TestRunDetail() {
   const [testRun, setTestRun] = useState<TestRunType | null>(null);
   const [testCase, setTestCase] = useState<TestCase | null>(null); // 🔥 新增：测试用例详情
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'logs' | 'live' | 'evidence'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'live' | 'evidence' | 'midscene'>('logs');
   const [stopping, setStopping] = useState(false);
   const [duration, setDuration] = useState<string>('0s');
   const [startTime, setStartTime] = useState<Date | null>(null);
+  
+  // 🔥 新增：日志格式状态管理（每次都默认简洁模式）
+  const [logFormat, setLogFormat] = useState<'compact' | 'detailed'>('compact');
   const [endTime, setEndTime] = useState<Date | null>(null);
+  
+  // 🔥 调试：监听 logFormat 变化
+  useEffect(() => {
+    console.log('[日志格式状态] 当前格式:', logFormat);
+  }, [logFormat]);
   
   // 全屏状态
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
@@ -129,6 +197,19 @@ export function TestRunDetail() {
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // 🔥 新增：从 LocalStorage 加载日志格式偏好设置
+  useEffect(() => {
+    const savedFormat = localStorage.getItem('logFormatPreference');
+    if (savedFormat === 'compact' || savedFormat === 'detailed') {
+      setLogFormat(savedFormat);
+    }
+  }, []);
+
+  // 🔥 新增：保存日志格式偏好设置到 LocalStorage
+  useEffect(() => {
+    localStorage.setItem('logFormatPreference', logFormat);
+  }, [logFormat]);
 
   // 🔥 处理返回逻辑
   const handleGoBack = () => {
@@ -1156,13 +1237,13 @@ export function TestRunDetail() {
               <div className="flex items-center gap-3 text-xs text-gray-600">
                 断言：{stats.totalAssertions} / {stats.passedAssertions} / {stats.failedAssertions}
               </div> */}
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span className="text-green-600 font-medium">{stats.passedOperationSteps}</span>通过
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                步骤：<span className="text-green-600 font-medium">{stats.passedOperationSteps}</span>通过
                 <span className="text-red-600 font-medium">{stats.failedOperationSteps}</span>失败
                 <span className="text-orange-600 font-medium">{Math.max(0, stats.totalOperationSteps - stats.passedOperationSteps - stats.failedOperationSteps)}</span>阻塞
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span className="text-green-600 font-medium">{stats.passedAssertions}</span>通过
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                断言：<span className="text-green-600 font-medium">{stats.passedAssertions}</span>通过
                 <span className="text-red-600 font-medium">{stats.failedAssertions}</span>失败
                 <span className="text-orange-600 font-medium">{Math.max(0, stats.totalAssertions - stats.passedAssertions - stats.failedAssertions)}</span>阻塞
               </div>
@@ -1267,44 +1348,97 @@ export function TestRunDetail() {
         {/* 标签页 */}
         <div className="bg-white rounded-lg shadow flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="border-b border-gray-200 flex-shrink-0">
-            <nav className="flex -mb-px">
-              <button
-                onClick={() => setActiveTab('logs')}
-                className={clsx(
-                  'px-6 py-3 text-sm font-medium border-b-2',
-                  activeTab === 'logs'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                )}
-              >
-                <Terminal className="h-4 w-4 inline mr-2" />
-                执行日志
-              </button>
-              <button
-                onClick={() => setActiveTab('live')}
-                className={clsx(
-                  'px-6 py-3 text-sm font-medium border-b-2',
-                  activeTab === 'live'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                )}
-              >
-                <Play className="h-4 w-4 inline mr-2" />
-                实时视图
-              </button>
-              <button
-                onClick={() => setActiveTab('evidence')}
-                className={clsx(
-                  'px-6 py-3 text-sm font-medium border-b-2',
-                  activeTab === 'evidence'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                )}
-              >
-                <ImageIcon className="h-4 w-4 inline mr-2" />
-                测试证据
-              </button>
-            </nav>
+            <div className="flex items-center justify-between">
+              <nav className="flex -mb-px">
+                <button
+                  onClick={() => setActiveTab('logs')}
+                  className={clsx(
+                    'px-6 py-3 text-sm font-medium border-b-2',
+                    activeTab === 'logs'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  )}
+                >
+                  <Terminal className="h-4 w-4 inline mr-2" />
+                  执行日志
+                </button>
+                <button
+                  onClick={() => setActiveTab(testRun?.executionEngine === 'midscene' ? 'midscene' : 'live')}
+                  className={clsx(
+                    'px-6 py-3 text-sm font-medium border-b-2',
+                    activeTab === 'live'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  )}
+                >
+                  <Play className="h-4 w-4 inline mr-2" />
+                  实时画面
+                </button>
+                {/* {testRun?.executionEngine === 'midscene' && (
+                  <button
+                    onClick={() => setActiveTab('midscene')}
+                    className={clsx(
+                      'px-6 py-3 text-sm font-medium border-b-2',
+                      activeTab === 'midscene'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    )}
+                  >
+                    <Video className="h-4 w-4 inline mr-2" />
+                    Midscene报告
+                  </button>
+                )} */}
+                <button
+                  onClick={() => setActiveTab('evidence')}
+                  className={clsx(
+                    'px-6 py-3 text-sm font-medium border-b-2',
+                    activeTab === 'evidence'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  )}
+                >
+                  <ImageIcon className="h-4 w-4 inline mr-2" />
+                  测试证据
+                </button>
+              </nav>
+              
+              {/* 🔥 格式切换按钮 - 只在日志标签页显示 */}
+              {activeTab === 'logs' && (
+                <div className="flex items-center gap-2 px-4">
+                  <span className="text-xs text-gray-500">日志格式：</span>
+                  <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5">
+                    <button
+                      onClick={() => {
+                        console.log('[日志格式切换] 切换到简洁模式');
+                        setLogFormat('compact');
+                      }}
+                      className={clsx(
+                        'px-2 py-1 text-xs font-medium rounded transition-colors',
+                        logFormat === 'compact'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      📊 简洁
+                    </button>
+                    <button
+                      onClick={() => {
+                        console.log('[日志格式切换] 切换到详细模式');
+                        setLogFormat('detailed');
+                      }}
+                      className={clsx(
+                        'px-2 py-1 text-xs font-medium rounded transition-colors',
+                        logFormat === 'detailed'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      📋 详细
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* <div className="p-6">
@@ -1344,44 +1478,52 @@ export function TestRunDetail() {
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {activeTab === 'logs' && (
-              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
-                {/* <div className="flex items-center justify-end mb-3 flex-shrink-0">
-                  <h3 className="text-lg font-semibold text-gray-900">执行日志</h3>
-                  <button className="text-sm text-blue-600 hover:text-blue-700">
-                    <Download className="inline h-4 w-4 mr-1" />
-                    导出日志
-                  </button>
-                </div> */}
+              <div className="flex-1 flex flex-col p-3 min-h-0 overflow-hidden">
                 <div 
                   ref={logsScrollRef}
-                  className="bg-gray-900 rounded-lg p-4 flex-1 min-h-0 overflow-y-auto font-mono text-sm"
+                  className="bg-gray-900 rounded-lg p-4 flex-1 min-h-0 overflow-y-auto font-mono text-[13px]"
                 >
                   {testRun.logs.length === 0 ? (
                     <div className="text-gray-600 text-center py-8">暂无日志</div>
                   ) : (
-                    testRun.logs.map((log, index) => (
-                      <div 
-                        key={log.id} 
-                        ref={index === testRun.logs.length - 1 ? lastLogRef : null}
-                        className="flex items-start gap-3 py-1 hover:bg-gray-800 px-2 rounded"
-                      >
-                        <span className="text-gray-500 flex-shrink-0">
-                          {safeFormatDate(log.timestamp, 'yyyy-MM-dd HH:mm:ss.SSS')}
-                        </span>
-                        <span className="flex-shrink-0">{getLevelIcon(log.level)}</span>
-                        <CollapsibleLogMessage message={log.message} />
-                      </div>
-                    ))
+                    testRun.logs.map((log, index) => {
+                      // 🔥 过滤日志消息
+                      const filteredMessage = filterLogLines(log.message, logFormat);
+                      // 🔥 如果过滤后为空，不渲染这条日志
+                      if (!filteredMessage || filteredMessage.trim() === '') {
+                        return null;
+                      }
+                      
+                      return (
+                        <div 
+                          key={log.id} 
+                          ref={index === testRun.logs.length - 1 ? lastLogRef : null}
+                          className="flex items-start gap-3 py-1 hover:bg-gray-800 px-2 rounded"
+                        >
+                          <span className="text-gray-500 flex-shrink-0">
+                            {safeFormatDate(log.timestamp, 'yyyy-MM-dd HH:mm:ss.SSS')}
+                          </span>
+                          <span className="flex-shrink-0">{getLevelIcon(log.level)}</span>
+                          <CollapsibleLogMessage message={filteredMessage} />
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
             )}
 
             {activeTab === 'live' && (
-              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
+              <div className="flex-1 flex flex-col p-3 min-h-0 overflow-hidden">
                 {/* <h3 className="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">实时画面</h3> */}
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  {testRun.status === 'running' ? (
+                  {/* 🔥 修复：Midscene引擎显示报告，其他引擎显示实时画面 */}
+                  {testRun.executionEngine === 'midscene' ? (
+                    <MidsceneReportViewer
+                      runId={testRun.id}
+                      isRunning={testRun.status === 'running'}
+                    />
+                  ) : testRun.status === 'running' ? (
                     <LiveView runId={testRun.id} />
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-8 text-center h-full flex flex-col items-center justify-center">
@@ -1394,11 +1536,23 @@ export function TestRunDetail() {
             )}
 
             {activeTab === 'evidence' && (
-              <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
+              <div className="flex-1 flex flex-col p-3 min-h-0 overflow-hidden">
                 {/* <h3 className="text-lg font-semibold text-gray-900 mb-3 flex-shrink-0">测试证据</h3> */}
                 <div className="flex-1 min-h-0 overflow-auto">
                   {/* <EvidenceViewer runId={testRun.id} /> */}
                   <EvidenceViewerNew runId={testRun.id} />
+                </div>
+              </div>
+            )}
+
+            {/* 🔥 新增：Midscene报告查看器 */}
+            {activeTab === 'midscene' && (
+              <div className="flex-1 flex flex-col p-3 min-h-0 overflow-hidden overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <MidsceneReportViewer
+                    runId={testRun.id}
+                    isRunning={testRun.status === 'running'}
+                  />
                 </div>
               </div>
             )}

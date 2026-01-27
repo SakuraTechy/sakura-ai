@@ -39,15 +39,19 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
   const previewImageRef = useRef<HTMLImageElement>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [stepViewMode, setStepViewMode] = useState<'grid' | 'list'>('grid'); // 🔥 步骤截图视图模式
+  const [assertionViewMode, setAssertionViewMode] = useState<'grid' | 'list'>('grid'); // 🔥 断言截图视图模式
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
+  const [stepScreenshotMode, setStepScreenshotMode] = useState<'optimized' | 'full'>('optimized'); // 🔥 步骤截图展示模式
+  const [assertionScreenshotMode, setAssertionScreenshotMode] = useState<'optimized' | 'full'>('optimized'); // 🔥 断言截图展示模式
 
   const extractStep = (filename: string) => {
-    // 支持多种格式：-step-数字- 或 step-数字- 或 step-数字.
+    // 🔥 修复：支持 Midscene 格式 runId-step-数字-状态-时间戳.png
+    // 例如：d595dfe4-cf8a-4e7a-b01e-c36af3b804d0-step-1-before-1737456789.png
     const patterns = [
-      /-step-(\d+)-/,      // 格式：xxx-step-1-success-xxx.png
-      /step-(\d+)-/,        // 格式：xxx-step-1-success-xxx.png (开头)
+      /-step-(\d+)-/,      // 格式：xxx-step-1-before-xxx.png (Midscene格式)
+      /step-(\d+)-/,        // 格式：step-1-success-xxx.png
       /step-(\d+)\./,       // 格式：xxx-step-1.png
       /step-(\d+)$/,        // 格式：xxx-step-1
     ];
@@ -62,34 +66,142 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
   };
 
   const extractAssertion = (filename: string) => {
-    // 提取断言序号：assertion-1-success-xxx.png
-    const match = filename.match(/^assertion-(\d+)-/);
-    return match ? parseInt(match[1], 10) : null;
+    // 🔥 支持两种格式：
+    // 新格式：{runId}-assertion-1-success-xxx.png
+    // 旧格式：assertion-1-success-xxx.png
+    const patterns = [
+      /-assertion-(\d+)-/,  // 新格式：runId-assertion-1-xxx
+      /^assertion-(\d+)-/   // 旧格式：assertion-1-xxx
+    ];
+    
+    for (const pattern of patterns) {
+      const match = filename.match(pattern);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    }
+    return null;
   };
 
   const isFinalScreenshot = (filename: string) => {
-    return filename.includes('-step-final-') || filename.includes('final-completed');
+    // 🔥 修复：支持 Midscene 和 Playwright 的最终截图格式
+    // Playwright: final-completed-时间戳.png
+    // Midscene: 可能没有最终截图，或者使用 -step-final- 格式
+    return filename.includes('final-completed') || filename.includes('-step-final-');
   };
 
   const isAssertionScreenshot = (filename: string) => {
-    return filename.startsWith('assertion-');
+    // 🔥 支持两种格式：
+    // 新格式：{runId}-assertion-1-xxx.png
+    // 旧格式：assertion-1-xxx.png
+    const result = filename.includes('-assertion-') || filename.startsWith('assertion-');
+    if (result) {
+      console.log('✔️ 识别为断言截图:', filename);
+    }
+    return result;
   };
 
-  const screenshotsAll = useMemo(() => artifacts.filter(a => a.type === 'screenshot'), [artifacts]);
+  const screenshotsAll = useMemo(() => {
+    const screenshots = artifacts.filter(a => a.type === 'screenshot');
+    console.log('📸 所有截图文件:', screenshots.map(s => s.filename));
+    return screenshots;
+  }, [artifacts]);
   
   // 🔥 分离步骤截图、断言截图和最终截图
   const stepScreenshots = useMemo(() => {
-    return screenshotsAll.filter(s => 
-      !isFinalScreenshot(s.filename) && !isAssertionScreenshot(s.filename)
-    );
-  }, [screenshotsAll]);
+    const filtered = screenshotsAll.filter(s => {
+      const isFinal = isFinalScreenshot(s.filename);
+      const isAssertion = isAssertionScreenshot(s.filename);
+      const shouldInclude = !isFinal && !isAssertion;
+      
+      console.log(`🔍 检查文件: ${s.filename}, isFinal: ${isFinal}, isAssertion: ${isAssertion}, shouldInclude: ${shouldInclude}`);
+      
+      return shouldInclude;
+    });
+    console.log('🎬 步骤截图（原始）:', filtered.map(s => ({ filename: s.filename, step: extractStep(s.filename) })));
+    
+    // 🔥 完整模式：返回所有截图
+    if (stepScreenshotMode === 'full') {
+      console.log('🎬 步骤截图（完整模式）:', filtered.length, '张');
+      return filtered;
+    }
+    
+    // 🔥 精简模式：每个步骤只保留一张截图（优先级：error > after > before > manual）
+    const stepMap = new Map<number, ArtifactRecord[]>();
+    
+    // 按步骤号分组
+    filtered.forEach(screenshot => {
+      const stepNum = extractStep(screenshot.filename);
+      if (stepNum !== null) {
+        if (!stepMap.has(stepNum)) {
+          stepMap.set(stepNum, []);
+        }
+        stepMap.get(stepNum)!.push(screenshot);
+      }
+    });
+    
+    // 每个步骤选择最佳截图
+    const optimized: ArtifactRecord[] = [];
+    stepMap.forEach((screenshots) => {
+      // 优先级：error > after > before > manual
+      const errorShot = screenshots.find(s => s.filename.includes('-error-'));
+      const afterShot = screenshots.find(s => s.filename.includes('-after-'));
+      const beforeShot = screenshots.find(s => s.filename.includes('-before-'));
+      const manualShot = screenshots.find(s => s.filename.includes('-manual-'));
+      
+      const selected = errorShot || afterShot || beforeShot || manualShot || screenshots[0];
+      optimized.push(selected);
+    });
+    
+    console.log('🎬 步骤截图（精简模式）:', optimized.length, '张，已过滤', filtered.length - optimized.length, '张');
+    return optimized;
+  }, [screenshotsAll, stepScreenshotMode]);
 
   const assertionScreenshots = useMemo(() => {
-    return screenshotsAll.filter(s => isAssertionScreenshot(s.filename));
-  }, [screenshotsAll]);
+    const filtered = screenshotsAll.filter(s => isAssertionScreenshot(s.filename));
+    console.log('✔️ 断言截图（原始）:', filtered.map(s => ({ filename: s.filename, assertion: extractAssertion(s.filename) })));
+    
+    // 🔥 完整模式：返回所有截图
+    if (assertionScreenshotMode === 'full') {
+      console.log('✔️ 断言截图（完整模式）:', filtered.length, '张');
+      return filtered;
+    }
+    
+    // 🔥 精简模式：每个断言只保留一张截图（优先级：error > after > before > manual）
+    const assertionMap = new Map<number, ArtifactRecord[]>();
+    
+    // 按断言号分组
+    filtered.forEach(screenshot => {
+      const assertionNum = extractAssertion(screenshot.filename);
+      if (assertionNum !== null) {
+        if (!assertionMap.has(assertionNum)) {
+          assertionMap.set(assertionNum, []);
+        }
+        assertionMap.get(assertionNum)!.push(screenshot);
+      }
+    });
+    
+    // 每个断言选择最佳截图
+    const optimized: ArtifactRecord[] = [];
+    assertionMap.forEach((screenshots) => {
+      // 优先级：error > after > before > manual
+      const errorShot = screenshots.find(s => s.filename.includes('-error-'));
+      const afterShot = screenshots.find(s => s.filename.includes('-after-'));
+      const beforeShot = screenshots.find(s => s.filename.includes('-before-'));
+      const manualShot = screenshots.find(s => s.filename.includes('-manual-'));
+      
+      const selected = errorShot || afterShot || beforeShot || manualShot || screenshots[0];
+      optimized.push(selected);
+    });
+    
+    console.log('✔️ 断言截图（精简模式）:', optimized.length, '张，已过滤', filtered.length - optimized.length, '张');
+    return optimized;
+  }, [screenshotsAll, assertionScreenshotMode]);
 
   const finalScreenshots = useMemo(() => {
-    return screenshotsAll.filter(s => isFinalScreenshot(s.filename));
+    const filtered = screenshotsAll.filter(s => isFinalScreenshot(s.filename));
+    console.log('🏁 最终截图:', filtered.map(s => s.filename));
+    return filtered;
   }, [screenshotsAll]);
 
   const steps = useMemo(() => {
@@ -120,14 +232,29 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
       const stepNum = parseInt(stepFilter, 10);
       filtered = stepScreenshots.filter(s => extractStep(s.filename) === stepNum);
     }
-    // 🔥 按步骤号正序排列（1->2->3）
+    // 🔥 按步骤号正序排列（1->2->3），同一步骤内按 before -> after -> error 排序
     return filtered.sort((a, b) => {
       const stepA = extractStep(a.filename);
       const stepB = extractStep(b.filename);
       if (stepA === null && stepB === null) return 0;
       if (stepA === null) return 1; // 没有步骤号的排在后面
       if (stepB === null) return -1;
-      return stepA - stepB; // 正序排列
+      
+      // 先按步骤号排序
+      if (stepA !== stepB) {
+        return stepA - stepB; // 正序排列
+      }
+      
+      // 🔥 同一步骤内，按状态排序：before -> after -> error -> manual
+      const getStatusOrder = (filename: string) => {
+        if (filename.includes('-before-')) return 1;
+        if (filename.includes('-after-')) return 2;
+        if (filename.includes('-error-')) return 3;
+        if (filename.includes('-manual-')) return 4;
+        return 5; // 其他
+      };
+      
+      return getStatusOrder(a.filename) - getStatusOrder(b.filename);
     });
   }, [stepScreenshots, stepFilter]);
 
@@ -140,14 +267,28 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
       const assertionNum = parseInt(assertionFilter, 10);
       filtered = assertionScreenshots.filter(s => extractAssertion(s.filename) === assertionNum);
     }
-    // 🔥 按断言号正序排列（1->2->3）
+    // 🔥 按断言号正序排列（1->2->3），同一断言内按 before -> success -> error 排序
     return filtered.sort((a, b) => {
       const assertionA = extractAssertion(a.filename);
       const assertionB = extractAssertion(b.filename);
       if (assertionA === null && assertionB === null) return 0;
       if (assertionA === null) return 1;
       if (assertionB === null) return -1;
-      return assertionA - assertionB;
+      
+      // 先按断言号排序
+      if (assertionA !== assertionB) {
+        return assertionA - assertionB;
+      }
+      
+      // 🔥 同一断言内，按状态排序：before -> success -> error
+      const getStatusOrder = (filename: string) => {
+        if (filename.includes('-before-')) return 1;
+        if (filename.includes('-success-')) return 2;
+        if (filename.includes('-error-')) return 3;
+        return 4; // 其他
+      };
+      
+      return getStatusOrder(a.filename) - getStatusOrder(b.filename);
     });
   }, [assertionScreenshots, assertionFilter]);
 
@@ -219,7 +360,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
   };
 
   const showPrev = async () => {
-    const allScreenshots = [...stepScreenshotsFiltered, ...finalScreenshots];
+    const allScreenshots = [...stepScreenshotsFiltered, ...assertionScreenshotsFiltered, ...finalScreenshots];
     if (previewIndex == null || allScreenshots.length === 0) return;
     const nextIdx = (previewIndex - 1 + allScreenshots.length) % allScreenshots.length;
     const file = allScreenshots[nextIdx];
@@ -241,7 +382,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
   };
 
   const showNext = async () => {
-    const allScreenshots = [...stepScreenshotsFiltered, ...finalScreenshots];
+    const allScreenshots = [...stepScreenshotsFiltered, ...assertionScreenshotsFiltered, ...finalScreenshots];
     if (previewIndex == null || allScreenshots.length === 0) return;
     const nextIdx = (previewIndex + 1) % allScreenshots.length;
     const file = allScreenshots[nextIdx];
@@ -634,54 +775,94 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
       {artifacts.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">暂无证据文件</p>
+          <p className="text-gray-500 text-sm">暂无证据文件</p>
         </div>
       ) : (
         <div className="space-y-4">
           {/* 步骤截图区域 */}
           {stepScreenshotsFiltered.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3 h-6">
+                <div className="flex items-center gap-3">
                   <ImageIcon className="w-5 h-5 text-blue-500" />
                   <h4 className="text-lg font-semibold text-gray-900">
                     步骤截图 ({stepScreenshotsFiltered.length})
                   </h4>
+                  {stepScreenshotMode === 'optimized' && stepScreenshots.length < screenshotsAll.filter(s => !isFinalScreenshot(s.filename) && !isAssertionScreenshot(s.filename)).length && (
+                    <span className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-md">
+                      已精简 {screenshotsAll.filter(s => !isFinalScreenshot(s.filename) && !isAssertionScreenshot(s.filename)).length - stepScreenshots.length} 张
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
-                    <Filter className="w-4 h-4 text-gray-500" />
-                    <label className="text-sm text-gray-600">步骤筛选</label>
-                    <select
-                      value={stepFilter}
-                      onChange={(e) => setStepFilter(e.target.value)}
-                      className="ml-2 px-2 py-1 text-sm border-0 bg-transparent focus:outline-none focus:ring-0 cursor-pointer"
-                      title="选择要筛选的步骤"
+                  {/* 步骤筛选器 */}
+                  <select
+                    value={stepFilter}
+                    onChange={(e) => setStepFilter(e.target.value)}
+                    className="h-8 px-3 text-sm bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer text-gray-700 transition-all"
+                    title="选择要筛选的步骤"
+                  >
+                    <option value="all">全部步骤</option>
+                    {steps.map((s) => (
+                      <option key={s} value={String(s)}>{`第 ${s} 步`}</option>
+                    ))}
+                  </select>
+                  
+                  {/* 精简/完整模式切换 */}
+                  <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+                    <button
+                      onClick={() => setStepScreenshotMode('optimized')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        stepScreenshotMode === 'optimized'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="精简模式：每步骤1张（推荐）"
                     >
-                      <option value="all">全部</option>
-                      {steps.map((s) => (
-                        <option key={s} value={String(s)}>{`第 ${s} 步`}</option>
-                      ))}
-                    </select>
+                      精简
+                    </button>
+                    <button
+                      onClick={() => setStepScreenshotMode('full')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        stepScreenshotMode === 'full'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="完整模式：显示所有截图"
+                    >
+                      完整
+                    </button>
                   </div>
-                  <Button
-                    variant={viewMode === 'grid' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    网格
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('list')}
-                  >
-                    列表
-                  </Button>
+                  
+                  {/* 视图切换 */}
+                  <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+                    <button
+                      onClick={() => setStepViewMode('grid')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        stepViewMode === 'grid'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="网格视图"
+                    >
+                      网格
+                    </button>
+                    <button
+                      onClick={() => setStepViewMode('list')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        stepViewMode === 'list'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="列表视图"
+                    >
+                      列表
+                    </button>
+                  </div>
                 </div>
               </div>
               
-              {viewMode === 'grid' ? (
+              {stepViewMode === 'grid' ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {stepScreenshotsFiltered.map((item, idx) => {
                     const imageUrl = imageUrls.get(item.filename);
@@ -737,7 +918,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
                         
                         {/* 文件名和操作 */}
                         <div className="p-3 bg-white">
-                          <div className="text-xs text-gray-600 truncate mb-2" title={item.filename}>
+                          <div className="text-xs text-gray-600 truncate mb-0" title={item.filename}>
                             {item.filename}
                           </div>
                           <div className="flex items-center justify-between">
@@ -835,48 +1016,88 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
 
           {/* 断言截图区域 */}
           {assertionScreenshotsFiltered.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-3">
                   <ImageIcon className="w-5 h-5 text-orange-500" />
                   <h4 className="text-lg font-semibold text-gray-900">
                     断言截图 ({assertionScreenshotsFiltered.length})
                   </h4>
+                  {assertionScreenshotMode === 'optimized' && assertionScreenshots.length < screenshotsAll.filter(s => isAssertionScreenshot(s.filename)).length && (
+                    <span className="text-xs text-gray-500 bg-orange-50 px-2 py-1 rounded-md">
+                      已精简 {screenshotsAll.filter(s => isAssertionScreenshot(s.filename)).length - assertionScreenshots.length} 张
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
-                    <Filter className="w-4 h-4 text-gray-500" />
-                    <label className="text-sm text-gray-600">断言筛选</label>
-                    <select
-                      value={assertionFilter}
-                      onChange={(e) => setAssertionFilter(e.target.value)}
-                      className="ml-2 px-2 py-1 text-sm border-0 bg-transparent focus:outline-none focus:ring-0 cursor-pointer"
-                      title="选择要筛选的断言"
+                  {/* 断言筛选器 */}
+                  <select
+                    value={assertionFilter}
+                    onChange={(e) => setAssertionFilter(e.target.value)}
+                    className="h-8 px-3 text-sm bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer text-gray-700 transition-all"
+                    title="选择要筛选的断言"
+                  >
+                    <option value="all">全部断言</option>
+                    {assertions.map((a) => (
+                      <option key={a} value={String(a)}>{`断言 ${a}`}</option>
+                    ))}
+                  </select>
+                  
+                  {/* 精简/完整模式切换 */}
+                  <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+                    <button
+                      onClick={() => setAssertionScreenshotMode('optimized')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        assertionScreenshotMode === 'optimized'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="精简模式：每断言1张（推荐）"
                     >
-                      <option value="all">全部</option>
-                      {assertions.map((a) => (
-                        <option key={a} value={String(a)}>{`断言 ${a}`}</option>
-                      ))}
-                    </select>
+                      精简
+                    </button>
+                    <button
+                      onClick={() => setAssertionScreenshotMode('full')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        assertionScreenshotMode === 'full'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="完整模式：显示所有截图"
+                    >
+                      完整
+                    </button>
                   </div>
-                  <Button
-                    variant={viewMode === 'grid' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    网格
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setViewMode('list')}
-                  >
-                    列表
-                  </Button>
+                  
+                  {/* 视图切换 */}
+                  <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+                    <button
+                      onClick={() => setAssertionViewMode('grid')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        assertionViewMode === 'grid'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="网格视图"
+                    >
+                      网格
+                    </button>
+                    <button
+                      onClick={() => setAssertionViewMode('list')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
+                        assertionViewMode === 'list'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="列表视图"
+                    >
+                      列表
+                    </button>
+                  </div>
                 </div>
               </div>
               
-              {viewMode === 'grid' ? (
+              {assertionViewMode === 'grid' ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {assertionScreenshotsFiltered.map((item, idx) => {
                     const imageUrl = imageUrls.get(item.filename);
@@ -939,7 +1160,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
                         
                         {/* 文件名和操作 */}
                         <div className="p-3 bg-white">
-                          <div className="text-xs text-gray-600 truncate mb-2" title={item.filename}>
+                          <div className="text-xs text-gray-600 truncate mb-0" title={item.filename}>
                             {item.filename}
                           </div>
                           <div className="flex items-center justify-between">
@@ -1043,8 +1264,8 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
 
           {/* 最终截图区域 */}
           {finalScreenshots.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <ImageIcon className="w-5 h-5 text-green-500" />
                   <h4 className="text-lg font-semibold text-gray-900">
@@ -1112,7 +1333,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
                       
                       {/* 文件名和操作 */}
                       <div className="p-3 bg-white">
-                        <div className="text-xs text-gray-600 truncate mb-2" title={item.filename}>
+                        <div className="text-xs text-gray-600 truncate mb-0" title={item.filename}>
                           {item.filename}
                         </div>
                         <div className="flex items-center justify-between">
@@ -1146,8 +1367,8 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
 
           {/* 其他文件区域 */}
           {nonScreenshots.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-5 h-5 text-purple-500" />
                 <h4 className="text-lg font-semibold text-gray-900">
                   其他文件 ({nonScreenshots.length})
@@ -1228,7 +1449,12 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
 
       {/* 图片预览模态框 */}
       <AnimatePresence>
-        {previewUrl && previewIndex != null && (
+        {previewUrl && previewIndex != null && (() => {
+          // 🔥 合并所有截图用于预览
+          const allScreenshots = [...stepScreenshotsFiltered, ...assertionScreenshotsFiltered, ...finalScreenshots];
+          const currentFile = allScreenshots[previewIndex];
+          
+          return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1247,7 +1473,7 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
               <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
                 <div className="flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur-md rounded-lg">
                   <span className="text-white text-sm font-medium">
-                    {previewIndex + 1} / {stepScreenshotsFiltered.length + finalScreenshots.length}
+                    {previewIndex + 1} / {allScreenshots.length}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1301,13 +1527,13 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
               <div className="absolute bottom-4 left-4 right-4 z-10">
                 <div className="px-4 py-2 bg-black/50 backdrop-blur-md rounded-lg">
                   <p className="text-white text-sm truncate">
-                    {[...stepScreenshotsFiltered, ...finalScreenshots][previewIndex]?.filename}
+                    {currentFile?.filename || ''}
                   </p>
                 </div>
               </div>
 
               {/* 导航按钮 */}
-              {stepScreenshotsFiltered.length + finalScreenshots.length > 1 && (
+              {allScreenshots.length > 1 && (
                 <>
                   <button
                     onClick={showPrev}
@@ -1327,7 +1553,8 @@ export const EvidenceViewerNew: React.FC<EvidenceViewerProps> = ({ runId }) => {
               )}
             </motion.div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* 视频预览模态框 */}

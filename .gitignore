@@ -51,11 +51,11 @@ pw.log
 debug-execution.log
 
 # Runtime generated directories
-artifacts/
 temp/
 backups/
 uploads/
 logs/
+artifacts/
 
 # Config files (keep templates)
 mcp-config.json
@@ -152,3 +152,10 @@ check-output.txt
 nul
 start-server.js
 create-test-*.js
+
+# Midscene.js dump files
+midscene_run/
+# midscene_run/dump
+# midscene_run/report
+# midscene_run/tmp
+# midscene_run/log

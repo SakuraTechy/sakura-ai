@@ -93,6 +93,7 @@ import axios from 'axios';
 import os from 'os';
 import fs from 'fs';
 import { getNow } from './utils/timezone.js';
+import { ModelPricingService } from './services/modelPricingService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -522,6 +523,12 @@ async function startServer() {
     await ensureAIConfiguration();
     console.log('✅ AI配置检查完成');
 
+    // 🔥 新增：初始化模型价格服务
+    console.log('💰 开始初始化模型价格服务...');
+    const pricingService = ModelPricingService.getInstance();
+    await pricingService.initialize();
+    console.log('✅ 模型价格服务初始化完成');
+
     // 🔥 初始化所有服务
     console.log('⚙️ 开始初始化所有服务...');
     
@@ -777,6 +784,11 @@ async function startServer() {
     // 🔥 新增：测试计划管理路由
     console.log('🔧 注册测试计划管理路由...');
     app.use('/api/v1/test-plans', authenticate, createTestPlanRoutes(testExecutionService));
+
+    // 🔥 新增：Midscene报告路由
+    console.log('🔧 注册Midscene报告路由...');
+    const midsceneReportRouter = (await import('./routes/midsceneReport.js')).default;
+    app.use('/api/midscene-report', midsceneReportRouter);
 
     console.log('✅ API路由注册完成');
 

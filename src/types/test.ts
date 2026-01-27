@@ -78,6 +78,9 @@ export interface TestStep {
   // 🔥 新增：页签切换参数
   tabTarget?: string;   // 页签目标（标题、URL片段或索引）
   tabMatchType?: 'title' | 'url' | 'index' | 'last' | 'first'; // 匹配方式
+  // 🔥 新增：Midscene 和 Playwright 需要的属性
+  duration?: number;    // 等待时长（毫秒）
+  expectedText?: string; // 期望文本（用于断言）
 }
 
 export type TestAction =
@@ -150,9 +153,9 @@ export interface TestRun {
   reuseBrowser?: boolean;
   contextState?: any;
   executionMode?: string;
-  executionEngine?: 'mcp' | 'playwright'; // 🔥 新增：执行引擎选择
-  enableTrace?: boolean; // 🔥 新增：是否启用 trace（仅 Playwright）
-  enableVideo?: boolean; // 🔥 新增：是否启用 video（仅 Playwright）
+  executionEngine?: 'mcp' | 'playwright' | 'midscene'; // 🔥 新增：执行引擎选择（添加midscene）
+  enableTrace?: boolean; // 🔥 新增：是否启用 trace（仅 Playwright 和 Midscene）
+  enableVideo?: boolean; // 🔥 新增：是否启用 video（仅 Playwright 和 Midscene）
   steps: TestStep[];
   successfulSteps: string[];
   error?: string;

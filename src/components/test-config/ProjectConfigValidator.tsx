@@ -62,10 +62,10 @@ export function ProjectConfigValidator({
 
   // 跳转到项目管理页面
   const goToProjectManagement = () => {
-    navigate('/system-management', {
+    navigate('/systems', {
       state: {
         returnPath: location.pathname,
-        returnTitle: '测试用例生成器',
+        returnTitle: 'AI 智能生成器',
         selectedProjectId: projectId
       }
     });

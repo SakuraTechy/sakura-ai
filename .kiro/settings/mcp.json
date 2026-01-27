@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "pencil": {
+      "name": "pencil",
+      "transport": "stdio",
+      "command": "c:\\Users\\Ankki\\.kiro\\extensions\\highagency.pencildev-0.6.15-universal\\out\\mcp-server-windows-x64.exe",
+      "args": [
+        "--ws-port",
+        "63878"
+      ],
+      "env": {},
+      "disabled": true,
+      "autoApprove": [
+        "get_editor_state",
+        "batch_get",
+        "batch_design",
+        "get_screenshot",
+        "snapshot_layout",
+        "find_empty_space_on_canvas",
+        "open_document"
+      ]
+    }
+  }
+}

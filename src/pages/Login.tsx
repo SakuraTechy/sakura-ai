@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Alert } from 'antd';
-import { User, Lock, ArrowRight } from 'lucide-react';
+import { User, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import NET from 'vanta/dist/vanta.net.min';
 import * as THREE from 'three';
 import '../styles/login.css';
+import packageJson from '../../package.json';
 
 export const Login: React.FC = () => {
   const [form] = Form.useForm();
@@ -126,7 +127,7 @@ export const Login: React.FC = () => {
         >
           {/* Logo 和标题 */}
           <motion.div
-            className="flex flex-col items-center mb-10 py-4"
+            className="flex flex-col items-center mb-16 py-4"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.8 }}
@@ -257,9 +258,9 @@ export const Login: React.FC = () => {
               className="mt-6 pt-4 border-t border-white/10"
             >
               <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-400/20">
-                <p className="text-purple-200/70 text-sm text-center mb-2">
+                {/* <p className="text-purple-200/70 text-sm text-center mb-2">
                   🔐 初始超级管理员账号
-                </p>
+                </p> */}
                 <div className="flex justify-center space-x-6 text-sm">
                   <div className="text-center">
                     <span className="text-purple-300/60 block mb-1">用户名</span>
@@ -279,18 +280,21 @@ export const Login: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6, duration: 0.5 }}
-            className="mt-4 text-center"
+            className="mt-16 flex flex-col gap-2 text-center"
           >
-            <p className="text-purple-300/50 text-sm">
+            <span className="text-purple-300/50 text-sm">
+                版本号：{packageJson.version}
+            </span>
+            {/* <p className="text-purple-300/50 text-sm"> */}
               {/* © 2025 Sakura AI. Powered by AI & Automation */}
               <span className="text-purple-300/50 text-sm">
                 Sakura AI. Powered by AI & Automation
               </span>
-              <br />
+              {/* <br /> */}
               <span className="text-purple-300/50 text-sm">
                 Copyright © 2019-2025 SakuraTech. All rights reserved.
               </span>
-            </p>
+            {/* </p> */}
           </motion.div>
         </motion.div>
       </div>

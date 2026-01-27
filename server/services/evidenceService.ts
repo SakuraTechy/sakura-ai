@@ -61,38 +61,55 @@ export class EvidenceService {
 
     const destPath = path.join(runDir, filename);
     
-    // 🔥 修复：检查文件是否已存在，避免重复保存
-    try {
-      const existingStats = await fs.stat(destPath);
-      // 检查数据库中是否已存在该记录
-      const existingRecord = await this.prisma.run_artifacts.findFirst({
-        where: {
-          runId,
-          filename
+    // 🔥 修复：对于日志文件，允许覆盖更新；其他文件检查是否已存在
+    const isLogFile = type === 'log' || filename.endsWith('.log');
+    
+    if (!isLogFile) {
+      // 非日志文件：检查文件是否已存在，避免重复保存
+      try {
+        const existingStats = await fs.stat(destPath);
+        // 检查数据库中是否已存在该记录
+        const existingRecord = await this.prisma.run_artifacts.findFirst({
+          where: {
+            runId,
+            filename
+          }
+        });
+        
+        if (existingRecord) {
+          console.log(`⚠️ [${runId}] 证据文件已存在，跳过保存: ${filename}`);
+          return {
+            runId,
+            type,
+            filename,
+            size: existingStats.size,
+            createdAt: existingRecord.createdAt
+          };
         }
-      });
-      
-      if (existingRecord) {
-        console.log(`⚠️ [${runId}] 证据文件已存在，跳过保存: ${filename}`);
-        return {
-          runId,
-          type,
-          filename,
-          size: existingStats.size,
-          createdAt: existingRecord.createdAt
-        };
+      } catch {
+        // 文件不存在，继续保存
       }
-    } catch {
-      // 文件不存在，继续保存
     }
     
-    // 直接保存Buffer到文件
+    // 保存Buffer到文件（日志文件会覆盖已存在的文件）
     await fs.writeFile(destPath, buffer);
     
     const stats = await fs.stat(destPath);
     
     // 保存到数据库（如果数据库可用）
     try {
+      // 🔥 修复：对于日志文件，先删除旧记录再创建新记录
+      if (isLogFile) {
+        // 删除旧记录（如果存在）
+        await this.prisma.run_artifacts.deleteMany({
+          where: {
+            runId,
+            filename
+          }
+        });
+      }
+      
+      // 创建新记录
       await this.prisma.run_artifacts.create({
         data: {
           runId,

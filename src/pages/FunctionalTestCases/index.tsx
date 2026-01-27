@@ -11,7 +11,8 @@ import { CardView } from './views/CardView';
 import { TableView } from './views/TableView';
 import { KanbanView } from './views/KanbanView';
 import { TimelineView } from './views/TimelineView';
-import { FilterState, TestScenarioGroup, TestPointGroup, ViewMode, ExecutionStatus } from './types';
+import { FilterState, TestScenarioGroup, TestPointGroup, ViewMode } from './types';
+import type { ExecutionResult } from '../../types/testPlan';
 import { SystemOption } from '../../types/test';
 import { ExecutionLogModal } from './components/ExecutionLogModal';
 import { requirementDocService, RequirementDoc } from '../../services/requirementDocService';
@@ -104,7 +105,7 @@ export function FunctionalTestCases() {
     const [pendingTestCase, setPendingTestCase] = useState<any | null>(null);
     const [runningTestId, setRunningTestId] = useState<number | null>(null);
     const [executionConfig, setExecutionConfig] = useState({
-        executionEngine: 'mcp' as 'mcp' | 'playwright',
+        executionEngine: 'mcp' as 'mcp' | 'playwright' | 'midscene',
         enableTrace: true,
         enableVideo: true,
         environment: 'staging',
@@ -125,7 +126,7 @@ export function FunctionalTestCases() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const result = await functionalTestCaseService.getFlatList({
+            const result: any = await functionalTestCaseService.getFlatList({
                 page: pagination.page,
                 pageSize: pagination.pageSize,
                 ...filters
@@ -566,7 +567,7 @@ export function FunctionalTestCases() {
         });
     };
 
-    const handleUpdateExecutionStatus = async (caseId: number, status: ExecutionStatus) => {
+    const handleUpdateExecutionStatus = async (caseId: number, status: ExecutionResult) => {
         try {
             // Optimistic update
             setTestCases(prev => prev.map(tc => tc.id === caseId ? { ...tc, execution_status: status } : tc));
@@ -860,7 +861,7 @@ export function FunctionalTestCases() {
                 
                 // showToast.info(`✅ 测试开始执行: ${pendingTestCase.name}\n运行ID: ${response.runId}\n引擎: ${executionConfig.executionEngine === 'playwright' ? 'Playwright Test Runner' : 'MCP 客户端'}`);
                 // showToast.info(`✅ 开始执行: ${pendingTestCase.name}`);
-                showToast.info(`✅ 测试执行开始`);
+                showToast.info(`测试执行开始`);
                 console.log('✅ [UI自动化测试] 测试运行ID:', response.runId);
                 console.log(`💡 [UI自动化测试] 提示: 临时测试用例ID ${temporaryTestCaseId} 已创建，执行完成后可在测试用例列表中查看或删除`);
                 
@@ -1190,11 +1191,12 @@ export function FunctionalTestCases() {
                                     value={executionConfig.executionEngine}
                                     onChange={(e) => setExecutionConfig(prev => ({ 
                                         ...prev, 
-                                        executionEngine: e.target.value as 'mcp' | 'playwright' 
+                                        executionEngine: e.target.value as 'mcp' | 'playwright' | 'midscene'
                                     }))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
                                     <option value="mcp">MCP 客户端（AI驱动，适应性强）</option>
+                                    <option value="midscene">Midscene Runner（AI视觉识别，智能定位）</option>
                                     <option value="playwright">Playwright Runner（高性能，推荐）</option>
                                 </select>
                                 <p className="mt-1 text-xs text-gray-500">

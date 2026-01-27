@@ -4,6 +4,15 @@ import * as fs from 'fs/promises';
 import type { TestStep } from '../../src/types/test.js';
 import { EvidenceService } from './evidenceService.js';
 import { StreamService } from './streamService.js';
+import { AssertionService } from './assertion/AssertionService.js';
+import type { Assertion, VerificationContext } from './assertion/types.js';
+import { AssertionType } from './assertion/types.js';
+import { FileDownloadStrategy } from './assertion/strategies/FileDownloadStrategy.js';
+import { PopupStrategy } from './assertion/strategies/PopupStrategy.js';
+import { ElementVisibilityStrategy } from './assertion/strategies/ElementVisibilityStrategy.js';
+import { TextContentStrategy } from './assertion/strategies/TextContentStrategy.js';
+import { PageStateStrategy } from './assertion/strategies/PageStateStrategy.js';
+import { TextHistoryManager } from './assertion/TextHistoryManager.js';
 
 /**
  * Playwright Test Runner 执行器
@@ -21,6 +30,10 @@ export class PlaywrightTestRunner {
   private textHistoryEnabled: boolean = false;
   // 🔥 新增：日志回调函数（用于将日志发送到前端）
   private logCallback?: (message: string, level?: 'info' | 'warning' | 'error' | 'success') => void;
+  // 🔥 新增：断言服务实例
+  private assertionService: AssertionService;
+  // 🔥 新增：文本历史管理器实例
+  private textHistoryManager: TextHistoryManager;
 
   constructor(
     evidenceService: EvidenceService,
@@ -32,6 +45,22 @@ export class PlaywrightTestRunner {
     this.streamService = streamService;
     this.artifactsDir = artifactsDir;
     this.logCallback = logCallback; // 🔥 保存日志回调
+    // 🔥 初始化断言服务
+    this.assertionService = AssertionService.getInstance({
+      logging: {
+        enabled: true,
+        level: 'info',
+        callback: logCallback
+      }
+    });
+    // 🔥 初始化文本历史管理器
+    this.textHistoryManager = TextHistoryManager.getInstance();
+    // 🔥 注册所有验证策略
+    this.assertionService.registerStrategy(AssertionType.FILE_DOWNLOAD, new FileDownloadStrategy());
+    this.assertionService.registerStrategy(AssertionType.POPUP, new PopupStrategy());
+    this.assertionService.registerStrategy(AssertionType.ELEMENT_VISIBILITY, new ElementVisibilityStrategy());
+    this.assertionService.registerStrategy(AssertionType.TEXT_CONTENT, new TextContentStrategy());
+    this.assertionService.registerStrategy(AssertionType.PAGE_STATE, new PageStateStrategy());
   }
 
   /**
@@ -64,6 +93,10 @@ export class PlaywrightTestRunner {
     const contextOptions: any = {
       viewport: null, // 使用全屏
       ignoreHTTPSErrors: true,
+      // 🔥 修复：启用文件下载功能
+      acceptDownloads: true,
+      // 🔥 修复：设置下载文件保存路径
+      downloadsPath: runDir,
     };
 
     // 启用 trace 录制
@@ -138,8 +171,11 @@ export class PlaywrightTestRunner {
           return Array.from(textSet);
         });
         
-        // 添加到历史记录
-        texts.forEach(text => this.textHistory.add(text));
+        // 🔥 修改：添加到 TextHistoryManager 和本地历史记录
+        texts.forEach(text => {
+          this.textHistory.add(text);
+          this.textHistoryManager.addText(text);
+        });
         
       } catch (error) {
         // 忽略错误（页面可能正在导航）
@@ -324,21 +360,38 @@ export class PlaywrightTestRunner {
           break;
 
         case 'click':
-          if (!step.selector) {
-            return { success: false, error: '点击步骤缺少选择器' };
+          // 🔥 修复：允许selector为空但ref存在的情况
+          if (!step.selector && !step.ref) {
+            return { success: false, error: '点击步骤缺少选择器或ref' };
           }
+          
+          // 🔥 新增：检测是否是下载操作（根据步骤描述判断）
+          const isDownloadAction = step.description && (
+            step.description.includes('下载') || 
+            step.description.includes('导出') ||
+            step.description.includes('保存文件')
+          );
+          
           // 🔥 智能元素查找：支持 label:xxx、text:xxx、role:name、role:nth(index) 格式、文本描述和 CSS 选择器
+          // 🔥 修复：如果selector为空，跳过selector处理，直接进入ref处理
           try {
-            // 🔥 新增：检查是否是 label:xxx 格式（最适合复选框）
-            if (step.selector.startsWith('label:')) {
-              const labelText = step.selector.substring(6); // 移除 "label:" 前缀
-              const labelLocator = this.page.getByLabel(labelText, { exact: false });
-              if (await labelLocator.count() > 0) {
-                await labelLocator.first().click();
-                console.log(`✅ [${runId}] 使用 getByLabel 格式点击成功: ${labelText}`);
-                return { success: true };
+            if (step.selector) {
+              // 🔥 新增：检查是否是 label:xxx 格式（最适合复选框）
+              if (step.selector.startsWith('label:')) {
+                const labelText = step.selector.substring(6); // 移除 "label:" 前缀
+                const labelLocator = this.page.getByLabel(labelText, { exact: false });
+                if (await labelLocator.count() > 0) {
+                  await labelLocator.first().click();
+                  console.log(`✅ [${runId}] 使用 getByLabel 格式点击成功: ${labelText}`);
+                  
+                  // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                  if (isDownloadAction) {
+                    await this.handleDownload(runId, step);
+                  }
+                  
+                  return { success: true };
+                }
               }
-            }
             
             // 🔥 新增：检查是否是 text:xxx 格式（通过文本查找附近的可点击元素）
             if (step.selector.startsWith('text:')) {
@@ -351,6 +404,12 @@ export class PlaywrightTestRunner {
                 if (await labelLocator.count() > 0) {
                   await labelLocator.first().click();
                   console.log(`✅ [${runId}] 通过label文本点击成功: ${searchText}`);
+                  
+                  // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                  if (isDownloadAction) {
+                    await this.handleDownload(runId, step);
+                  }
+                  
                   return { success: true };
                 }
               } catch {
@@ -376,11 +435,23 @@ export class PlaywrightTestRunner {
                       if (await checkboxInner.count() > 0 && await checkboxInner.first().isVisible()) {
                         await checkboxInner.first().click();
                         console.log(`✅ [${runId}] 点击ElementUI复选框图标成功`);
+                        
+                        // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                        if (isDownloadAction) {
+                          await this.handleDownload(runId, step);
+                        }
+                        
                         return { success: true };
                       } else {
                         // 否则点击label本身
                         await label.click();
                         console.log(`✅ [${runId}] 点击ElementUI复选框label成功`);
+                        
+                        // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                        if (isDownloadAction) {
+                          await this.handleDownload(runId, step);
+                        }
+                        
                         return { success: true };
                       }
                     }
@@ -394,6 +465,12 @@ export class PlaywrightTestRunner {
                     if (await parentLabel.count() > 0) {
                       await parentLabel.first().click();
                       console.log(`✅ [${runId}] 点击父级label元素成功`);
+                      
+                      // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                      if (isDownloadAction) {
+                        await this.handleDownload(runId, step);
+                      }
+                      
                       return { success: true };
                     }
                   } catch (e: any) {
@@ -428,6 +505,12 @@ export class PlaywrightTestRunner {
                           }
                         }
                       }
+                      
+                      // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                      if (isDownloadAction) {
+                        await this.handleDownload(runId, step);
+                      }
+                      
                       return { success: true };
                     }
                   } catch (e: any) {
@@ -440,6 +523,12 @@ export class PlaywrightTestRunner {
                     if (cursorStyle === 'pointer') {
                       await textElement.click();
                       console.log(`✅ [${runId}] 作为备选：点击可点击的文本元素成功`);
+                      
+                      // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                      if (isDownloadAction) {
+                        await this.handleDownload(runId, step);
+                      }
+                      
                       return { success: true };
                     }
                   } catch (e: any) {
@@ -450,6 +539,12 @@ export class PlaywrightTestRunner {
                   try {
                     await textElement.click({ force: true });
                     console.log(`⚠️ [${runId}] 最后手段：强制点击文本元素`);
+                    
+                    // 🔥 关键修复：点击成功后，如果是下载操作，立即处理下载
+                    if (isDownloadAction) {
+                      await this.handleDownload(runId, step);
+                    }
+                    
                     return { success: true };
                   } catch (e: any) {
                     throw new Error(`所有点击尝试都失败: ${e.message}`);
@@ -548,13 +643,24 @@ export class PlaywrightTestRunner {
                   console.log(`✅ [${runId}] 使用 button:name 格式点击成功: ${trimmedValue}`);
                   return { success: true };
                 }
-              } else if (['textbox', 'link', 'checkbox', 'combobox', 'radio'].includes(prefix)) {
+              } else if (['textbox', 'link', 'checkbox', 'combobox', 'radio', 'menuitem', 'menu', 'menubar', 'listitem', 'option', 'tab', 'searchbox', 'spinbutton', 'div', 'generic'].includes(prefix)) {
                 // role:name -> getByRole
-                const roleLocator = this.page.getByRole(prefix as any, { name: trimmedValue, exact: false });
-                if (await roleLocator.count() > 0) {
-                  await roleLocator.first().click();
-                  console.log(`✅ [${runId}] 使用 role:name 格式点击成功: ${prefix}:${trimmedValue}`);
-                  return { success: true };
+                // 🔥 修复：新增 menuitem, menu, menubar, listitem, option, tab, searchbox, spinbutton, div, generic 等role类型
+                // 🔥 特殊处理：div和generic不是标准ARIA role，需要用getByText查找
+                if (prefix === 'div' || prefix === 'generic') {
+                  const textLocator = this.page.getByText(trimmedValue, { exact: false });
+                  if (await textLocator.count() > 0) {
+                    await textLocator.first().click();
+                    console.log(`✅ [${runId}] 使用 ${prefix}:name 格式点击成功: ${trimmedValue}`);
+                    return { success: true };
+                  }
+                } else {
+                  const roleLocator = this.page.getByRole(prefix as any, { name: trimmedValue, exact: false });
+                  if (await roleLocator.count() > 0) {
+                    await roleLocator.first().click();
+                    console.log(`✅ [${runId}] 使用 role:name 格式点击成功: ${prefix}:${trimmedValue}`);
+                    return { success: true };
+                  }
                 }
               }
             }
@@ -586,23 +692,40 @@ export class PlaywrightTestRunner {
                 }
               }
             }
+            } // 🔥 结束 if (step.selector) 块
           } catch (clickError: any) {
-            // 如果所有方式都失败，尝试更宽松的文本匹配
-            try {
-              const allButtons = this.page.locator('button, [role="button"], a, input[type="button"], input[type="submit"]');
-              const count = await allButtons.count();
-              for (let i = 0; i < count; i++) {
-                const text = await allButtons.nth(i).textContent();
-                if (text && text.includes(step.selector)) {
-                  await allButtons.nth(i).click();
-                  return { success: true };
+            // 🔥 修复：只有selector存在时才尝试宽松匹配
+            if (step.selector) {
+              // 如果所有方式都失败，尝试更宽松的文本匹配
+              try {
+                const allButtons = this.page.locator('button, [role="button"], a, input[type="button"], input[type="submit"]');
+                const count = await allButtons.count();
+                for (let i = 0; i < count; i++) {
+                  const text = await allButtons.nth(i).textContent();
+                  if (text && text.includes(step.selector)) {
+                    await allButtons.nth(i).click();
+                    
+                    // 🔥 关键修复：点击成功后，如果是下载操作，立即设置下载监听器
+                    if (isDownloadAction) {
+                      await this.handleDownload(runId, step);
+                    }
+                    
+                    return { success: true };
+                  }
                 }
+                throw new Error(`无法找到元素: ${step.selector}`);
+              } catch (fallbackError: any) {
+                throw new Error(`点击失败: ${fallbackError.message || clickError.message}`);
               }
-              throw new Error(`无法找到元素: ${step.selector}`);
-            } catch (fallbackError: any) {
-              throw new Error(`点击失败: ${fallbackError.message || clickError.message}`);
             }
+            // 🔥 如果selector为空，不抛出异常，继续执行ref处理
           }
+          
+          // 🔥 关键修复：点击成功后，如果是下载操作，立即设置下载监听器并等待下载完成
+          if (isDownloadAction) {
+            await this.handleDownload(runId, step);
+          }
+          
           break;
 
         case 'fill':
@@ -644,8 +767,9 @@ export class PlaywrightTestRunner {
               await element.fill(String(step.value));
               console.log(`✅ [${runId}] 使用 getByText 格式填充成功: ${trimmedValue}`);
               break;
-            } else if (['button', 'textbox', 'link', 'checkbox', 'combobox', 'heading'].includes(prefix)) {
+            } else if (['button', 'textbox', 'link', 'checkbox', 'combobox', 'heading', 'menuitem', 'menu', 'menubar', 'listitem', 'option', 'tab', 'searchbox', 'spinbutton'].includes(prefix)) {
               // role:name -> getByRole
+              // 🔥 修复：新增 menuitem, menu, menubar, listitem, option, tab, searchbox, spinbutton 等role类型
               const element = this.page.getByRole(prefix as any, { name: trimmedValue, exact: false });
               await element.fill(String(step.value));
               console.log(`✅ [${runId}] 使用 role:name 格式填充成功: ${prefix}:${trimmedValue}`);
@@ -695,8 +819,9 @@ export class PlaywrightTestRunner {
               await element.fill(String(step.value));
               console.log(`✅ [${runId}] 使用 getByText 格式填充成功: ${trimmedValue}`);
               break;
-            } else if (['button', 'textbox', 'link', 'checkbox', 'combobox', 'heading'].includes(prefix)) {
+            } else if (['button', 'textbox', 'link', 'checkbox', 'combobox', 'heading', 'menuitem', 'menu', 'menubar', 'listitem', 'option', 'tab', 'searchbox', 'spinbutton'].includes(prefix)) {
               // role:name -> getByRole
+              // 🔥 修复：新增 menuitem, menu, menubar, listitem, option, tab, searchbox, spinbutton 等role类型
               const element = this.page.getByRole(prefix as any, { name: trimmedValue, exact: false });
               await element.fill(String(step.value));
               console.log(`✅ [${runId}] 使用 role:name 格式填充成功: ${prefix}:${trimmedValue}`);
@@ -708,140 +833,119 @@ export class PlaywrightTestRunner {
           break;
 
         case 'expect': {
+          // 🔥 新增：文件下载验证 - 使用AssertionService统一处理
+          const isFileVerification = (step.description || '').match(/验证.*文件.*下载|文件.*已.*下载|下载.*成功|文件.*存在/i);
+          
+          if (isFileVerification) {
+            console.log(`📁 [${runId}] 检测到文件下载验证断言`);
+            console.log(`📋 [${runId}] 断言描述: "${step.description}"`);
+            
+            try {
+              // 🔥 使用AssertionService进行文件下载验证
+              const assertion: Assertion = {
+                id: `${runId}-${stepIndex}`,
+                description: step.description || '验证文件下载成功',
+                type: AssertionType.FILE_DOWNLOAD,
+                timeout: 30000 // 30秒内的文件被认为是最近下载的
+              };
+              
+              const context: VerificationContext = {
+                page: this.page!,
+                runId,
+                artifactsDir: path.join(this.artifactsDir, runId),
+                logCallback: this.logCallback
+              };
+              
+              const result = await this.assertionService.verify(assertion, context);
+              
+              if (result.success) {
+                console.log(`✅ [${runId}] 文件下载验证成功`);
+                if (result.actualValue && typeof result.actualValue === 'object') {
+                  const fileInfo = result.actualValue as any;
+                  console.log(`📄 [${runId}] 文件名: ${fileInfo.fileName}`);
+                  console.log(`📊 [${runId}] 文件大小: ${fileInfo.fileSize} 字节`);
+                  console.log(`⏱️ [${runId}] 文件年龄: ${Math.round(fileInfo.fileAge / 1000)} 秒`);
+                }
+                return { success: true };
+              } else {
+                console.log(`❌ [${runId}] 文件下载验证失败: ${result.error}`);
+                if (result.suggestions && result.suggestions.length > 0) {
+                  console.log(`💡 [${runId}] 建议:`);
+                  result.suggestions.forEach(suggestion => {
+                    console.log(`   - ${suggestion}`);
+                  });
+                }
+                return { success: false, error: result.error };
+              }
+            } catch (fileError: any) {
+              const errorMsg = `文件验证失败: ${fileError.message}`;
+              console.error(`❌ [${runId}] ${errorMsg}`);
+              if (this.logCallback) {
+                this.logCallback(`❌ ${errorMsg}`, 'error');
+              }
+              return { success: false, error: errorMsg };
+            }
+          }
+          
           // 🔥 智能元素查找：支持 role:name 格式、ref参数、文本描述和 CSS 选择器
           let element: any = null;
           let selectorText: string | undefined; // 🔥 记录selector中的文本，用于多种方式查找
           
-          // 🔥 新增：对于弹窗/提示类验证，如果element或description包含"弹窗"、"提示"等关键词，且有value值，优先用value查找
+          // 🔥 新增：对于弹窗/提示类验证，使用 AssertionService 统一处理
           // 🔥 关键优化：同时检查 element 和 description，因为 AI 可能修改 element 但 description 保留原始文本
           const isPopupVerification = (
             (step.element || '') + ' ' + (step.description || '')
           ).match(/弹窗|提示|对话框|警告|错误|成功|消息|通知|toast|alert|dialog|message|notification/i);
           
           if (isPopupVerification && step.value && typeof step.value === 'string' && step.value.trim()) {
-            console.log(`🔍 [${runId}] 检测到弹窗验证（element="${step.element}", description="${step.description}"）`);
-            console.log(`🔍 [${runId}] 优先使用value值快速查找: "${step.value}"`);
-            
-            // 🔥 新增：先检查文本历史记录（可能弹窗已经消失），使用用户选择的匹配模式
-            const historyResult = this.findInTextHistory(step.value, runId, matchMode);
-            if (historyResult.found) {
-              // 🔥 优化：调整日志输出顺序，先输出匹配结果，再输出详细信息
-              console.log(`✅ [${runId}] 在文本历史记录中找到弹窗: "${historyResult.matchedText}"`);
-              console.log(`📊 [${runId}] 匹配类型: ${historyResult.matchType}`);
-              
-              // 🔥 新增：将日志发送到前端（优化顺序）
-              if (this.logCallback) {
-                this.logCallback(`✅ 在文本历史记录中找到弹窗: "${historyResult.matchedText}"`, 'success');
-                this.logCallback(`📊 匹配类型: ${historyResult.matchType}`, 'info');
-              }
-              
-              // 🔥 如果是宽松匹配（反向包含或关键词匹配），给出警告
-              if (historyResult.matchType?.includes('反向包含') || historyResult.matchType?.includes('关键词')) {
-                console.log(`⚠️ [${runId}] 警告：使用了宽松匹配策略`);
-                console.log(`   期望文本: "${step.value}"`);
-                console.log(`   实际文本: "${historyResult.matchedText}"`);
-                console.log(`💡 [${runId}] 建议：检查测试用例中的期望文本是否准确`);
-                
-                // 🔥 新增：将警告日志发送到前端
-                if (this.logCallback) {
-                  this.logCallback(`⚠️ 警告：使用了宽松匹配策略`, 'warning');
-                  this.logCallback(`   期望文本: "${step.value}"`, 'warning');
-                  this.logCallback(`   实际文本: "${historyResult.matchedText}"`, 'warning');
-                  this.logCallback(`💡 建议：检查测试用例中的期望文本是否准确`, 'info');
-                }
-              }
-              
-              console.log(`💡 [${runId}] 弹窗已消失，但历史记录证明它曾经出现过`);
-              if (this.logCallback) {
-                this.logCallback(`💡 弹窗已消失，但历史记录证明它曾经出现过`, 'info');
-              }
-              // 弹窗已经出现过（即使现在消失了），验证通过
-              return { success: true };
-            }
+            console.log(`🔍 [${runId}] 检测到弹窗验证断言`);
+            console.log(`📋 [${runId}] 断言描述: "${step.description}"`);
+            console.log(`🔍 [${runId}] 期望文本: "${step.value}"`);
             
             try {
-              // 🔥 弹窗快速捕捉策略：使用短超时时间快速检测
-              // 因为弹窗通常会在几秒内消失，需要立即捕捉
-              const popupElement = this.page.getByText(step.value, { exact: false });
+              // 🔥 使用 AssertionService 进行弹窗验证
+              const assertion: Assertion = {
+                id: `${runId}-${stepIndex}`,
+                description: step.description || '验证弹窗内容',
+                type: AssertionType.POPUP,
+                expectedValue: step.value,
+                matchMode: matchMode, // 使用用户选择的匹配模式
+                timeout: 10000 // 10秒超时（覆盖AI解析时间）
+              };
               
-              // 🔥 方式1：尝试立即查找（不等待）
-              let count = await popupElement.count();
-              if (count > 0) {
-                element = popupElement.first();
-                console.log(`✅ [${runId}] 立即找到弹窗元素: "${step.value}"`);
-              } else {
-                // 🔥 方式2：等待更长时间（10秒）让弹窗出现
-                // 注意：第一次执行时 AI 解析可能花费 5-6 秒，弹窗可能在 AI 解析期间出现并消失
-                // 所以需要更长的等待时间来覆盖这个时间窗口
-                // 第二次执行时会使用缓存，AI 解析几乎是即时的，所以会很快找到
-                console.log(`⚠️ [${runId}] 弹窗未立即出现，等待10秒（覆盖AI解析时间）...`);
-                try {
-                  await popupElement.first().waitFor({ state: 'visible', timeout: 10000 });
-                  element = popupElement.first();
-                  console.log(`✅ [${runId}] 等待后找到弹窗元素: "${step.value}"`);
-                } catch (waitError) {
-                  // 🔥 方式3：尝试查找包含部分文本的弹窗（更宽松的匹配）
-                  console.log(`⚠️ [${runId}] 完整文本未找到，尝试部分匹配...`);
-                  
-                  // 🔥 优化：更智能的文本分割，保留更多有意义的词组
-                  const words = step.value
-                    .split(/[：:，,、\s]+/)
-                    .filter(w => w.length > 1)
-                    .sort((a, b) => b.length - a.length); // 优先尝试较长的词组
-                  
-                  console.log(`🔍 [${runId}] 尝试匹配关键词: ${words.join(', ')}`);
-                  
-                  for (const word of words) {
-                    const partialElement = this.page.getByText(word, { exact: false });
-                    const partialCount = await partialElement.count();
-                    if (partialCount > 0) {
-                      element = partialElement.first();
-                      console.log(`✅ [${runId}] 通过部分文本找到弹窗: "${word}" (共找到 ${partialCount} 个匹配)`);
-                      break;
-                    }
-                  }
-                  
-                  // 🔥 方式4：如果部分匹配也失败，尝试查找页面上所有可见的文本元素
-                  if (!element) {
-                    console.log(`⚠️ [${runId}] 部分匹配失败，尝试在所有可见文本中查找...`);
-                    try {
-                      // 获取页面上所有包含文本的可见元素
-                      const allTextElements = this.page.locator('div, span, p, li, td, th, label, a, button').filter({ hasText: /.+/ });
-                      const textCount = await allTextElements.count();
-                      console.log(`🔍 [${runId}] 页面上共有 ${textCount} 个文本元素`);
-                      
-                      // 遍历查找包含任意关键词的元素
-                      for (let i = 0; i < Math.min(textCount, 50); i++) { // 限制最多检查50个元素
-                        const el = allTextElements.nth(i);
-                        try {
-                          const text = await el.textContent();
-                          if (text) {
-                            // 检查是否包含任意关键词
-                            for (const word of words) {
-                              if (text.includes(word)) {
-                                element = el;
-                                console.log(`✅ [${runId}] 在文本元素中找到关键词 "${word}": "${text.substring(0, 50)}..."`);
-                                break;
-                              }
-                            }
-                          }
-                          if (element) break;
-                        } catch {
-                          // 忽略单个元素的错误
-                        }
-                      }
-                    } catch (scanError: any) {
-                      console.warn(`⚠️ [${runId}] 页面文本扫描失败: ${scanError.message}`);
-                    }
-                  }
-                  
-                  if (!element) {
-                    console.log(`⚠️ [${runId}] 未通过value值找到弹窗，继续尝试其他方式`);
-                  }
+              const context: VerificationContext = {
+                page: this.page!,
+                runId,
+                artifactsDir: path.join(this.artifactsDir, runId),
+                logCallback: this.logCallback,
+                textHistory: this.textHistory // 传递文本历史记录
+              };
+              
+              const result = await this.assertionService.verify(assertion, context);
+              
+              if (result.success) {
+                console.log(`✅ [${runId}] 弹窗验证成功`);
+                if (result.actualValue) {
+                  console.log(`📄 [${runId}] 匹配文本: ${result.actualValue}`);
                 }
+                return { success: true };
+              } else {
+                console.log(`❌ [${runId}] 弹窗验证失败: ${result.error}`);
+                if (result.suggestions && result.suggestions.length > 0) {
+                  console.log(`💡 [${runId}] 建议:`);
+                  result.suggestions.forEach(suggestion => {
+                    console.log(`   - ${suggestion}`);
+                  });
+                }
+                return { success: false, error: result.error };
               }
-            } catch (error: any) {
-              console.warn(`⚠️ [${runId}] 弹窗快速捕捉失败: ${error.message}`);
+            } catch (popupError: any) {
+              const errorMsg = `弹窗验证失败: ${popupError.message}`;
+              console.error(`❌ [${runId}] ${errorMsg}`);
+              if (this.logCallback) {
+                this.logCallback(`❌ ${errorMsg}`, 'error');
+              }
+              return { success: false, error: errorMsg };
             }
           }
           
@@ -898,15 +1002,41 @@ export class PlaywrightTestRunner {
                 }
               } else if (step.ref.startsWith('element_')) {
                 // 🔥 修复：element_xxx 格式是Playwright accessibility snapshot的内部引用，不是HTML属性
-                // 如果selector已经设置（应该是role:name格式），就不需要再处理ref了
-                // 如果没有selector，回退到使用element描述进行智能查找
-                if (step.element) {
-                  console.log(`⚠️ [${runId}] ref是内部引用，使用element描述进行智能查找: "${step.element}"`);
-                  // 不在这里处理，让后续的智能查找逻辑处理
+                // 格式: element_<counter>_<role>_<safeName>
+                // 例如: element_1_menuitem___ 表示第2个menuitem元素
+                console.log(`🔍 [${runId}] 检测到accessibility snapshot ref: ${step.ref}`);
+                
+                // 从ref中提取role和索引信息
+                const refMatch = step.ref.match(/^element_(\d+)_(\w+)_/);
+                if (refMatch) {
+                  const [, indexStr, role] = refMatch;
+                  const index = parseInt(indexStr);
+                  console.log(`📋 [${runId}] 从ref提取: role=${role}, index=${index}`);
+                  
+                  // 使用role和index定位元素
+                  try {
+                    const roleLocator = this.page.getByRole(role as any);
+                    const count = await roleLocator.count();
+                    console.log(`📊 [${runId}] 页面上${role}元素数量: ${count}`);
+                    
+                    if (count > index) {
+                      element = roleLocator.nth(index);
+                      console.log(`✅ [${runId}] 使用ref中的role和index定位成功: ${role}:nth(${index})`);
+                    } else {
+                      console.log(`⚠️ [${runId}] 元素数量不足: ${count} <= ${index}，尝试使用element描述`);
+                      // 回退到使用element描述
+                      if (step.element) {
+                        console.log(`🔍 [${runId}] 回退到使用element描述: "${step.element}"`);
+                        // 不在这里处理，让后续的智能查找逻辑处理
+                      }
+                    }
+                  } catch (error: any) {
+                    console.log(`⚠️ [${runId}] 使用ref定位失败: ${error.message}，回退到element描述`);
+                    // 回退到使用element描述
+                  }
                 } else {
-                  // 尝试作为文本内容查找（最后的手段）
-                  element = this.page.getByText(step.ref, { exact: false });
-                  console.log(`🔍 [${runId}] 尝试将ref作为文本内容查找`);
+                  console.log(`⚠️ [${runId}] ref格式不匹配，使用element描述进行智能查找`);
+                  // 不在这里处理，让后续的智能查找逻辑处理
                 }
               } else if (step.ref.startsWith('#') || step.ref.startsWith('.') || step.ref.startsWith('[')) {
                 // 标准 CSS 选择器
@@ -1627,6 +1757,14 @@ export class PlaywrightTestRunner {
   getPage(): Page | null {
     return this.page;
   }
+  
+  /**
+   * 🔥 新增：获取文本历史记录
+   * 用于 AssertionService 进行弹窗验证
+   */
+  getTextHistory(): Set<string> {
+    return this.textHistory;
+  }
 
   /**
    * 停止 trace 录制并保存
@@ -1644,6 +1782,102 @@ export class PlaywrightTestRunner {
     } catch (error: any) {
       console.error(`❌ [${runId}] 保存 trace 文件失败:`, error.message);
       return null;
+    }
+  }
+
+  /**
+   * 🔥 新增：处理下载操作
+   * 在点击成功后立即设置下载监听器并等待下载完成
+   */
+  private async handleDownload(runId: string, step: TestStep): Promise<void> {
+    if (!this.page) {
+      console.warn(`⚠️ [${runId}] 页面未初始化，无法处理下载`);
+      return;
+    }
+
+    try {
+      console.log(`📥 [${runId}] 点击成功后设置下载监听器...`);
+      
+      // 🔥 关键修复：在点击成功后才设置下载监听器
+      // 使用 Promise.race 同时等待下载事件和超时
+      const downloadPromise = new Promise<any>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('下载超时（30秒）'));
+        }, 30000); // 30秒超时
+        
+        this.page!.once('download', (download) => {
+          clearTimeout(timeout);
+          resolve(download);
+        });
+      });
+      
+      console.log(`⏳ [${runId}] 等待下载开始（最多30秒）...`);
+      
+      // 等待下载事件
+      const download = await downloadPromise;
+      
+      // 获取建议的文件名
+      const suggestedFilename = download.suggestedFilename();
+      console.log(`📥 [${runId}] 下载事件触发，建议文件名: ${suggestedFilename}`);
+      
+      // 记录下载URL（用于调试）
+      try {
+        const downloadUrl = download.url();
+        console.log(`🔗 [${runId}] 下载URL: ${downloadUrl}`);
+      } catch (e) {
+        console.log(`⚠️ [${runId}] 无法获取下载URL`);
+      }
+      
+      // 构建保存路径
+      const runDir = path.join(this.artifactsDir, runId);
+      const savePath = path.join(runDir, suggestedFilename);
+      
+      console.log(`💾 [${runId}] 开始保存文件到: ${savePath}`);
+      
+      // 使用 saveAs 保存文件，并等待完成
+      await download.saveAs(savePath);
+      
+      // 验证文件是否成功保存
+      try {
+        const stats = await fs.stat(savePath);
+        console.log(`✅ [${runId}] 文件下载成功: ${savePath}`);
+        console.log(`📊 [${runId}] 文件大小: ${stats.size} 字节`);
+        
+        // 将下载信息发送到日志回调
+        if (this.logCallback) {
+          this.logCallback(`📥 文件下载成功: ${suggestedFilename}`, 'success');
+          this.logCallback(`📁 保存路径: ${savePath}`, 'info');
+          this.logCallback(`📊 文件大小: ${stats.size} 字节`, 'info');
+        }
+      } catch (statError: any) {
+        console.error(`⚠️ [${runId}] 无法验证文件: ${statError.message}`);
+        // 文件可能已保存，但无法验证
+        if (this.logCallback) {
+          this.logCallback(`📥 文件已保存: ${suggestedFilename}`, 'success');
+          this.logCallback(`📁 保存路径: ${savePath}`, 'info');
+        }
+      }
+    } catch (downloadError: any) {
+      console.error(`❌ [${runId}] 下载失败: ${downloadError.message}`);
+      console.error(`❌ [${runId}] 错误堆栈:`, downloadError.stack);
+      
+      if (this.logCallback) {
+        this.logCallback(`❌ 下载失败: ${downloadError.message}`, 'error');
+        
+        // 提供调试建议
+        if (downloadError.message.includes('超时')) {
+          this.logCallback(`💡 提示：下载超时，可能原因：`, 'info');
+          this.logCallback(`   1. 点击没有触发下载`, 'info');
+          this.logCallback(`   2. 下载需要更长时间（可以增加超时时间）`, 'info');
+          this.logCallback(`   3. 需要额外的用户交互（如确认对话框）`, 'info');
+        } else {
+          this.logCallback(`💡 提示：请检查浏览器开发者工具的Network标签`, 'info');
+        }
+      }
+      
+      // 下载失败不影响点击操作的成功状态
+      // 因为点击本身已经成功了，只是下载没有触发
+      console.log(`ℹ️ [${runId}] 点击操作成功，但下载未完成`);
     }
   }
 

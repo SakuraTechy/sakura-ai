@@ -10,7 +10,7 @@ datasource db {
 
 model ai_prompts {
   id         Int       @id @default(autoincrement())
-  name       String    @db.VarChar(255)
+  name       String    @db.VarChar(191)
   version    Int
   template   String    @db.Text
   created_at DateTime? @default(now()) @db.Timestamp(0)
@@ -112,14 +112,14 @@ model roles {
 }
 
 model settings {
-  key        String    @id @db.VarChar(255)
+  key        String    @id @db.VarChar(191)
   value      String?   @db.Text
   updated_at DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model step_screenshots {
   id               Int                     @id @default(autoincrement())
-  run_id           String                  @db.VarChar(255)
+  run_id           String                  @db.VarChar(191)
   test_case_id     Int?
   step_index       String                  @db.VarChar(50)
   step_description String?                 @db.Text
@@ -156,7 +156,7 @@ model test_cases {
   module               String?                @db.VarChar(100)
   project              String?                @db.VarChar(100)
   created_at           DateTime?              @default(now()) @db.Timestamp(0)
-  updated_at           DateTime?              @updatedAt @db.Timestamp(0)
+  updated_at           DateTime?              @updatedAt @db.DateTime(0)
   deleted_at           DateTime?              @db.Timestamp(0)
   patch_proposals      case_patch_proposals[]
   case_versions        case_versions[]
@@ -227,7 +227,7 @@ model user_roles {
 
 model users {
   id                     Int                      @id @default(autoincrement())
-  email                  String                   @unique(map: "email") @db.VarChar(255)
+  email                  String                   @unique(map: "email") @db.VarChar(191)
   username               String                   @unique(map: "username") @db.VarChar(100)
   account_name           String?                  @db.VarChar(100)
   password_hash          String                   @db.VarChar(255)
@@ -251,7 +251,7 @@ model users {
 
 model run_artifacts {
   id        Int      @id @default(autoincrement())
-  runId     String   @db.VarChar(255)
+  runId     String   @db.VarChar(191)
   type      String   @db.VarChar(50)
   filename  String   @db.VarChar(255)
   size      BigInt
@@ -323,11 +323,12 @@ model case_patch_proposals {
 }
 
 model test_case_executions {
-  id                  String                     @id @db.VarChar(255)
+  id                  String                     @id @db.VarChar(191)
   test_case_id        Int
   test_case_title     String                     @db.VarChar(255)
   environment         String                     @default("default") @db.VarChar(100)
   execution_mode      String                     @default("standard") @db.VarChar(50)
+  execution_engine    String?                    @db.VarChar(50)
   status              test_case_execution_status @default(queued)
   executor_user_id    Int?
   executor_project    String?                    @db.VarChar(100)
@@ -345,6 +346,7 @@ model test_case_executions {
   screenshots         Json?
   artifacts           Json?
   metadata            Json?
+  midscene_report_path String?                   @db.VarChar(500)
   users               users?                     @relation(fields: [executor_user_id], references: [id])
   test_cases          test_cases                 @relation(fields: [test_case_id], references: [id], onDelete: Cascade)
 
@@ -380,7 +382,7 @@ model functional_test_cases {
   batch_number        Int?                     @default(0)
   coverage_areas      String?                  @db.VarChar(500)
   created_at          DateTime                 @default(now()) @db.Timestamp(0)
-  updated_at          DateTime                 @updatedAt @db.Timestamp(0)
+  updated_at          DateTime                 @updatedAt @db.DateTime(0)
   case_type           functional_case_type     @default(FULL)
   project_version_id  Int?
   requirement_source  String?                  @db.Text
@@ -406,7 +408,7 @@ model functional_test_cases {
   @@index([batch_number])
   @@index([project_version_id])
   @@index([case_type])
-  @@index([test_point_name])
+  // @@index([test_point_name]) // 移除：VARCHAR(500) 超过 MySQL 5.7 索引长度限制
   @@index([requirement_doc_id])
   @@index([deleted_at])  // 🆕 软删除索引，优化查询性能
 }
@@ -450,7 +452,7 @@ model requirement_documents {
   test_case_count    Int                     @default(0)
   status             requirement_doc_status  @default(ACTIVE)
   created_at         DateTime                @default(now()) @db.Timestamp(0)
-  updated_at         DateTime                @updatedAt @db.Timestamp(0)
+  updated_at         DateTime                @updatedAt @db.DateTime(0)
   module             String?                 @db.VarChar(255)
   system             String?                 @db.VarChar(255)
   test_cases         functional_test_cases[]
@@ -475,7 +477,7 @@ model systems {
   status                system_status           @default(active)
   sort_order            Int                     @default(0)
   created_at            DateTime                @default(now()) @db.Timestamp(0)
-  updated_at            DateTime                @updatedAt @db.Timestamp(0)
+  updated_at            DateTime                @updatedAt @db.DateTime(0)
   versions              project_versions[]
   requirement_documents requirement_documents[]
   account_configs       account_configs[]
@@ -496,7 +498,7 @@ model project_versions {
   status                system_status           @default(active)
   release_date          DateTime?               @db.Date
   created_at            DateTime                @default(now()) @db.Timestamp(0)
-  updated_at            DateTime                @updatedAt @db.Timestamp(0)
+  updated_at            DateTime                @updatedAt @db.DateTime(0)
   functional_test_cases functional_test_cases[]
   project               systems                 @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requirement_documents requirement_documents[]
@@ -691,7 +693,7 @@ model test_plans {
   start_date          DateTime?                @db.Timestamp(0)
   end_date            DateTime?                @db.Timestamp(0)
   created_at          DateTime                 @default(now()) @db.Timestamp(0)
-  updated_at          DateTime                 @updatedAt @db.Timestamp(0)
+  updated_at          DateTime                 @updatedAt @db.DateTime(0)
   deleted_at          DateTime?                @db.Timestamp(0)
   
   // 关联
@@ -772,7 +774,7 @@ model test_plan_executions {
 // AI元素识别缓存表
 model ai_element_cache {
   id               Int       @id @default(autoincrement())
-  cache_key        String    @unique @db.VarChar(255)  // MD5 hash key
+  cache_key        String    @unique @db.VarChar(191)  // MD5 hash key (32字符足够)
   url              String    @db.VarChar(500)          // 页面URL
   selector         String    @db.VarChar(500)          // 元素选择器描述
   snapshot_fp      String    @db.VarChar(32)           // 页面快照指纹
@@ -790,7 +792,7 @@ model ai_element_cache {
   created_at       DateTime  @default(now()) @db.Timestamp(0)
   expires_at       DateTime  @db.Timestamp(0)          // 过期时间
   
-  @@index([url])
+  // @@index([url]) // 移除：VARCHAR(500) 超过 MySQL 5.7 索引长度限制
   @@index([expires_at])
   @@index([created_at])
 }
@@ -798,7 +800,7 @@ model ai_element_cache {
 // AI断言解析缓存表
 model ai_assertion_cache {
   id               Int       @id @default(autoincrement())
-  cache_key        String    @unique @db.VarChar(255)  // MD5 hash key
+  cache_key        String    @unique @db.VarChar(191)  // MD5 hash key (32字符足够)
   assertion_desc   String    @db.VarChar(1000)         // 断言描述
   page_elements_fp String    @db.VarChar(32)           // 页面元素指纹
   
@@ -822,7 +824,7 @@ model ai_assertion_cache {
 // AI操作步骤解析缓存表
 model ai_operation_cache {
   id               Int       @id @default(autoincrement())
-  cache_key        String    @unique @db.VarChar(255)  // MD5 hash key
+  cache_key        String    @unique @db.VarChar(191)  // MD5 hash key (32字符足够)
   operation_desc   String    @db.VarChar(1000)         // 操作描述
   page_elements_fp String    @db.VarChar(32)           // 页面元素指纹
   
@@ -853,7 +855,7 @@ model account_configs {
   status              system_status @default(active)
   is_default          Boolean       @default(false)  // 是否为默认账号
   created_at          DateTime      @default(now()) @db.Timestamp(0)
-  updated_at          DateTime      @updatedAt @db.Timestamp(0)
+  updated_at          DateTime      @updatedAt @db.DateTime(0)
   project             systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([account_type])
@@ -869,7 +871,7 @@ model server_configs {
   project_id    Int
   server_type   String        @db.VarChar(50)
   server_version String       @db.VarChar(100)
-  host_name     String        @db.VarChar(255)
+  host_name     String        @db.VarChar(191)
   host_port     Int
   username      String        @db.VarChar(100)
   password      String        @db.VarChar(255)
@@ -878,7 +880,7 @@ model server_configs {
   is_default    Boolean       @default(false)  // 是否为默认服务器
   parameters    Json?         // 参数配置（键值对）
   created_at    DateTime      @default(now()) @db.Timestamp(0)
-  updated_at    DateTime      @updatedAt @db.Timestamp(0)
+  updated_at    DateTime      @updatedAt @db.DateTime(0)
   project       systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([server_type])
@@ -895,7 +897,7 @@ model database_configs {
   database_type     String        @db.VarChar(50)
   database_version  String        @db.VarChar(100)
   database_driver   String        @db.VarChar(255)
-  database_name     String        @db.VarChar(255)
+  database_name     String        @db.VarChar(191)
   database_port     Int
   database_schema   String        @db.VarChar(100)
   username          String        @db.VarChar(100)
@@ -906,7 +908,7 @@ model database_configs {
   is_default        Boolean       @default(false)  // 是否为默认数据库
   parameters        Json?         // 参数配置（键值对）
   created_at        DateTime      @default(now()) @db.Timestamp(0)
-  updated_at        DateTime      @updatedAt @db.Timestamp(0)
+  updated_at        DateTime      @updatedAt @db.DateTime(0)
   project           systems       @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([database_type])

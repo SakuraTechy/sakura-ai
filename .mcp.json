@@ -8,6 +8,14 @@
         "ENABLE_GUI": "true",
         "PROMPT_LANGUAGE": "zh"
       }
+    },
+    "pencil": {
+      "command": "c:\\Users\\Ankki\\.kiro\\extensions\\highagency.pencildev-0.6.15-universal\\out\\mcp-server-windows-x64.exe",
+      "args": [
+        "--ws-port",
+        "63767"
+      ],
+      "env": {}
     }
   }
 }

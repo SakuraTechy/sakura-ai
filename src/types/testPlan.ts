@@ -216,10 +216,11 @@ export interface TestPlanCaseResult {
  * 执行配置
  */
 export interface ExecutionConfig {
-  executionEngine?: 'mcp' | 'playwright';
+  executionEngine?: 'mcp' | 'playwright' | 'midscene';
   enableTrace?: boolean;
   enableVideo?: boolean;
   environment?: string;
+  assertionMatchMode?: 'strict' | 'auto' | 'loose'; // 🔥 新增：断言匹配策略
 }
 
 /**

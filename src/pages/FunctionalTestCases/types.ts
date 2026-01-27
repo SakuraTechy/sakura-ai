@@ -1,5 +1,5 @@
-// 执行结果：与 src/types/testPlan.ts 保持一致
-export type ExecutionResult = 'pass' | 'fail' | 'block' | 'skip' | 'pending';
+// 从全局类型导入 ExecutionResult
+import type { ExecutionResult } from '../../types/testPlan';
 
 export interface ExecutionLog {
     id: string;

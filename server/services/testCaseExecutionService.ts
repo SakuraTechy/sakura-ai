@@ -15,6 +15,7 @@ interface TestCaseExecutionData {
   testCaseTitle: string;
   environment: string;
   executionMode: string;
+  executionEngine?: string; // 🔥 添加执行引擎字段（mcp | playwright | midscene）
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'error';
 
   // 执行者信息
@@ -821,6 +822,7 @@ export class TestCaseExecutionService {
       testCaseTitle: execution.test_case_title,
       environment: execution.environment,
       executionMode: execution.execution_mode,
+      executionEngine: execution.execution_engine || 'playwright', // 🔥 添加执行引擎字段
       status: execution.status as TestCaseExecutionData['status'],
 
       executorUserId: execution.executor_user_id || undefined,

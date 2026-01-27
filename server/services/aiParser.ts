@@ -259,21 +259,6 @@ export class AITestParser {
   }
 
   /**
-   * 🔥 设置操作缓存
-   */
-  private setOperationCache(cacheKey: string, command: MCPCommand): void {
-    // 如果缓存已满，删除最早的一半
-    if (this.operationCache.size >= this.operationCacheMaxSize) {
-      const keysToDelete = Array.from(this.operationCache.keys()).slice(0, Math.floor(this.operationCacheMaxSize / 2));
-      keysToDelete.forEach(key => this.operationCache.delete(key));
-      console.log(`🗑️ 操作缓存已满，清理了 ${keysToDelete.length} 条旧缓存`);
-    }
-
-    this.operationCache.set(cacheKey, command);
-    console.log(`💾 操作结果已缓存 (当前: ${this.operationCache.size}/${this.operationCacheMaxSize})`);
-  }
-
-  /**
    * 🔥 获取缓存统计信息
    */
   public getCacheStats(): {
@@ -568,12 +553,58 @@ export class AITestParser {
       console.log(`🔄 [${runId}] 原始步骤: "${lines[0]}"`);
       console.log(`🔄 [${runId}] 清理后步骤: "${nextStepText}"`);
 
-      // 🔥 关键修复：确保剩余步骤正确计算
-      const remaining = lines.slice(1).join('\n').trim();
+      // 🔥 关键修复：检测并拆分复合操作（如"点击系统管理，选择许可证模块"）
+      const splitResult = this.splitCompoundStep(nextStepText);
+      if (splitResult.isCompound) {
+        console.log(`🔀 [${runId}] 检测到复合操作，拆分为 ${splitResult.subSteps.length} 个子步骤:`);
+        splitResult.subSteps.forEach((sub, idx) => {
+          console.log(`   ${idx + 1}. "${sub}"`);
+        });
+        
+        // 取第一个子步骤作为当前步骤，其余子步骤加入剩余步骤
+        nextStepText = splitResult.subSteps[0];
+        const additionalSteps = splitResult.subSteps.slice(1);
+        const originalRemaining = lines.slice(1).join('\n').trim();
+        
+        // 将拆分出的子步骤插入到剩余步骤的最前面
+        const newRemaining = additionalSteps.length > 0
+          ? additionalSteps.join('\n') + (originalRemaining ? '\n' + originalRemaining : '')
+          : originalRemaining;
+        
+        console.log(`📋 [${runId}] 当前执行: "${nextStepText}"`);
+        console.log(`📋 [${runId}] 新的剩余步骤: "${newRemaining}"`);
+        
+        // 使用新的剩余步骤
+        var remaining = newRemaining;
+      } else {
+        // 🔥 关键修复：确保剩余步骤正确计算
+        var remaining = lines.slice(1).join('\n').trim();
+      }
 
       console.log(`🎯 [${runId}] 当前解析步骤: "${nextStepText}"`);
       console.log(`📊 [${runId}] 剩余步骤数: ${lines.length - 1}`);
       console.log(`📋 [${runId}] 剩余步骤内容: "${remaining}"`)
+
+      // 🔥 新增：检测是否为断言/验证类型的步骤，如果是则跳过
+      const assertionCheckResult = this.isAssertionStep(nextStepText);
+      if (assertionCheckResult.isAssertion) {
+        console.log(`⚠️ [${runId}] 检测到断言步骤，跳过操作解析: "${nextStepText}"`);
+        console.log(`   📋 断言类型: ${assertionCheckResult.reason}`);
+        if (logCallback) {
+          logCallback(`⚠️ 跳过断言步骤: "${nextStepText}" (${assertionCheckResult.reason})`, 'warning');
+        }
+        
+        // 返回一个特殊的跳过步骤，让执行器知道这是断言而非操作
+        const skipStep: TestStep = {
+          id: `skip-assertion-${Date.now()}`,
+          action: 'skip_assertion',
+          description: nextStepText,
+          order: 0,
+          stepType: 'assertion'
+        };
+        
+        return { success: true, step: skipStep, remaining: remaining || '' };
+      }
 
       // 🔥 增强日志：打印页面快照状态
       if (snapshot) {
@@ -613,6 +644,16 @@ export class AITestParser {
       console.log(`   🎯 操作类型: ${mcpCommand.name}`);
       console.log(`   📋 参数: ${JSON.stringify(mcpCommand.arguments, null, 2)}`);
 
+      // 🔥 新增：如果AI返回了剩余步骤，需要添加到剩余步骤中
+      let finalRemaining = remaining;
+      if ((mcpCommand as any).remainingSteps) {
+        const aiRemainingSteps = (mcpCommand as any).remainingSteps;
+        console.log(`📋 [${runId}] AI返回的剩余步骤: "${aiRemainingSteps}"`);
+        // 将AI返回的剩余步骤添加到现有剩余步骤的前面
+        finalRemaining = aiRemainingSteps + (remaining ? '\n' + remaining : '');
+        console.log(`📋 [${runId}] 合并后的剩余步骤: "${finalRemaining}"`);
+      }
+
       const step: TestStep = {
         id: `step-${Date.now()}`,
         action: mcpCommand.name,
@@ -623,11 +664,11 @@ export class AITestParser {
       };
 
       console.log(`✅ [${runId}] AI解析步骤完成: ${step.action} - ${step.description}`);
-      console.log(`📋 [${runId}] 返回剩余步骤: "${remaining}"`);
+      console.log(`📋 [${runId}] 返回剩余步骤: "${finalRemaining}"`);
       console.log(`🔍 [${runId}] ===== AI解析步骤结束 =====\n`);
 
       // 🔥 关键修复：确保返回正确的剩余步骤
-      return { success: true, step, remaining: remaining || '' };
+      return { success: true, step, remaining: finalRemaining || '' };
     } catch (error) {
       // 🔥 修复：不再在这里记录错误，因为 callLLM 已经记录过了，避免重复打印
       // 直接返回错误，让上层处理
@@ -711,6 +752,311 @@ export class AITestParser {
       description: line,
       order: index + 1
     }));
+  }
+
+  /**
+   * 🔥 新增：检测并拆分复合操作步骤
+   * 识别包含多个连续操作的步骤描述，如"点击系统管理，选择许可证模块"
+   * @param stepDescription 步骤描述
+   * @returns 拆分结果，包含是否为复合操作和拆分后的子步骤
+   */
+  private splitCompoundStep(stepDescription: string): { isCompound: boolean; subSteps: string[] } {
+    // 🔥 关键修复：先分离操作部分和预期结果部分
+    // 格式："操作描述 -> 预期结果"
+    const arrowMatch = stepDescription.match(/^(.+?)\s*->\s*(.+)$/);
+    let operationPart = stepDescription.trim();
+    let expectedResultPart = '';
+    
+    if (arrowMatch) {
+      operationPart = arrowMatch[1].trim();
+      expectedResultPart = arrowMatch[2].trim();
+      console.log(`📋 分离操作和预期结果:`);
+      console.log(`   操作: "${operationPart}"`);
+      console.log(`   预期: "${expectedResultPart}"`);
+    }
+    
+    // 复合操作的分隔符模式：中文逗号、顿号、分号，以及"然后"、"接着"、"再"等连接词
+    // 但要排除一些特殊情况，如"输入用户名，密码"这种不应该拆分的情况
+    
+    // 1. 检测是否包含复合操作的分隔符
+    // 常见模式：
+    // - "点击A，选择B" - 逗号分隔的两个动作
+    // - "点击A，然后选择B" - 带连接词
+    // - "展开A、选择B" - 顿号分隔
+    // - "点击A；输入B" - 分号分隔
+    
+    // 操作动词列表（用于识别是否是独立操作）
+    const actionVerbs = [
+      '点击', '单击', '双击', '右击',
+      '选择', '选中', '勾选', '取消勾选',
+      '输入', '填写', '清空', '删除',
+      '展开', '收起', '打开', '关闭',
+      '滚动', '拖拽', '拖动',
+      '悬停', '移动到', '鼠标移到',
+      '等待', '刷新', '返回', '前进',
+      '切换', '跳转', '导航',
+      '上传', '下载',
+      '按下', '按键', '回车', '确认', '取消'
+    ];
+    
+    // 2. 尝试按分隔符拆分（只拆分操作部分）
+    // 优先级：中文逗号 > 顿号 > 分号 > 连接词
+    const separators = [
+      /[，,]\s*(?:然后|接着|再|并|之后)?/,  // 逗号（可选连接词）
+      /[、]\s*(?:然后|接着|再|并)?/,         // 顿号
+      /[；;]\s*/,                            // 分号
+      /\s+(?:然后|接着|再|之后)\s*/,         // 纯连接词
+    ];
+    
+    for (const separator of separators) {
+      const parts = operationPart.split(separator).map(p => p.trim()).filter(p => p.length > 0);
+      
+      if (parts.length >= 2) {
+        // 验证每个部分是否都以操作动词开头（或包含操作动词）
+        const allPartsAreActions = parts.every(part => {
+          return actionVerbs.some(verb => part.includes(verb));
+        });
+        
+        if (allPartsAreActions) {
+          console.log(`🔀 复合操作检测: "${operationPart}" -> 拆分为 ${parts.length} 个子步骤`);
+          
+          // 🔥 关键修复：为后续子步骤添加上下文，确保AI能正确理解操作意图
+          const enhancedParts = this.enhanceSubStepsWithContext(parts, operationPart);
+          
+          // 🔥 关键修复：只在最后一个子步骤后添加预期结果
+          if (expectedResultPart) {
+            const lastIndex = enhancedParts.length - 1;
+            enhancedParts[lastIndex] = `${enhancedParts[lastIndex]} -> ${expectedResultPart}`;
+            console.log(`📋 预期结果添加到最后一个子步骤: "${enhancedParts[lastIndex]}"`);
+          }
+          
+          return {
+            isCompound: true,
+            subSteps: enhancedParts
+          };
+        }
+      }
+    }
+    
+    // 3. 特殊模式检测：没有明显分隔符但包含多个动作
+    // 例如："点击系统管理选择许可证模块"（无分隔符）
+    // 这种情况比较复杂，暂时不处理，依赖用户规范书写
+    
+    return {
+      isCompound: false,
+      subSteps: [stepDescription.trim()]
+    };
+  }
+
+  /**
+   * 🔥 新增：为拆分后的子步骤添加上下文信息
+   * 确保每个子步骤都有足够的上下文让AI正确理解操作意图
+   * @param parts 拆分后的子步骤数组
+   * @param originalText 原始完整步骤描述（不包含预期结果）
+   * @returns 增强后的子步骤数组
+   */
+  private enhanceSubStepsWithContext(parts: string[], originalText: string): string[] {
+    if (parts.length < 2) return parts;
+    
+    const enhancedParts: string[] = [];
+    
+    // 第一个子步骤保持不变
+    enhancedParts.push(parts[0]);
+    
+    // 检测是否是菜单/导航类操作（点击A，选择B 模式）
+    const isMenuOperation = parts[0].includes('点击') && 
+      (parts.some(p => p.includes('选择') || p.includes('选中')));
+    
+    // 检测是否是下拉选择操作（展开A，选择B 模式）
+    const isDropdownOperation = (parts[0].includes('展开') || parts[0].includes('打开')) && 
+      (parts.some(p => p.includes('选择') || p.includes('选中')));
+    
+    for (let i = 1; i < parts.length; i++) {
+      let enhancedStep = parts[i];
+      
+      // 如果子步骤只有"选择XXX"，需要添加上下文和等待指令
+      if (enhancedStep.startsWith('选择') || enhancedStep.startsWith('选中')) {
+        if (isMenuOperation) {
+          // 菜单操作：添加"等待并在菜单中"上下文
+          // 从第一个步骤提取菜单名称
+          const menuMatch = parts[0].match(/点击[「『"']?([^「『"'」』，,]+)[」』"']?/);
+          const menuName = menuMatch ? menuMatch[1] : '';
+          
+          // 🔥 关键修复：明确指示AI需要等待3秒
+          if (menuName) {
+            enhancedStep = `等待3秒后在${menuName}菜单中${enhancedStep}`;
+          } else {
+            enhancedStep = `等待3秒后在展开的菜单中${enhancedStep}`;
+          }
+        } else if (isDropdownOperation) {
+          // 下拉操作：添加"等待并在下拉列表中"上下文
+          enhancedStep = `等待3秒后在下拉列表中${enhancedStep}`;
+        } else {
+          // 通用情况：添加"点击"前缀确保AI识别为操作
+          enhancedStep = `点击${enhancedStep.replace(/^选择/, '').replace(/^选中/, '')}选项`;
+        }
+      }
+      
+      enhancedParts.push(enhancedStep);
+      console.log(`   🔧 子步骤 ${i + 1} 增强: "${parts[i]}" -> "${enhancedStep}"`);
+    }
+    
+    return enhancedParts;
+  }
+
+  /**
+   * 🔥 新增：从操作指令中提取关键词用于精确匹配
+   * @param instruction 操作指令
+   * @returns 提取的关键词数组
+   */
+  private extractKeywordsFromInstruction(instruction: string): string[] {
+    const keywords: string[] = [];
+    
+    // 移除操作动词，提取目标元素名称
+    const actionVerbs = ['点击', '单击', '双击', '右击', '选择', '选中', '输入', '填写', 
+                        '展开', '收起', '打开', '关闭', '滚动', '悬停', '按下', '确认', '取消'];
+    
+    let targetText = instruction;
+    
+    // 移除操作动词
+    for (const verb of actionVerbs) {
+      targetText = targetText.replace(new RegExp(`^${verb}`, 'g'), '');
+    }
+    
+    // 移除常见后缀
+    targetText = targetText.replace(/按钮$/, '').replace(/链接$/, '').replace(/选项$/, '');
+    
+    // 提取引号内的内容
+    const quotedMatches = instruction.match(/[「『"']([^「『"'」』]+)[」』"']/g);
+    if (quotedMatches) {
+      quotedMatches.forEach(m => {
+        const content = m.replace(/[「『"'」』]/g, '');
+        if (content.length > 1) keywords.push(content);
+      });
+    }
+    
+    // 提取核心名词短语
+    targetText = targetText.trim();
+    if (targetText.length > 1 && targetText.length < 20) {
+      keywords.push(targetText);
+    }
+    
+    // 🔥 特殊处理：提取"XXX下载"、"XXX上传"等模式
+    const downloadUploadMatch = instruction.match(/([^\s,，]+(?:下载|上传|导出|导入))/);
+    if (downloadUploadMatch) {
+      keywords.push(downloadUploadMatch[1]);
+    }
+    
+    // 🔥 特殊处理：提取"授权XXX"模式
+    const authMatch = instruction.match(/(授权[^\s,，]+)/);
+    if (authMatch) {
+      keywords.push(authMatch[1]);
+    }
+    
+    return [...new Set(keywords)]; // 去重
+  }
+
+  /**
+   * 🔥 新增：检测步骤是否为断言/验证类型
+   * 断言步骤不应该被当作操作步骤来解析
+   * @param stepText 步骤文本
+   * @returns 检测结果，包含是否为断言和原因
+   */
+  private isAssertionStep(stepText: string): { isAssertion: boolean; reason: string } {
+    const text = stepText.trim();
+    
+    // 🔥 关键修复：先分离操作部分和预期结果部分
+    // 格式："操作描述 -> 预期结果"
+    // 只检查操作部分，不检查预期结果部分
+    const arrowMatch = text.match(/^(.+?)\s*->\s*(.+)$/);
+    const operationPart = arrowMatch ? arrowMatch[1].trim() : text;
+    
+    console.log(`🔍 [isAssertionStep] 检测步骤: "${text}"`);
+    if (arrowMatch) {
+      console.log(`   📋 操作部分: "${operationPart}"`);
+      console.log(`   📋 预期结果: "${arrowMatch[2].trim()}"`);
+    }
+    
+    // 1. 检测明显的断言/验证关键词模式（只检查操作部分）
+    const assertionPatterns = [
+      // 验证类
+      { pattern: /^验证/, reason: '以"验证"开头' },
+      { pattern: /^检查/, reason: '以"检查"开头' },
+      { pattern: /^确认/, reason: '以"确认"开头' },
+      { pattern: /^断言/, reason: '以"断言"开头' },
+      { pattern: /^校验/, reason: '以"校验"开头' },
+      
+      // 期望类
+      { pattern: /应该显示/, reason: '包含"应该显示"' },
+      { pattern: /应该包含/, reason: '包含"应该包含"' },
+      { pattern: /应该存在/, reason: '包含"应该存在"' },
+      { pattern: /应该为/, reason: '包含"应该为"' },
+      { pattern: /应该是/, reason: '包含"应该是"' },
+      { pattern: /应该有/, reason: '包含"应该有"' },
+      { pattern: /期望/, reason: '包含"期望"' },
+      { pattern: /预期/, reason: '包含"预期"' },
+      
+      // 结果描述类（无操作动词）- 只在没有箭头分隔符时检查
+      { pattern: /^.{0,10}会有/, reason: '描述预期结果（会有）', onlyWithoutArrow: true },
+      { pattern: /^.{0,10}会显示/, reason: '描述预期结果（会显示）', onlyWithoutArrow: true },
+      { pattern: /^.{0,10}会出现/, reason: '描述预期结果（会出现）', onlyWithoutArrow: true },
+      { pattern: /^.{0,10}会弹出/, reason: '描述预期结果（会弹出）', onlyWithoutArrow: true },
+      
+      // 状态描述类
+      { pattern: /^.{0,5}显示为/, reason: '描述显示状态' },
+      { pattern: /^.{0,5}变为/, reason: '描述状态变化' },
+      { pattern: /^.{0,5}变成/, reason: '描述状态变化' },
+      { pattern: /页面跳转到/, reason: '描述页面跳转结果' },
+      { pattern: /跳转到.*页面/, reason: '描述页面跳转结果' },
+      
+      // 否定验证类
+      { pattern: /不应该/, reason: '包含"不应该"' },
+      { pattern: /不能/, reason: '包含"不能"（验证限制）' },
+      { pattern: /无法/, reason: '包含"无法"（验证限制）' },
+    ];
+    
+    for (const { pattern, reason, onlyWithoutArrow } of assertionPatterns) {
+      // 如果模式标记为onlyWithoutArrow，且存在箭头分隔符，则跳过此模式
+      if (onlyWithoutArrow && arrowMatch) {
+        continue;
+      }
+      
+      if (pattern.test(operationPart)) {
+        console.log(`   ✅ 匹配断言模式: ${reason}`);
+        return { isAssertion: true, reason };
+      }
+    }
+    
+    // 2. 检测是否缺少操作动词（纯描述性语句）- 只检查操作部分
+    const actionVerbs = [
+      '点击', '单击', '双击', '右击',
+      '选择', '选中', '勾选', '取消勾选',
+      '输入', '填写', '清空', '删除',
+      '展开', '收起', '打开', '关闭',
+      '滚动', '拖拽', '拖动',
+      '悬停', '移动到', '鼠标移到',
+      '等待', '刷新', '返回', '前进',
+      '切换', '跳转', '导航',
+      '上传', '下载',
+      '按下', '按键', '回车', '确认', '取消'
+    ];
+    
+    const hasActionVerb = actionVerbs.some(verb => operationPart.includes(verb));
+    
+    // 如果没有操作动词，且包含冒号（通常是"条件：结果"格式），判定为断言
+    if (!hasActionVerb && operationPart.includes('：')) {
+      console.log(`   ✅ 无操作动词且包含冒号，判定为断言`);
+      return { isAssertion: true, reason: '无操作动词且包含冒号（条件：结果格式）' };
+    }
+    
+    // 如果没有操作动词，且以"未"、"已"、"无"、"有"开头，判定为断言
+    if (!hasActionVerb && /^[未已无有]/.test(operationPart)) {
+      console.log(`   ✅ 无操作动词且以状态词开头，判定为断言`);
+      return { isAssertion: true, reason: '无操作动词且以状态词开头' };
+    }
+    
+    console.log(`   ❌ 不是断言步骤，是操作步骤`);
+    return { isAssertion: false, reason: '' };
   }
 
   /**
@@ -851,12 +1197,13 @@ export class AITestParser {
         }
       } else {
         // L1: 检查内存缓存
-        let cachedCommand = this.operationCache.get(cacheKey);
+        let cachedCommand: MCPCommand | undefined = this.operationCache.get(cacheKey);
         
         // L2: 如果内存没有，检查数据库
         if (!cachedCommand && this.enablePersistence) {
-          cachedCommand = await this.getOperationFromDatabase(cacheKey);
-          if (cachedCommand) {
+          const dbResult = await this.getOperationFromDatabase(cacheKey);
+          if (dbResult) {
+            cachedCommand = dbResult;
             // 加载到内存缓存
             this.operationCache.set(cacheKey, cachedCommand);
             console.log(`💾 从数据库加载操作缓存`);
@@ -906,6 +1253,11 @@ export class AITestParser {
       const mcpCommand = this.parseAIResponse(aiResponse);
 
       console.log(`✅ AI操作解析成功: ${mcpCommand.name}`);
+      
+      // 🔥 新增：如果AI返回了剩余步骤，需要在后续处理中使用
+      if (mcpCommand.remainingSteps) {
+        console.log(`📋 [${runId}] AI返回剩余步骤: "${mcpCommand.remainingSteps}"`);
+      }
       
       // 🔥 修复：验证命令有效性，只缓存有效命令
       const invalidCommands = ['error', 'unknown', 'invalid', 'failed', 'undefined', 'null', ''];
@@ -997,12 +1349,13 @@ export class AITestParser {
       const cacheKey = this.generateCacheKey(assertionDescription, pageFingerprint);
 
       // 4. 🔥 检查缓存（L1内存 + L2数据库）
-      let cachedResult = this.assertionCache.get(cacheKey);
+      let cachedResult: (MCPCommand & { assertion?: any }) | undefined = this.assertionCache.get(cacheKey);
       
       // L2: 如果内存没有，检查数据库
       if (!cachedResult && this.enablePersistence) {
-        cachedResult = await this.getAssertionFromDatabase(cacheKey);
-        if (cachedResult) {
+        const dbResult = await this.getAssertionFromDatabase(cacheKey);
+        if (dbResult) {
+          cachedResult = dbResult;
           // 加载到内存缓存
           this.assertionCache.set(cacheKey, cachedResult);
           console.log(`💾 从数据库加载断言缓存`);
@@ -1081,19 +1434,6 @@ export class AITestParser {
   }
 
   /**
-   * 🔥 清理缓存（LRU 策略）
-   */
-  private cleanupCache(): void {
-    if (this.assertionCache.size >= this.cacheMaxSize) {
-      // 删除最早的 20% 缓存项
-      const deleteCount = Math.floor(this.cacheMaxSize * 0.2);
-      const keysToDelete = Array.from(this.assertionCache.keys()).slice(0, deleteCount);
-      keysToDelete.forEach(key => this.assertionCache.delete(key));
-      console.log(`🧹 清理断言缓存: 删除 ${deleteCount} 个旧缓存项，当前缓存数: ${this.assertionCache.size}`);
-    }
-  }
-
-  /**
    * 🔥 清空所有缓存（公共方法）
    */
   public clearAssertionCache(): void {
@@ -1114,43 +1454,265 @@ export class AITestParser {
 
   /**
    * 🔥 提取页面元素用于AI分析
+   * 增强版：支持更精确的元素识别和层级关系
    */
-  private extractPageElements(snapshot: string): Array<{ ref: string, role: string, text: string }> {
+  private extractPageElements(snapshot: string): Array<{ ref: string, role: string, text: string, isClickable?: boolean, hasChildren?: boolean, containsCheckbox?: boolean }> {
     if (!snapshot) return [];
 
-    const elements: Array<{ ref: string, role: string, text: string }> = [];
+    const elements: Array<{ ref: string, role: string, text: string, isClickable?: boolean, hasChildren?: boolean, containsCheckbox?: boolean }> = [];
     const lines = snapshot.split('\n');
-
-    for (const line of lines) {
+    
+    // 🔥 简化方案：直接分析YAML结构中的父子关系
+    const elementInfo = new Map<string, { role: string, text: string, indent: number, line: string }>();
+    const parentChildMap = new Map<string, string[]>(); // parent -> children[]
+    
+    // 第一遍：收集所有元素信息
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmedLine = line.trim();
       const refMatch = trimmedLine.match(/\[ref=([a-zA-Z0-9_-]+)\]/);
 
       if (refMatch) {
         const ref = refMatch[1];
-        const textMatches = trimmedLine.match(/"([^"]*)"/g) || [];
-        const texts = textMatches.map(t => t.replace(/"/g, ''));
-
+        const indent = line.search(/\S/);
+        
+        // 识别元素角色
         let role = '';
         if (trimmedLine.includes('textbox')) role = 'textbox';
         else if (trimmedLine.includes('button')) role = 'button';
         else if (trimmedLine.includes('link')) role = 'link';
         else if (trimmedLine.includes('checkbox')) role = 'checkbox';
         else if (trimmedLine.includes('combobox')) role = 'combobox';
-        else role = 'element';
-
-        // 🔥 修复：即使text为空也要包含元素（特别是输入框可能没有name）
-        if (ref) {
-          const text = texts.length > 0 ? texts[0] : '';
-          elements.push({ ref, role, text });
+        else if (trimmedLine.includes('menuitem')) role = 'menuitem';
+        else if (trimmedLine.includes('menu ') || trimmedLine.includes('menu[')) role = 'menu';
+        else if (trimmedLine.includes('menubar')) role = 'menubar';
+        else if (trimmedLine.includes('listitem')) role = 'listitem';
+        else if (trimmedLine.includes('img')) role = 'img';
+        else if (trimmedLine.includes('heading')) role = 'heading';
+        else if (trimmedLine.includes(' div ') || trimmedLine.includes('] div ')) role = 'div';  // 🔥 新增：识别div元素
+        else if (trimmedLine.includes(' text ') || trimmedLine.includes('] text ')) role = 'text';  // 🔥 新增：识别text元素
+        else if (trimmedLine.includes('generic')) role = 'generic';  // 🔥 修复：显式识别generic元素
+        else role = 'generic';  // 🔥 默认为generic
+        
+        // 提取文本
+        let text = '';
+        const textMatches = trimmedLine.match(/"([^"]*)"/g) || [];
+        const texts = textMatches.map(t => t.replace(/"/g, ''));
+        
+        if (texts.length > 0) {
+          text = texts[0];
+        } else {
+          const colonTextMatch = trimmedLine.match(/:\s*([^[\]]+)$/);
+          if (colonTextMatch) {
+            text = colonTextMatch[1].trim();
+          }
+        }
+        
+        elementInfo.set(ref, { role, text, indent, line });
+        parentChildMap.set(ref, []);
+      }
+    }
+    
+    // 第二遍：建立父子关系（基于缩进）
+    const elementRefs = Array.from(elementInfo.keys());
+    for (let i = 0; i < elementRefs.length; i++) {
+      const currentRef = elementRefs[i];
+      const currentInfo = elementInfo.get(currentRef)!;
+      
+      // 查找下一个元素，如果缩进更深，则是子元素
+      for (let j = i + 1; j < elementRefs.length; j++) {
+        const nextRef = elementRefs[j];
+        const nextInfo = elementInfo.get(nextRef)!;
+        
+        if (nextInfo.indent > currentInfo.indent) {
+          // 检查是否是直接子元素（没有中间层级）
+          let isDirectChild = true;
+          for (let k = i + 1; k < j; k++) {
+            const middleRef = elementRefs[k];
+            const middleInfo = elementInfo.get(middleRef)!;
+            if (middleInfo.indent > currentInfo.indent && middleInfo.indent < nextInfo.indent) {
+              isDirectChild = false;
+              break;
+            }
+          }
+          
+          if (isDirectChild) {
+            const children = parentChildMap.get(currentRef) || [];
+            children.push(nextRef);
+            parentChildMap.set(currentRef, children);
+            console.log(`🔗 [extractPageElements] 父子关系: ${currentRef}(${currentInfo.role}) -> ${nextRef}(${nextInfo.role})`);
+          }
+        } else {
+          // 缩进相同或更小，停止查找子元素
+          break;
         }
       }
     }
+    
+    // 第三遍：构建最终元素列表
+    for (const [ref, info] of elementInfo.entries()) {
+      const children = parentChildMap.get(ref) || [];
+      const hasChildren = children.length > 0;
+      
+      // 🔥 检查是否包含checkbox子元素（递归检查，支持无ref的checkbox）
+      const containsCheckbox = this.hasCheckboxInChildren(ref, parentChildMap, elementInfo, snapshot);
+      
+      // 🔥 关键修复：为包含checkbox的元素关联相邻的文本
+      let associatedText = info.text;
+      if (containsCheckbox && !associatedText) {
+        // 查找同级的文本元素（通常checkbox和文本是兄弟节点）
+        // 从快照中找到该元素的父元素，然后查找兄弟节点中的文本
+        const parentRef = this.findParentRef(ref, parentChildMap, elementInfo);
+        if (parentRef) {
+          const siblings = parentChildMap.get(parentRef) || [];
+          for (const siblingRef of siblings) {
+            if (siblingRef !== ref) {
+              const siblingInfo = elementInfo.get(siblingRef);
+              if (siblingInfo && siblingInfo.text) {
+                associatedText = siblingInfo.text;
+                console.log(`🔗 [extractPageElements] 为包含checkbox的元素 ${ref} 关联文本: "${associatedText}" (来自兄弟元素 ${siblingRef})`);
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // 🔥 调试日志：打印包含checkbox的元素
+      if (containsCheckbox) {
+        console.log(`✅ [extractPageElements] 发现包含checkbox的元素: ref=${ref}, role=${info.role}, text="${associatedText}", children=[${children.join(', ')}]`);
+      }
+      
+      // 检测是否可点击
+      // 🔥 修复：generic类型元素如果有文本内容，也应该被视为可点击（例如：授权机器码下载按钮）
+      const isClickableGeneric = info.role === 'generic' && associatedText && associatedText.trim().length > 0;
+      const isClickable = info.line.includes('[cursor=pointer]') ||
+                         info.line.includes('[可点击]') ||  // 🔥 新增：检测[可点击]标记
+                         ['button', 'link', 'menuitem', 'listitem', 'checkbox', 'div', 'text'].includes(info.role) ||  // 🔥 新增：text类型也是可点击的
+                         containsCheckbox ||  // 🔥 包含checkbox的元素也应该是可点击的
+                         isClickableGeneric;  // 🔥 修复：有文本的generic元素也是可点击的
+      
+      elements.push({ 
+        ref, 
+        role: info.role, 
+        text: associatedText,  // 🔥 使用关联的文本
+        isClickable,
+        hasChildren,
+        containsCheckbox
+      });
+    }
 
-    return elements.slice(0, 100); // 🔥 放宽到前100个元素
+    // 🔥 排序：优先返回包含checkbox的元素
+    elements.sort((a, b) => {
+      // 🔥 包含checkbox的元素优先（用于复选框操作）
+      if (a.containsCheckbox && !b.containsCheckbox) return -1;
+      if (!a.containsCheckbox && b.containsCheckbox) return 1;
+      // 有文本的优先
+      if (a.text && !b.text) return -1;
+      if (!a.text && b.text) return 1;
+      // 可点击的优先
+      if (a.isClickable && !b.isClickable) return -1;
+      if (!a.isClickable && b.isClickable) return 1;
+      // 没有子元素的优先（叶子节点更可能是目标）
+      if (!a.hasChildren && b.hasChildren) return -1;
+      if (a.hasChildren && !b.hasChildren) return 1;
+      return 0;
+    });
+
+    // 🔥 调试日志：打印generic元素（包括div和其他可点击元素）
+    const genericElements = elements.filter(el => el.role === 'generic' || el.role === 'div');
+    if (genericElements.length > 0) {
+      console.log(`✅ [extractPageElements] 提取了 ${genericElements.length} 个generic/div元素:`);
+      genericElements.slice(0, 5).forEach(el => {
+        console.log(`   - ref=${el.ref}, role=${el.role}, text="${el.text}", isClickable=${el.isClickable}`);
+      });
+    } else {
+      console.log(`⚠️ [extractPageElements] 未提取到generic/div元素`);
+    }
+
+    return elements.slice(0, 150);
   }
 
   /**
-   * 🔥 获取操作模式的系统提示词
+   * 🔥 查找元素的父元素ref
+   */
+  private findParentRef(
+    childRef: string,
+    parentChildMap: Map<string, string[]>,
+    elementInfo: Map<string, { role: string, text: string, indent: number, line: string }>
+  ): string | null {
+    for (const [parentRef, children] of parentChildMap.entries()) {
+      if (children.includes(childRef)) {
+        return parentRef;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 🔥 递归检查元素是否包含checkbox子元素（修复版：支持无ref的checkbox）
+   */
+  private hasCheckboxInChildren(
+    ref: string, 
+    parentChildMap: Map<string, string[]>, 
+    elementInfo: Map<string, { role: string, text: string, indent: number, line: string }>,
+    snapshot: string
+  ): boolean {
+    const children = parentChildMap.get(ref) || [];
+    
+    // 直接检查子元素中是否有checkbox
+    for (const childRef of children) {
+      const childInfo = elementInfo.get(childRef);
+      if (childInfo && childInfo.role === 'checkbox') {
+        console.log(`🎯 [hasCheckboxInChildren] ${ref} 包含checkbox子元素: ${childRef}`);
+        return true;
+      }
+      
+      // 递归检查孙子元素
+      if (this.hasCheckboxInChildren(childRef, parentChildMap, elementInfo, snapshot)) {
+        return true;
+      }
+    }
+    
+    // 🔥 关键修复：检查快照中该元素下是否有无ref的checkbox
+    // 从快照中找到该元素的行，然后检查后续缩进更深的行中是否包含"checkbox"
+    const lines = snapshot.split('\n');
+    const refPattern = `[ref=${ref}]`;
+    let foundRefLine = -1;
+    let refIndent = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(refPattern)) {
+        foundRefLine = i;
+        refIndent = lines[i].search(/\S/);
+        break;
+      }
+    }
+    
+    if (foundRefLine >= 0) {
+      // 检查后续行中是否有checkbox（缩进更深）
+      for (let i = foundRefLine + 1; i < lines.length; i++) {
+        const line = lines[i];
+        const lineIndent = line.search(/\S/);
+        
+        // 如果缩进不再更深，停止检查
+        if (lineIndent >= 0 && lineIndent <= refIndent) {
+          break;
+        }
+        
+        // 检查是否包含checkbox（可能没有ref）
+        if (line.trim().startsWith('- checkbox')) {
+          console.log(`🎯 [hasCheckboxInChildren] ${ref} 包含无ref的checkbox元素（快照检测）`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * 🔥 获取操作模式的系统提示词（增强版）
    */
   private getOperationSystemPrompt(): string {
     return `你是一个顶级的测试自动化AI专家。你的核心职责是：
@@ -1160,14 +1722,60 @@ export class AITestParser {
 - 基于页面元素快照进行智能元素定位和操作解析
 - 专注于处理明确的用户操作指令（点击、输入、滚动等）
 
+# ⚠️ 复选框操作最高优先级规则
+**当指令包含"勾选"、"选中"、"取消勾选"等关键词时：**
+1. **必须且只能选择标记为[包含checkbox]的元素**
+2. **从所有[包含checkbox]元素中，选择文本匹配的那个**
+3. **文本匹配规则**：提取指令中的目标文本，在所有[包含checkbox]元素中查找文本包含目标文本的元素
+4. **绝对禁止选择文本不匹配的[包含checkbox]元素**
+5. **这是不可违反的最高优先级规则**
+
 # 操作模式原则
 - 你处于【操作模式】，只处理明确的操作指令
 - 如果指令看起来像断言或验证，请返回错误信息
 - 只有具体的操作指令才应该被转换为MCP命令
 
+# ⭐ 核心匹配规则（最高优先级）
+
+## 1. 文本精确匹配原则
+- **当操作指令中包含明确的元素名称时，必须找到文本完全匹配或高度相似的元素**
+- 例如："点击授权机器码下载按钮" → 必须找到文本包含"授权机器码下载"的元素
+- **严禁选择文本不相关的元素**，即使它们的ref编号看起来相近
+- 匹配优先级：完全匹配 > 包含匹配 > 相似匹配
+
+## 2. 元素标记识别
+- [可点击] 标记的元素是优先选择目标
+- [容器] 标记的元素通常不是直接操作目标，应该选择其子元素或同级的可点击元素
+- 没有文本的元素通常不是目标（除非是图标按钮）
+
+## 3. 复选框/单选框特殊规则（最高优先级）
+- **勾选/取消勾选复选框时，必须选择标记为[包含checkbox]的元素**
+- **从所有[包含checkbox]元素中，选择文本匹配的那个**
+- **绝对禁止选择纯文本的generic元素**
+- 识别方法：
+  - 查看元素列表中的标记：[ref=eXX] generic [可点击] [容器] [包含checkbox] "文本"
+  - **[包含checkbox]标记表示该元素的子元素中包含checkbox控件**
+  - 这是复选框操作的正确目标
+- 选择规则（按优先级）：
+  1. **最优先**：从所有标记为[包含checkbox]的元素中，选择文本匹配的那个
+  2. **次优先**：如果没有[包含checkbox]标记，选择checkbox类型的元素
+  3. **绝对禁止**：选择不包含checkbox的纯文本generic元素
+- 正确示例：
+  - 指令："勾选《数据库安全审计系统许可协议》"
+  - 元素列表：
+    [ref=e15] generic [可点击] [包含checkbox] "记住密码"
+    [ref=e22] generic [可点击] [包含checkbox] "我已阅读并同意《数据库安全审计系统许可协议》"
+  - ✅ 正确选择：ref=e22（[包含checkbox]且文本匹配）
+  - ❌ 错误选择：ref=e15（[包含checkbox]但文本不匹配）
+
+## 4. ref选择验证
+- 选择ref之前，必须验证该ref对应的文本与操作目标匹配
+- 如果文本不匹配，即使ref编号接近也不能选择
+- **对于复选框操作，优先选择checkbox类型的元素，即使其没有文本**
+
 # 核心参数规则
 - element参数：必须是简洁的中文描述（如"用户名输入框"、"提交按钮"）
-- ref参数：必须使用页面元素列表中的确切ref值
+- ref参数：必须使用页面元素列表中文本匹配的元素的ref值
 - 两个参数都是必需的，缺一不可
 - ElementUI下拉组件：包含"el-input__inner"的readonly输入框是下拉触发器
 
@@ -1178,11 +1786,11 @@ export class AITestParser {
 
 # 输出格式要求
 <THOUGHTS>
-1. 分析操作意图：检查是否包含"选择"、"选中"等选择关键词，还是"点击"、"展开"等打开关键词
-2. 定位匹配的页面元素：选择操作应找listitem元素，打开操作应找textbox元素
-3. 判断操作类型：根据操作意图和元素类型选择对应命令
-4. 生成element描述和ref参数
-5. 处理变量（如果需要）
+1. 分析操作意图：提取操作目标名称（如"授权机器码下载"）
+2. 文本匹配搜索：在元素列表中找到文本包含目标名称的元素
+3. 验证元素可点击性：确认选中元素标记为[可点击]
+4. 确认ref与文本对应：验证选择的ref确实对应目标文本
+5. 生成element描述和ref参数
 6. 构建对应的MCP命令
 </THOUGHTS>
 <COMMAND>
@@ -1191,6 +1799,26 @@ export class AITestParser {
   "args": {...}
 }
 </COMMAND>
+
+**🔥 重要：如果当前操作是多阶段操作（如先展开菜单再点击按钮），必须返回剩余步骤：**
+<REMAINING_STEPS>
+等待3秒后点击授权机器码下载按钮
+</REMAINING_STEPS>
+
+**示例：**
+- 指令："点击授权机器码下载按钮"
+- 快照中没有该按钮，但有"许可证"菜单
+- 返回：
+
+  <THOUGHTS>
+  目标"授权机器码下载"不在快照中，但"许可证"菜单可能包含它
+  </THOUGHTS>
+  <COMMAND>
+  {"name": "browser_click", "args": {"element": "许可证菜单项", "ref": "element_9_menuitem_unnamed"}}
+  </COMMAND>
+  <REMAINING_STEPS>
+  等待3秒后点击授权机器码下载按钮
+  </REMAINING_STEPS>
 
 # 支持的MCP操作命令
 ## 核心交互
@@ -1236,35 +1864,164 @@ export class AITestParser {
   }
 
   /**
-   * 🔥 构建操作模式的用户提示词
+   * 🔥 构建操作模式的用户提示词（增强版）
    */
-  private buildOperationUserPrompt(stepDescription: string, pageElements: Array<{ ref: string, role: string, text: string }>): string {
+  private buildOperationUserPrompt(stepDescription: string, pageElements: Array<{ ref: string, role: string, text: string, isClickable?: boolean, hasChildren?: boolean, containsCheckbox?: boolean }>): string {
+    // 🔥 增强元素上下文：标记可点击性和层级信息
     const elementsContext = pageElements.length > 0
-      ? pageElements.map(el => `[ref=${el.ref}] ${el.role} "${el.text}"`).join('\n')
+      ? pageElements.map(el => {
+          const clickableTag = el.isClickable ? ' [可点击]' : '';
+          const containerTag = el.hasChildren ? ' [容器]' : '';
+          const checkboxTag = el.containsCheckbox ? ' [包含checkbox]' : '';  // 🔥 新增标记
+          return `[ref=${el.ref}] ${el.role}${clickableTag}${containerTag}${checkboxTag} "${el.text}"`;
+        }).join('\n')
       : "当前页面没有可用的交互元素。";
+
+    // 🔥 调试日志：打印AI收到的元素列表
+    console.log(`🔍 [buildOperationUserPrompt] AI收到的元素列表:\n${elementsContext}`);
+    
+    // 🔥 调试日志：检查是否有包含checkbox的元素
+    const checkboxElements = pageElements.filter(el => el.containsCheckbox);
+    if (checkboxElements.length > 0) {
+      console.log(`✅ [buildOperationUserPrompt] 发现 ${checkboxElements.length} 个包含checkbox的元素:`);
+      checkboxElements.forEach(el => {
+        console.log(`   - ref=${el.ref}, role=${el.role}, text="${el.text}"`);
+      });
+    } else {
+      console.log(`⚠️ [buildOperationUserPrompt] 未发现包含checkbox的元素`);
+    }
+
+    // 🔥 从操作指令中提取关键词用于精确匹配
+    const extractedKeywords = this.extractKeywordsFromInstruction(stepDescription);
+    const keywordsHint = extractedKeywords.length > 0 
+      ? `\n## 🎯 关键匹配词（必须精确匹配）\n${extractedKeywords.map(k => `- "${k}"`).join('\n')}`
+      : '';
 
     return `# 当前任务：操作模式
 
 ## 当前页面可用元素
 ${elementsContext}
+${keywordsHint}
 
 ## 用户操作指令
 "${stepDescription}"
 
-## 分析要求
-请将上述操作指令转换为MCP命令：
-1. 确认这是一个明确的操作指令（而非断言验证）
-2. **必须严格执行的下拉选择判定**：
-   - 如果指令包含"选择"、"选中"关键词 → **必须**点击listitem选项元素，**绝不**点击textbox
-   - 如果指令包含"点击"、"展开"关键词且无"选择" → 点击textbox触发器元素
-   - 示例：
-     * "下拉栏选择生鲜" → 点击listitem[生鲜]，不是textbox
-     * "点击下拉栏" → 点击textbox触发器
-3. **强制元素类型匹配**：
-   - 选择操作：必须使用listitem元素的ref
-   - 打开操作：必须使用textbox元素的ref
-4. 在页面元素中找到最匹配的目标元素（严格按元素类型）
-5. 生成简洁的中文element描述和准确的ref参数
+## ⚠️ 复选框操作特别提醒（最高优先级）
+**如果当前指令包含"勾选"、"选中"、"取消勾选"等关键词：**
+1. **立即查找标记为[包含checkbox]的元素**
+2. **从所有[包含checkbox]元素中，选择文本匹配的那个**
+3. **文本匹配规则**：
+   - 提取指令中的目标文本（如"《数据库安全审计系统许可协议》"）
+   - 在所有[包含checkbox]元素中查找文本包含目标文本的元素
+   - 选择文本最匹配的元素
+4. **绝对禁止选择文本不匹配的[包含checkbox]元素**
+
+**示例：**
+- 指令："勾选《数据库安全审计系统许可协议》"
+- 可用元素：
+  - [ref=e15] generic [可点击] [包含checkbox] "记住密码" ❌ 文本不匹配
+  - [ref=e22] generic [可点击] [包含checkbox] "我已阅读并同意《数据库安全审计系统许可协议》" ✅ 文本匹配
+- 正确选择：e22
+
+## ⭐ 核心匹配规则（必须遵守）
+
+### 1. 文本精确匹配优先
+- **当操作指令中包含明确的元素名称时，必须找到文本完全匹配或高度相似的元素**
+- 例如："点击授权机器码下载按钮" → 必须找到文本包含"授权机器码下载"的元素
+- **禁止选择文本不相关的元素**，即使它们的ref看起来相近
+
+### 2. 元素类型判断
+- [可点击] 标记的元素是优先选择目标
+- [容器] 标记的元素通常不是直接操作目标，应该选择其子元素
+- 没有文本的元素通常不是目标（除非是图标按钮）
+
+### 3. 菜单和下拉选择判定（重要）
+- **如果指令包含"等待X秒后"（如"等待3秒后在系统管理菜单中选择许可证"）**：
+  - **必须先生成等待命令**：{"name": "browser_wait_for", "args": {"timeout": 3000}}
+  - **然后再生成选择命令**：{"name": "browser_click", "args": {"ref": "目标元素ref", "element": "目标元素描述"}}
+  - **禁止跳过等待步骤**，即使页面快照中已经有目标元素
+- **如果指令包含"在菜单中选择"或"在下拉列表中选择"**：
+  - 查找 menuitem 或 listitem 类型的元素
+  - 文本必须匹配目标选项名称
+  - 使用元素的ref进行点击
+- **如果指令只包含"点击"、"展开"关键词且无"选择"**：
+  - 点击 button 或 textbox 触发器元素
+
+### 4. 按钮/链接识别
+- "下载"、"上传"、"提交"、"确认"等操作词通常对应button或link元素
+- 优先选择role为button/link且文本匹配的元素
+
+### 5. 等待策略（关键）
+- **当指令明确包含"等待X秒"时，必须生成等待命令**
+- **等待命令格式**：
+  - 等待固定时间：{"name": "browser_wait_for", "args": {"timeout": 3000}}（单位：毫秒）
+  - 等待元素出现：{"name": "browser_wait_for", "args": {"text": "目标文本", "timeout": 3000}}
+  - 等待元素可见：{"name": "browser_wait_for", "args": {"ref": "element_ref", "state": "visible", "timeout": 3000}}
+- **等待后的操作必须作为独立的命令返回**，不能合并在一个命令中
+
+## 分析步骤
+**第一步：等待指令检测（最高优先级）**
+- 检查指令是否包含："等待X秒后"、"等待X秒"、"等待菜单展开"、"等待页面加载"等关键词
+- 如果包含等待指令：
+  1. **提取等待时间**（如"等待3秒" → 3000ms）
+  2. **生成等待命令**：{"name": "browser_wait_for", "args": {"timeout": 3000}}
+  3. **如果还有后续操作**（如"等待3秒后选择许可证"），继续分析后续操作
+  4. **注意**：等待命令和后续操作命令必须分开返回，不能合并
+
+**第二步：复选框操作检测（高优先级）**
+- 检查指令是否包含："勾选"、"选中"、"取消勾选"、"打勾"、"选择复选框"等关键词
+- 如果是复选框操作：
+  1. **提取指令中的目标文本**（如"《数据库安全审计系统许可协议》"）
+  2. **在所有[包含checkbox]元素中查找文本匹配的元素**
+  3. **选择文本最匹配的那个[包含checkbox]元素**
+  4. **禁止选择文本不匹配的元素，即使它是第一个[包含checkbox]元素**
+  5. **跳过所有其他分析步骤，直接生成命令**
+
+**第三步：常规操作分析（仅在非等待、非复选框操作时执行）**
+1. **提取操作目标**：从指令中识别要操作的元素名称（如"授权机器码下载按钮"）
+2. **在当前快照中搜索目标元素**：
+   - 查找文本包含目标名称的元素
+   - 优先选择[可点击]标记的元素
+   - **如果找到 → 直接生成点击命令，跳到第7步**
+   - **如果未找到 → 必须执行第3.3步（菜单展开检查），禁止返回错误**
+3. **菜单展开检查（重要）**：
+   - **如果目标元素不在当前快照中**，检查是否需要先展开菜单：
+     1. **分析指令中的操作词**：
+        - "下载"、"上传"、"导出"、"授权"、"证书"等 → 可能在菜单中
+        - "选择"、"进入"、"打开" → 可能需要展开菜单或导航
+     2. **查找相关菜单项**：
+        - 如果指令包含"许可证"、"证书"等词 → 查找"许可证"菜单项
+        - 如果指令包含"系统"、"管理"等词 → 查找"系统管理"菜单项
+        - 如果指令包含"下载"、"导出"等词 → 查找可能包含这些功能的菜单项
+     3. **生成两阶段操作**：
+        - 第一步：点击相关菜单项
+        - 第二步：返回剩余步骤："等待3秒后点击[目标元素名称]"
+     4. **示例**：
+        - 指令："点击授权机器码下载按钮"
+        - 快照中没有"授权机器码下载"元素，但有"许可证"菜单项
+        - 分析：目标可能在"许可证"菜单中
+        - 生成：{"name": "browser_click", "args": {"ref": "element_9_menuitem_unnamed", "element": "许可证菜单项"}}
+        - 返回剩余步骤："等待3秒后点击授权机器码下载按钮"
+4. **文本匹配**：在元素列表中找到文本最匹配的元素（优先完全匹配，其次部分匹配）
+5. **元素类型验证**：
+   - 对于按钮操作：选择button类型的元素
+   - 对于输入操作：选择textbox/input类型的元素
+6. **验证可点击性**：确认选中的元素标记为[可点击]
+7. **生成命令**：使用匹配元素的ref生成MCP命令
+
+**嵌套菜单示例：**
+- 指令："点击授权机器码下载按钮"
+- 快照中只有：menuitem"监控墙"、menuitem"系统管理"、menuitem"许可证"等
+- 分析：目标是"授权机器码下载"按钮，但快照中没有，可能在"许可证"菜单中
+- 生成：
+  1. 点击"许可证"菜单：{"name": "browser_click", "args": {"ref": "element_9_menuitem_unnamed", "element": "许可证菜单项"}}
+  2. 返回剩余步骤："等待3秒后点击授权机器码下载按钮"
+
+**重要提示：**
+- 如果指令包含"等待X秒后做某事"，必须返回等待命令，不能直接执行后续操作
+- 等待命令示例：{"name": "browser_wait_for", "args": {"timeout": 3000}}
+- 等待后的操作需要在下一次调用时执行，不能在同一个命令中完成
+- 如果目标元素不在当前快照中，考虑是否需要先展开菜单或导航到其他页面
 
 请开始分析：`;
   }
@@ -2037,13 +2794,21 @@ ${elementsContext}
   }
 
   /**
-   * 🔥 解析AI响应为MCP命令 (支持V3格式，支持结构化断言信息)
+   * 🔥 解析AI响应为MCP命令 (支持V3格式，支持结构化断言信息，支持剩余步骤)
    */
-  private parseAIResponse(aiResponse: string): MCPCommand & { assertion?: any } {
+  private parseAIResponse(aiResponse: string): MCPCommand & { assertion?: any, remainingSteps?: string } {
     try {
       console.log(`🔍 开始解析AI响应: ${aiResponse.substring(0, 200)}...`);
 
       let jsonText = aiResponse.trim();
+
+      // 🔥 新增：提取 <REMAINING_STEPS> 标签（如果存在）
+      let remainingSteps: string | undefined;
+      const remainingStepsMatch = jsonText.match(/<REMAINING_STEPS>\s*([\s\S]*?)\s*<\/REMAINING_STEPS>/i);
+      if (remainingStepsMatch) {
+        remainingSteps = remainingStepsMatch[1].trim();
+        console.log(`✅ 提取到剩余步骤: "${remainingSteps}"`);
+      }
 
       // 🔥 检查是否包含错误信息（在<THOUGHTS>或其他地方）
       if (jsonText.includes('<ERROR>') || jsonText.includes('用户指令不是具体的操作指令')) {
@@ -2073,10 +2838,30 @@ ${elementsContext}
             jsonText = jsonMatch[0];
             console.log(`✅ 直接提取JSON对象: ${jsonText}`);
           } else {
-            // 🔥 如果没有找到JSON，但包含<THOUGHTS>，说明AI没有按格式返回
+            // 🔥 如果没有找到JSON，但包含<THOUGHTS>，尝试从思考过程中提取有用信息
             if (jsonText.includes('<THOUGHTS>')) {
               console.error(`❌ AI返回包含<THOUGHTS>但缺少<COMMAND>标签`);
-              throw new Error('AI响应格式错误：包含思考过程但缺少命令部分');
+              
+              // 🔥 尝试从THOUGHTS中提取原因
+              const thoughtsMatch = jsonText.match(/<THOUGHTS>\s*([\s\S]*?)\s*(?:<\/THOUGHTS>|$)/i);
+              let reason = '未知原因';
+              if (thoughtsMatch) {
+                const thoughts = thoughtsMatch[1].trim();
+                // 检查是否包含无法操作的原因
+                if (thoughts.includes('无法') || thoughts.includes('找不到') || thoughts.includes('不存在')) {
+                  reason = `AI分析：${thoughts.substring(0, 200)}`;
+                } else if (thoughts.includes('断言') || thoughts.includes('验证') || thoughts.includes('检查')) {
+                  reason = '该指令可能是断言/验证类型，而非操作指令';
+                } else if (thoughts.includes('下载') || thoughts.includes('文件')) {
+                  // 🔥 特殊处理：下载操作可能已经触发，无需额外命令
+                  console.log(`⚠️ 检测到下载相关操作，可能已自动完成`);
+                  reason = '下载操作可能已在上一步自动触发';
+                } else {
+                  reason = `AI思考过程：${thoughts.substring(0, 150)}...`;
+                }
+              }
+              
+              throw new Error(`AI响应格式错误：包含思考过程但缺少命令部分。${reason}`);
             }
           }
         }
@@ -2106,7 +2891,7 @@ ${elementsContext}
 
       console.log(`✅ AI响应解析成功: ${parsed.name}`);
       
-      const result: MCPCommand & { assertion?: any } = {
+      const result: MCPCommand & { assertion?: any, remainingSteps?: string } = {
         name: parsed.name,
         arguments: parsed.args
       };
@@ -2115,6 +2900,12 @@ ${elementsContext}
       if (parsed.assertion) {
         result.assertion = parsed.assertion;
         console.log(`✅ 解析到结构化断言信息:`, JSON.stringify(parsed.assertion, null, 2));
+      }
+
+      // 🔥 新增：如果提取到剩余步骤，也返回它
+      if (remainingSteps) {
+        result.remainingSteps = remainingSteps;
+        console.log(`✅ 返回剩余步骤: "${remainingSteps}"`);
       }
 
       return result;

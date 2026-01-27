@@ -140,7 +140,7 @@ export function TestPlanDetail() {
   const [pendingCases, setPendingCases] = useState<TestPlanCase[]>([]);
   const [pendingReexecuteExecution, setPendingReexecuteExecution] = useState<TestPlanExecution | null>(null); // 🔥 重新执行的execution对象
   const [executionConfig, setExecutionConfig] = useState({
-    executionEngine: 'mcp' as 'mcp' | 'playwright',
+    executionEngine: 'mcp' as 'mcp' | 'playwright' | 'midscene',
     enableTrace: true,
     enableVideo: true,
     environment: 'staging',
@@ -3653,18 +3653,21 @@ export function TestPlanDetail() {
               value={executionConfig.executionEngine}
               onChange={(e) => setExecutionConfig(prev => ({ 
                 ...prev, 
-                executionEngine: e.target.value as 'mcp' | 'playwright' 
+                executionEngine: e.target.value as 'mcp' | 'playwright' | 'midscene'
               }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               aria-label="执行引擎"
             >
               <option value="mcp">MCP 客户端（AI驱动，适应性强）</option>
+              <option value="midscene">Midscene Runner（AI视觉识别，智能定位）</option>
               <option value="playwright">Playwright Runner（高性能，推荐）</option>
             </select>
             <p className="mt-1 text-xs text-gray-500">
               {executionConfig.executionEngine === 'mcp' 
                 ? '🤖 AI实时解析，动态适应页面变化'
-                : '⚡ 原生API执行，速度快5-10倍，成本低95%'}
+                : executionConfig.executionEngine === 'playwright'
+                ? '⚡ 原生API执行，速度快5-10倍，成本低95%'
+                : '👁️ AI视觉识别，智能元素定位，适合复杂UI'}
             </p>
           </div>
 

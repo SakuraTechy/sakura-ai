@@ -145,9 +145,9 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
         caseId, 
         testCaseId, 
         environment = 'staging',
-        executionEngine = 'mcp', // 🔥 新增：执行引擎选择
-        enableTrace = false,     // 🔥 新增：是否启用 trace（仅 Playwright）
-        enableVideo = false,     // 🔥 新增：是否启用 video（仅 Playwright）
+        executionEngine = 'mcp', // 🔥 新增：执行引擎选择（mcp | playwright | midscene）
+        enableTrace = false,     // 🔥 新增：是否启用 trace（仅 Playwright 和 Midscene）
+        enableVideo = false,     // 🔥 新增：是否启用 video（仅 Playwright 和 Midscene）
         assertionMatchMode = 'auto', // 🔥 新增：断言匹配模式
         planExecutionId          // 🔥 新增：测试计划执行记录ID，用于完成后同步数据
       } = req.body;
@@ -178,7 +178,7 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
         'standard',
         {
           userId: userId,
-          executionEngine: executionEngine as 'mcp' | 'playwright',
+          executionEngine: executionEngine as 'mcp' | 'playwright' | 'midscene',
           enableTrace: enableTrace === true,
           enableVideo: enableVideo === true,
           assertionMatchMode: assertionMatchMode as 'strict' | 'auto' | 'loose', // 🔥 新增：传递断言匹配模式
@@ -366,6 +366,7 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
             failedSteps: dbRun.failedSteps || 0,
             executor: executorName,
             environment: dbRun.environment || 'default',
+            executionEngine: dbRun.executionEngine || 'playwright', // 🔥 添加执行引擎字段
             logs: logs,
             screenshots: dbRun.screenshots || []
           } as any;
@@ -435,6 +436,7 @@ export function testRoutes(testExecutionService: TestExecutionService): Router {
           passedSteps: memoryRun.passedSteps ?? 0,
           failedSteps: memoryRun.failedSteps ?? 0,
           duration: duration, // 🔥 使用同步后的 duration
+          executionEngine: memoryRun.executionEngine || 'playwright', // 🔥 添加执行引擎字段
           logs: memoryRun.logs || [],
           screenshots: memoryRun.screenshots || [],
           // 🔥 修复：确保包含 actualStartedAt 字段，优先使用内存中的值，如果没有则使用从日志提取的时间

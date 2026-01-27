@@ -498,7 +498,7 @@ export class TestService {
   async runTestCase(
     caseId: number, 
     options?: {
-      executionEngine?: 'mcp' | 'playwright';
+      executionEngine?: 'mcp' | 'playwright' | 'midscene';
       enableTrace?: boolean;
       enableVideo?: boolean;
       environment?: string;

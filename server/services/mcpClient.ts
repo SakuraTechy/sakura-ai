@@ -177,7 +177,10 @@ export class PlaywrightMcpClient {
           PLAYWRIGHT_SCREENSHOTS_DIR: screenshotDir,
           MCP_SCREENSHOT_DIR: screenshotDir,
           PLAYWRIGHT_DOWNLOAD_DIR: screenshotDir,
-          PLAYWRIGHT_TEMP_DIR: screenshotDir
+          PLAYWRIGHT_TEMP_DIR: screenshotDir,
+          // 🔥 修复：启用文件下载功能
+          PLAYWRIGHT_ACCEPT_DOWNLOADS: 'true',
+          PLAYWRIGHT_DOWNLOADS_PATH: screenshotDir
         }
       });
 
