@@ -800,16 +800,27 @@ export function Settings() {
           {/* API密钥 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              API 密钥
+              API 密钥 {selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local' && (
+                <span className="text-gray-500 font-normal">（本地模型可选）</span>
+              )}
+              {selectedModel?.requiresCustomAuth !== false && (
+                <span className="text-red-500 font-normal">*</span>
+              )}
             </label>
             <div className="relative">
               <input
                 type={showApiKey ? 'text' : 'password'}
                 value={formData.apiKey}
                 onChange={(e) => handleFieldChange('apiKey', e.target.value)}
-                placeholder="sk-or-v1-..."
+                placeholder={
+                  selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local'
+                    ? '本地模型无需API密钥（可选）'
+                    : 'sk-or-v1-...'
+                }
                 className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  getFieldError('apiKey') ? 'border-red-300' : 'border-gray-300'
+                  getFieldError('apiKey') || (selectedModel?.requiresCustomAuth !== false && !formData.apiKey) 
+                    ? 'border-red-300' 
+                    : 'border-gray-300'
                 }`}
               />
               <button
@@ -828,24 +839,25 @@ export function Settings() {
             {getFieldError('apiKey') && (
               <p className="mt-1 text-sm text-red-600">{getFieldError('apiKey')}</p>
             )}
+            {!getFieldError('apiKey') && selectedModel?.requiresCustomAuth !== false && !formData.apiKey && (
+              <p className="mt-1 text-sm text-red-600">
+                <AlertCircle className="inline h-3 w-3 mr-1" />
+                云端模型必须配置API密钥
+              </p>
+            )}
             <p className="mt-1 text-sm text-gray-500">
-              {selectedModel?.requiresCustomAuth
+              {selectedModel?.requiresCustomAuth !== false
                 ? (() => {
-                    // 需要自定义认证的模型
-                    if (selectedModel.provider === '百度') {
+                    // 需要自定义认证的云端模型
+                    if (selectedModel.provider === 'Local') {
+                      return '本地模型（Ollama、LM Studio等）通常不需要API密钥，如果您的本地服务配置了认证，请填写对应的密钥';
+                    } else if (selectedModel.provider === '百度') {
                       return (
                         <>
                           从 <a href="https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">百度智能云千帆</a> 获取API密钥（免费额度充足，需要Access Token）
                         </>
                       );
-                    } else {
-                      return `从 ${selectedModel.provider} 获取认证密钥（参考项目文档配置）`;
-                    }
-                  })()
-                : selectedModel?.customBaseUrl
-                ? (() => {
-                    // 根据提供商显示不同的链接
-                    if (selectedModel.provider === '阿里云') {
+                    } else if (selectedModel.provider === '阿里云') {
                       return (
                         <>
                           从 <a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">阿里云通义千问</a> 获取API密钥（免费额度充足）
@@ -869,16 +881,24 @@ export function Settings() {
                           从 <a href="https://bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">智谱AI平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === 'Google (Zenmux)') {
+                    } else if (selectedModel.provider === 'OpenRouter') {
+                      return (
+                        <>
+                          从 <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenRouter平台</a> 获取API密钥（支持多家厂商模型）
+                        </>
+                      );
+                    } else if (selectedModel.provider === 'Zenmux' || selectedModel.provider === 'Google (Zenmux)') {
                       return (
                         <>
                           从 <a href="https://zenmux.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Zenmux平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
                     } else {
-                      return `从 ${selectedModel.provider} 获取API密钥`;
+                      return `从 ${selectedModel.provider} 获取认证密钥（参考项目文档配置）`;
                     }
                   })()
+                : selectedModel?.customBaseUrl
+                ? `从 ${selectedModel.provider} 获取API密钥`
                 : (
                   <>
                     从 <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenRouter</a> 获取API密钥
@@ -988,7 +1008,7 @@ export function Settings() {
           <div className="flex justify-between">
             <button
               onClick={handleTestConnection}
-              disabled={isTesting || !formData.selectedModelId || !formData.apiKey}
+              disabled={isTesting || !formData.selectedModelId || (!formData.apiKey && selectedModel?.requiresCustomAuth !== false)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isTesting ? (

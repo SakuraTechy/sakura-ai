@@ -346,7 +346,7 @@ export class ModelRegistry {
         provider: 'OpenRouter',
         openRouterModel: 'openai/gpt-4o',
         customBaseUrl: 'https://openrouter.ai/api/v1',
-        requiresCustomAuth: false,
+        requiresCustomAuth: true,
         defaultConfig: {
           temperature: 0.3,
           maxTokens: 2000
@@ -393,7 +393,7 @@ export class ModelRegistry {
         provider: 'Local',
         openRouterModel: 'deepseek-r1:8b',
         customBaseUrl: 'http://localhost:11434', // Ollama 默认端口
-        requiresCustomAuth: true,
+        requiresCustomAuth: false,
         requiresManualInput: true, // 只支持手动输入模式
         apiFormat: 'ollama', // 使用 Ollama 原生 API 格式 (/api/generate)
         defaultConfig: {
@@ -411,7 +411,7 @@ export class ModelRegistry {
         provider: 'Local',
         openRouterModel: 'qwen3-vl-30b',
         customBaseUrl: 'http://localhost:3000/v1',
-        requiresCustomAuth: true,
+        requiresCustomAuth: false,
         requiresManualInput: true, // 只支持手动输入模式
         apiFormat: 'openai', // 使用 OpenAI 兼容 API 格式 (/chat/completions)
         defaultConfig: {

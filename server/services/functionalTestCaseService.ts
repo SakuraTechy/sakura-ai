@@ -1741,11 +1741,28 @@ export class FunctionalTestCaseService {
     try {
       console.log(`📋 获取测试用例执行历史 - 用例ID: ${testCaseId}`);
 
+      // 🔧 优化：使用 select 替代 include 减少内存占用，避免 MySQL sort buffer 溢出
       const executions = await this.prisma.functional_test_executions.findMany({
         where: {
           test_case_id: testCaseId
         },
-        include: {
+        select: {
+          id: true,
+          test_case_id: true,
+          test_case_name: true,
+          final_result: true,
+          actual_result: true,
+          comments: true,
+          duration_ms: true,
+          executed_at: true,
+          step_results: true,
+          total_steps: true,
+          completed_steps: true,
+          passed_steps: true,
+          failed_steps: true,
+          blocked_steps: true,
+          screenshots: true,
+          attachments: true,
           test_case: {
             select: {
               id: true,
@@ -1758,7 +1775,7 @@ export class FunctionalTestCaseService {
               id: true,
               username: true,
               account_name: true,
-              project: true // 🔥 修复：使用 project 字段
+              project: true
             }
           }
         },

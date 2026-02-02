@@ -70,7 +70,7 @@ export class MidsceneTestRunner {
 
     // 🔥 启用Midscene DEBUG模式，打印AI服务消耗的时间和token使用情况
     process.env.DEBUG = 'midscene:*';
-    console.log(`� [${runId}] 已启用 Midscene DEBUG 模式: DEBUG=midscene:*`);
+    console.log(`🔧 [${runId}] 已启用 Midscene DEBUG 模式: DEBUG=midscene:*`);
 
     console.log(`🚀 [${runId}] 初始化 Midscene Test Runner...`);
     // this.addLog(runId, '🚀 初始化 Midscene Test Runner...', 'info');

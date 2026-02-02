@@ -25,7 +25,7 @@ function validateAndFixUTF8(text: string): string | null {
     // 修复乱码模式
     cleaned = cleaned
       .replace(/\uFFFD+/g, '') // 移除连续的替换字符
-      .replace(/����+/g, '') // 移除常见乱码模式
+      .replace(/\u{FFFD}+/gu, '') // 移除常见乱码模式
       .replace(/Â·/g, '·') // 修复常见中文标点乱码
       .replace(/â€/g, '"') // 修复引号乱码
       .replace(/â€™/g, "'") // 修复单引号乱码

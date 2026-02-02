@@ -30,6 +30,7 @@ export class LLMConfigManager {
   private currentModelInfo: ModelDefinition | null = null;
   private listeners: ConfigChangeListener[] = [];
   private isInitialized = false;
+  private backendSettingsService: any = null; // 🔥 后端设置服务实例
 
   private constructor() {}
 
@@ -41,6 +42,28 @@ export class LLMConfigManager {
     return LLMConfigManager.instance;
   }
 
+  // 🔥 获取正确的设置服务（根据环境）
+  private async getSettingsService(): Promise<any> {
+    // 前端环境：使用前端设置服务
+    if (typeof window !== 'undefined') {
+      return settingsService;
+    }
+
+    // 后端环境：使用后端设置服务
+    if (!this.backendSettingsService) {
+      try {
+        const module = await import('../../server/services/settingsService.js');
+        this.backendSettingsService = module.BackendSettingsService.getInstance();
+        console.log('✅ 后端设置服务已加载');
+      } catch (error) {
+        console.warn('⚠️ 无法加载后端设置服务，回退到前端服务:', error);
+        return settingsService;
+      }
+    }
+
+    return this.backendSettingsService;
+  }
+
   // 初始化配置管理器
   public async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -48,15 +71,26 @@ export class LLMConfigManager {
     try {
       console.log('🔧 初始化LLM配置管理器...');
       
-      // 🔥 修复：根据环境选择不同的设置服务
-      let settings;
-      if (typeof window !== 'undefined') {
-        // 前端环境：使用前端设置服务
-        settings = await settingsService.getLLMSettings();
-      } else {
-        // 后端环境：使用动态导入避免打包服务器端代码
-        const { BackendSettingsService } = await import('../../server/services/settingsService.ts');
-        settings = await BackendSettingsService.getInstance().getLLMSettings();
+      // 🔥 根据环境获取正确的设置服务
+      const service = await this.getSettingsService();
+      const settings = await service.getLLMSettings();
+      
+      // 🔥 修复：检查模型是否需要API密钥
+      const modelInfo = modelRegistry.getModelById(settings.selectedModelId);
+      const requiresApiKey = modelInfo?.requiresCustomAuth !== false; // 云端模型需要API密钥，本地模型不需要
+      
+      // 如果需要API密钥但未配置，标记为"未配置"状态
+      if (requiresApiKey && (!settings.apiKey || settings.apiKey.trim() === '')) {
+        console.warn('⚠️ API密钥未配置，配置管理器将以"未配置"状态初始化');
+        console.warn('⚠️ 请在设置中配置有效的API密钥以启用AI功能');
+        
+        // 标记为已初始化，但不设置配置
+        this.isInitialized = true;
+        this.currentConfig = null;
+        this.currentModelInfo = null;
+        
+        console.log('✅ LLM配置管理器已初始化（未配置状态）');
+        return;
       }
       
       await this.updateConfig(settings);
@@ -65,22 +99,35 @@ export class LLMConfigManager {
       console.log('✅ LLM配置管理器初始化完成');
     } catch (error) {
       console.error('❌ LLM配置管理器初始化失败:', error);
+      // 🔥 修复：即使初始化失败，也标记为已初始化，避免重复尝试
+      this.isInitialized = true;
       throw error;
     }
   }
 
   // 获取当前配置
   public getCurrentConfig(): LLMConfig {
+    // 🔥 修复：如果配置为空，返回默认值而不是抛出错误
     if (!this.currentConfig) {
-      throw new Error('配置管理器未初始化，请先调用 initialize()');
+      console.warn('⚠️ 配置管理器未初始化或API密钥未配置，返回默认值');
+      return {
+        apiKey: '',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'openai/gpt-4o',
+        temperature: 0.3,
+        maxTokens: 1500,
+        apiFormat: 'openai'
+      };
     }
     return { ...this.currentConfig };
   }
 
   // 获取当前模型信息
   public getModelInfo(): ModelDefinition {
+    // 🔥 修复：如果模型信息为空，返回默认模型而不是抛出错误
     if (!this.currentModelInfo) {
-      throw new Error('配置管理器未初始化，请先调用 initialize()');
+      console.warn('⚠️ 模型信息未初始化或API密钥未配置，返回默认模型');
+      return modelRegistry.getDefaultModel();
     }
     return { ...this.currentModelInfo };
   }
@@ -90,23 +137,37 @@ export class LLMConfigManager {
     try {
       console.log(`🔄 更新LLM配置: ${settings.selectedModelId}`);
       
-      // 验证设置
-      const validation = await settingsService.validateLLMSettings(settings);
-      if (!validation.isValid) {
-        throw new Error(`配置验证失败: ${validation.errors.map(e => e.message).join(', ')}`);
-      }
-
       // 获取模型信息
       const modelInfo = modelRegistry.getModelById(settings.selectedModelId);
       if (!modelInfo) {
         throw new Error(`未找到模型: ${settings.selectedModelId}`);
+      }
+      
+      // 🔥 修复：检查模型是否需要API密钥
+      const requiresApiKey = modelInfo.requiresCustomAuth !== false; // 云端模型需要API密钥，本地模型不需要
+      
+      // 如果需要API密钥但未配置，标记为"未配置"
+      if (requiresApiKey && (!settings.apiKey || settings.apiKey.trim() === '')) {
+        console.warn('⚠️ API密钥未配置，跳过配置更新');
+        this.currentConfig = null;
+        this.currentModelInfo = null;
+        return;
+      }
+      
+      // 🔥 根据环境获取正确的设置服务
+      const service = await this.getSettingsService();
+      
+      // 验证设置
+      const validation = await service.validateLLMSettings(settings);
+      if (!validation.isValid) {
+        throw new Error(`配置验证失败: ${validation.errors.map(e => e.message).join(', ')}`);
       }
 
       // 构建新配置
       // 🔥 修复：优先使用 settings 中传入的值，其次使用模型默认值
       const oldConfig = this.currentConfig;
       const newConfig: LLMConfig = {
-        apiKey: settings.apiKey,
+        apiKey: settings.apiKey || '', // 🔥 本地模型允许空字符串
         baseUrl: settings.baseUrl || modelInfo.customBaseUrl || 'https://openrouter.ai/api/v1', // 🔥 优先使用 settings.baseUrl
         model: settings.customModelName || modelInfo.openRouterModel, // 优先使用自定义模型名称
         temperature: settings.customConfig?.temperature ?? modelInfo.defaultConfig.temperature,
@@ -133,6 +194,7 @@ export class LLMConfigManager {
       console.log(`   模型: ${newConfig.model} (来源: ${settings.customModelName ? 'customModelName' : 'openRouterModel'})`);
       console.log(`   温度: ${newConfig.temperature}`);
       console.log(`   最大令牌: ${newConfig.maxTokens}`);
+      console.log(`   API密钥: ${newConfig.apiKey ? '已设置' : '未设置（本地模型）'}`);
       
     } catch (error) {
       console.error('❌ 更新LLM配置失败:', error);
@@ -142,8 +204,17 @@ export class LLMConfigManager {
 
   // 测试OpenRouter API连接
   public async testConnection(): Promise<ConnectionTestResult> {
+    // 🔥 修复：如果配置未就绪，返回有意义的错误
     if (!this.currentConfig || !this.currentModelInfo) {
-      throw new Error('配置管理器未初始化');
+      const timestamp = new Date();
+      const result: ConnectionTestResult = {
+        success: false,
+        error: 'API密钥未配置，请先在设置中配置有效的API密钥',
+        modelInfo: modelRegistry.getDefaultModel(),
+        timestamp
+      };
+      console.warn('⚠️ 配置管理器未初始化，无法测试连接');
+      return result;
     }
 
     const startTime = Date.now();
@@ -243,15 +314,21 @@ export class LLMConfigManager {
     try {
       console.log('🔄 重新加载LLM配置...');
       
-      // 🔥 修复：根据环境选择不同的设置服务
-      let settings;
-      if (typeof window !== 'undefined') {
-        // 前端环境：使用前端设置服务
-        settings = await settingsService.getLLMSettings();
-      } else {
-        // 后端环境：使用动态导入避免打包服务器端代码
-        const { BackendSettingsService } = await import('../../server/services/settingsService.ts');
-        settings = await BackendSettingsService.getInstance().getLLMSettings();
+      // 🔥 根据环境获取正确的设置服务
+      const service = await this.getSettingsService();
+      const settings = await service.getLLMSettings();
+      
+      // 🔥 修复：检查模型是否需要API密钥
+      const modelInfo = modelRegistry.getModelById(settings.selectedModelId);
+      const requiresApiKey = modelInfo?.requiresCustomAuth !== false; // 云端模型需要API密钥，本地模型不需要
+      
+      // 如果需要API密钥但未配置，标记为"未配置"状态
+      if (requiresApiKey && (!settings.apiKey || settings.apiKey.trim() === '')) {
+        console.warn('⚠️ API密钥未配置，配置管理器将以"未配置"状态重新加载');
+        this.currentConfig = null;
+        this.currentModelInfo = null;
+        console.log('✅ LLM配置已重新加载（未配置状态）');
+        return;
       }
       
       await this.updateConfig(settings);
@@ -279,7 +356,9 @@ export class LLMConfigManager {
         }
       };
 
-      await settingsService.saveLLMSettings(settings);
+      // 🔥 根据环境获取正确的设置服务
+      const service = await this.getSettingsService();
+      await service.saveLLMSettings(settings);
       console.log('✅ 当前配置已保存到存储');
     } catch (error) {
       console.error('❌ 保存配置失败:', error);
@@ -311,15 +390,17 @@ export class LLMConfigManager {
     capabilities: string[];
     isInitialized: boolean;
   } {
+    // 🔥 修复：如果配置未就绪，返回默认摘要而不是抛出错误
     if (!this.currentConfig || !this.currentModelInfo) {
+      const defaultModel = modelRegistry.getDefaultModel();
       return {
-        modelName: '未初始化',
-        modelId: '',
-        provider: '',
-        temperature: 0,
-        maxTokens: 0,
-        costLevel: '',
-        capabilities: [],
+        modelName: '未配置',
+        modelId: defaultModel.id,
+        provider: defaultModel.provider,
+        temperature: defaultModel.defaultConfig.temperature,
+        maxTokens: defaultModel.defaultConfig.maxTokens,
+        costLevel: defaultModel.costLevel,
+        capabilities: defaultModel.capabilities,
         isInitialized: false
       };
     }

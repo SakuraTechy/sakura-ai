@@ -4214,7 +4214,7 @@ ${requirementDoc.substring(0, 1500)}...
       if (errorPos > 0 && errorPos < jsonText.length) {
         const start = Math.max(0, errorPos - 100);
         const end = Math.min(jsonText.length, errorPos + 100);
-        console.error(`� 错误位置附近的文本:`);
+        console.error(`📍 错误位置附近的文本:`);
         console.error(`   ${jsonText.substring(start, end)}`);
         console.error(`   ${' '.repeat(Math.min(100, errorPos - start))}^`);
       }

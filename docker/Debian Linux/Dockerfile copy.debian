@@ -1,0 +1,85 @@
+# Sakura AI - Debian Linux Dockerfile
+# 使用 Debian slim 镜像，Playwright 完全兼容
+# 适用于 CentOS 7 宿主机的容器化部署方案
+# 解决 CentOS 7 不支持 Node.js 18+ 的问题
+
+FROM node:20-slim
+
+WORKDIR /app
+
+# 配置 Debian 国内镜像源（阿里云）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    (echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+     echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+     echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list)
+
+# 安装系统依赖（包含 Playwright Chromium 所需的全部依赖）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # 编译工具（better-sqlite3 需要）
+    python3 make g++ \
+    # Chromium 浏览器（Debian 中系统 Chromium 路径是 /usr/bin/chromium。）
+    # chromium \
+    # ffmpeg（Playwright 视频录制需要）
+    # ffmpeg \
+    # Playwright Chromium 运行依赖
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libgbm1 libasound2 libpango-1.0-0 libcairo2 \
+    libfreetype6 libharfbuzz0b ca-certificates \
+    libglib2.0-0 libstdc++6 libgcc-s1 libx11-6 libxtst6 libxext6 \
+    libatspi2.0-0 libexpat1 libxcb1 libxshmfence1 libdbus-1-3 \
+    # Playwright install-deps 需要的额外依赖
+    xvfb fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
+    fonts-wqy-zenhei fonts-tlwg-loma-otf fonts-noto-color-emoji \
+    # 中文字体
+    fonts-noto-cjk fonts-noto-color-emoji fonts-wqy-zenhei \
+    # 工具
+    bash curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 环境变量配置
+ENV NODEJS_ORG_MIRROR=https://npmmirror.com/mirrors/node \
+    PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
+    # Playwright 使用系统 Chromium
+    #PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    
+# 配置 npm 镜像源
+RUN npm config set registry https://registry.npmmirror.com
+
+# 复制依赖文件
+COPY package.json package-lock.json ./
+
+# 配置 sharp：使用国内镜像加速下载
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+ENV npm_config_sharp_binary_host=https://npmmirror.com/mirrors/sharp
+ENV npm_config_sharp_libvips_binary_host=https://npmmirror.com/mirrors/sharp-libvips
+
+# 安装依赖
+# 跨平台构建：需要强制安装 Linux 版本的原生模块
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --ignore-scripts && \
+    npm install @img/sharp-linux-x64 @rollup/rollup-linux-x64-gnu --legacy-peer-deps && \
+    npm rebuild
+
+# 安装 Playwright 浏览器
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+RUN npx playwright install chromium ffmpeg
+
+# 复制应用代码
+COPY . .
+
+# 生成 Prisma 客户端
+RUN npx prisma generate
+
+# 构建前端
+RUN npm run build
+
+# 创建必要目录
+RUN mkdir -p logs artifacts uploads screenshots
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+CMD ["npm", "start"]

@@ -71,33 +71,73 @@ export class PlaywrightTestRunner {
     enableTrace?: boolean;
     enableVideo?: boolean;
   } = {}): Promise<void> {
+    // 🔥 在 Linux 服务器上强制使用 headless 模式
+    const isLinux = process.platform === 'linux';
+    const defaultHeadless = isLinux ? true : false;
+    
     const {
-      headless = false,
+      headless = defaultHeadless,
       enableTrace = true,
       enableVideo = true
     } = options;
+    
+    // 🔥 如果在 Linux 上且 headless 为 false，强制改为 true 并警告
+    const finalHeadless = isLinux ? true : headless;
+    if (isLinux && headless === false) {
+      console.log(`⚠️ [${runId}] Linux 服务器环境检测到，强制启用 headless 模式`);
+    }
 
-    console.log(`🚀 [${runId}] 初始化 Playwright Test Runner...`);
+    console.log(`🚀 [${runId}] 初始化 Playwright Test Runner (headless: ${finalHeadless})...`);
     
     // 启动浏览器
+    // CentOS 7 兼容性配置
+    const launchArgs = [
+      '--start-maximized',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions'
+    ];
+
+    // 获取 Chromium 可执行文件路径（如果设置了环境变量则使用系统 Chromium，否则使用 Playwright 自带的）
+    const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || 
+                          process.env.CHROME_PATH || 
+                          process.env.CHROMIUM_PATH || 
+                          undefined; // undefined 表示使用 Playwright 默认路径
+
     this.browser = await chromium.launch({
-      headless,
-      args: ['--start-maximized']
+      headless: finalHeadless,
+      args: launchArgs,
+      ...(executablePath && { executablePath })
     });
+
+    if (executablePath) {
+      console.log(`🌐 [${runId}] 使用系统 Chromium: ${executablePath}`);
+    }
 
     // 创建运行目录
     const runDir = path.join(this.artifactsDir, runId);
     await fs.mkdir(runDir, { recursive: true });
 
     // 配置 context 选项
+    // 🔥 Linux headless 模式下必须明确设置视口大小，否则页面显示不完整
     const contextOptions: any = {
-      viewport: null, // 使用全屏
+      viewport: finalHeadless ? { width: 1920, height: 1080 } : null, // headless 使用固定视口，有头模式使用全屏
       ignoreHTTPSErrors: true,
       // 🔥 修复：启用文件下载功能
       acceptDownloads: true,
       // 🔥 修复：设置下载文件保存路径
       downloadsPath: runDir,
+      // 🔥 确保页面完全加载
+      hasTouch: false,
+      isMobile: false,
+      // 🔥 设备缩放比例，确保高清截图（仅在有 viewport 时设置）
+      ...(finalHeadless && { deviceScaleFactor: 1 }),
     };
+
+    console.log(`📐 [${runId}] 视口配置: ${finalHeadless ? '1920x1080 (headless)' : '全屏 (有头模式)'}`);
 
     // 启用 trace 录制
     if (enableTrace) {
@@ -202,7 +242,7 @@ export class PlaywrightTestRunner {
     runId: string, 
     matchMode: 'strict' | 'auto' | 'loose' = 'auto'
   ): { found: boolean; matchedText?: string; matchType?: string } {
-    // � 优化：调整日志输出顺序，先输出匹配模式，再输出查找信息
+    // 🔧 优化：调整日志输出顺序，先输出匹配模式，再输出查找信息
     console.log(`⚙️ [${runId}] 匹配模式: ${matchMode === 'strict' ? '严格匹配' : matchMode === 'auto' ? '智能匹配' : '宽松匹配'}`);
     console.log(`🔍 [${runId}] 在文本历史记录中查找: "${searchText}"`);
     console.log(`📊 [${runId}] 历史记录共有 ${this.textHistory.size} 条文本`);

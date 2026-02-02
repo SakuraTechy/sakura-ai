@@ -2438,8 +2438,8 @@ export function TestCases() {
                            focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     >
                       <option value="">所有状态</option>
-                      <option value="active">启用</option>
                       <option value="draft">草稿</option>
+                      <option value="active">启用</option>
                       <option value="disabled">禁用</option>
                     </select>
                   </div>
@@ -3747,8 +3747,8 @@ export function TestCases() {
                   onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'draft' | 'disabled' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="active">启用</option>
                   <option value="draft">草稿</option>
+                  <option value="active">启用</option>
                   <option value="disabled">禁用</option>
                 </select>
               </div>
@@ -3949,8 +3949,8 @@ export function TestCases() {
                   onChange={(e) => setSuiteFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'draft' | 'disabled' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="active">启用</option>
                   <option value="draft">草稿</option>
+                  <option value="active">启用</option>
                   <option value="disabled">禁用</option>
                 </select>
               </div>

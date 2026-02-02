@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1
+# Sakura AI - Alpine Linux Dockerfile
+# 适用于 CentOS 7 宿主机的容器化部署方案
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 配置 Alpine 镜像源（阿里云）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 安装系统依赖（合并为单层减少镜像大小）
+RUN apk update && apk add --no-cache \
+    # 编译工具（better-sqlite3 需要）
+    python3 make g++ \
+    # Chromium 浏览器（Debian 中系统 Chromium 路径是 /usr/bin/chromium。）
+    # chromium \
+    # ffmpeg（Playwright 视频录制需要）
+    # ffmpeg \
+    # Playwright Chromium 运行依赖
+    chromium nss freetype harfbuzz ca-certificates ttf-freefont \
+    # Playwright 依赖
+    glib libstdc++ libgcc libx11 libxcomposite libxdamage libxext \
+    libxfixes libxrandr libxtst alsa-lib at-spi2-core cups-libs \
+    dbus-libs expat libdrm libxcb libxkbcommon libxshmfence \
+    mesa-gbm pango \
+    # 中文字体
+    font-noto-emoji font-noto-cjk wqy-zenhei \
+    # 工具
+    bash curl git \
+    && rm -rf /var/cache/apk/*
+
+# 环境变量配置
+ENV NODEJS_ORG_MIRROR=https://npmmirror.com/mirrors/node \
+    PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma \
+    # Playwright 使用系统 Chromium
+    #PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+
+# 配置 npm 镜像源
+RUN npm config set registry https://registry.npmmirror.com
+
+# 复制依赖文件（单独复制，利用缓存）
+COPY package.json package-lock.json ./
+
+# 安装依赖（使用 BuildKit 缓存挂载加速）
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+
+# 安装 Playwright ffmpeg（视频录制需要）
+RUN npx playwright install ffmpeg
+
+# 复制应用代码
+COPY . .
+
+# 构建前端 + 生成 Prisma 客户端
+RUN npm run build || echo "No build script" && npx prisma generate
+
+# 创建必要目录
+RUN mkdir -p logs artifacts uploads screenshots
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+CMD ["npm", "start"]

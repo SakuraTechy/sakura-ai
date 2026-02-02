@@ -118,6 +118,13 @@ export class AITestParser {
         await this.configManager.initialize();
       }
 
+      // 🔥 修复：如果配置管理器未就绪（API密钥未配置），不抛出错误
+      if (!this.configManager.isReady()) {
+        console.warn('⚠️ 配置管理器未就绪（API密钥未配置），将使用回退配置');
+        this.useConfigManager = false;
+        return;
+      }
+
       const summary = this.configManager.getConfigSummary();
       console.log(`🔧 AI解析器配置已加载: ${summary.modelName} (${summary.provider})`);
       console.log(`   温度: ${summary.temperature}, 最大令牌: ${summary.maxTokens}`);
@@ -157,10 +164,14 @@ export class AITestParser {
           ]);
         }
 
+        // 🔥 修复：检查配置管理器是否就绪，如果未就绪则回退
         if (this.configManager.isReady()) {
           const config = this.configManager.getCurrentConfig();
           console.log(`🔧 使用配置管理器配置: ${config.model}`);
           return config;
+        } else {
+          console.warn('⚠️ 配置管理器未就绪（API密钥未配置），回退到默认配置');
+          this.useConfigManager = false;
         }
       } catch (error) {
         console.error('❌ 配置管理器初始化失败，回退到默认配置:', error.message);
@@ -187,10 +198,18 @@ export class AITestParser {
     if (this.useConfigManager) {
       try {
         await this.configManager.reloadConfig();
-        const summary = this.configManager.getConfigSummary();
-        console.log(`🔄 AI解析器配置已重新加载: ${summary.modelName}`);
+        
+        // 🔥 修复：检查配置管理器是否就绪
+        if (this.configManager.isReady()) {
+          const summary = this.configManager.getConfigSummary();
+          console.log(`🔄 AI解析器配置已重新加载: ${summary.modelName}`);
+        } else {
+          console.warn('⚠️ 配置管理器未就绪（API密钥未配置），将使用回退配置');
+          this.useConfigManager = false;
+        }
       } catch (error) {
         console.error('❌ 重新加载AI解析器配置失败:', error);
+        this.useConfigManager = false;
       }
     } else {
       console.log('⚠️ AI解析器使用传统模式，无法重新加载配置');

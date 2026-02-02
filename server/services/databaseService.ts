@@ -1234,7 +1234,7 @@ export async function testDatabaseConnection(
         return await testJdbcConnection(database);
       }
 
-      console.log('� 未提供driverPath，使用Node.js mssql包连接');
+      console.log('💡 未提供driverPath，使用Node.js mssql包连接');
 
       try {
         // 动态导入mssql模块
@@ -1261,7 +1261,7 @@ export async function testDatabaseConnection(
         // 🔄 如果连接串是JDBC格式但没有driverPath，转换为mssql格式
         let connectionString = database.connection_string;
         if (connectionString && connectionString.toLowerCase().startsWith('jdbc:sqlserver://')) {
-          console.log('� 检测到JDBC连接串，转换为mssql格式...');
+          console.log('🔄 检测到JDBC连接串，转换为mssql格式...');
           // 转换 jdbc:sqlserver://host:port;databaseName=db 为 Server=host,port;Database=db;...
           const jdbcMatch = connectionString.match(/jdbc:sqlserver:\/\/([^:;]+):(\d+);databaseName=([^;]+)/i);
           if (jdbcMatch) {
@@ -1359,7 +1359,7 @@ export async function testDatabaseConnection(
     } else if (detectedType === 'oracle') {
       // Oracle连接测试
       console.log('🔍 开始Oracle连接测试...');
-      console.log('� 连接配置:', {
+      console.log('📋 连接配置:', {
         host: database.database_name,
         port: database.database_port,
         service: database.database_schema,

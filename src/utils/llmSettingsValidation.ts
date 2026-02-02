@@ -28,22 +28,24 @@ export function validateLLMSettings(settings: LLMSettings): ValidationResult {
   }
 
   // 验证API密钥
-  if (!settings.apiKey || settings.apiKey.trim() === '') {
-    errors.push({
-      field: 'apiKey',
-      message: 'API密钥不能为空',
-      code: 'REQUIRED'
-    });
+  const model = modelRegistry.getModelById(settings.selectedModelId);
+  
+  // 🔥 修复：根据 requiresCustomAuth 的正确语义验证
+  // requiresCustomAuth: true = 需要自定义认证（云端厂商）→ API密钥必填
+  // requiresCustomAuth: false = 不需要自定义认证（本地模型）→ API密钥可选
+  if (model?.requiresCustomAuth === false) {
+    // 本地模型：API密钥可选，如果提供则不验证格式
+    // 不做任何验证
   } else {
-    const model = modelRegistry.getModelById(settings.selectedModelId);
-    // 只对标准 OpenRouter 模型进行 sk- 格式验证
-    if (!model?.requiresCustomAuth && !settings.apiKey.startsWith('sk-')) {
+    // 云端模型（requiresCustomAuth: true 或未设置）：API密钥必填
+    if (!settings.apiKey || settings.apiKey.trim() === '') {
       errors.push({
         field: 'apiKey',
-        message: 'OpenRouter API密钥必须以 sk- 开头',
-        code: 'INVALID_FORMAT'
+        message: 'API密钥不能为空',
+        code: 'REQUIRED'
       });
     }
+    // 注意：不再验证 sk- 前缀，因为不同厂商的密钥格式不同
   }
 
   // 验证自定义配置

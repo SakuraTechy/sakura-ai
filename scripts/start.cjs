@@ -201,18 +201,68 @@ async function generatePrismaClient() {
 // 安装 Playwright 浏览器
 async function setup() {
   try {
-    // 检查 playwright 是否已安装（__dirname 是 scripts 目录，所以用 ../node_modules）
+    // 🔥 严格检测：验证 Playwright 缓存中的可执行文件是否存在
+    const playwrightCachePath = path.join(os.homedir(), '.cache', 'ms-playwright');
+    
+    if (fs.existsSync(playwrightCachePath)) {
+      const cacheContents = fs.readdirSync(playwrightCachePath);
+      
+      // 查找任意版本的 chromium 目录并验证可执行文件
+      const chromiumDir = cacheContents.find(dir => dir.startsWith('chromium-') && !dir.includes('headless'));
+      const headlessDir = cacheContents.find(dir => dir.includes('chromium_headless_shell'));
+      const ffmpegDir = cacheContents.find(dir => dir.startsWith('ffmpeg'));
+      
+      let chromiumOk = false;
+      let headlessOk = false;
+      let ffmpegOk = false;
+      
+      // 验证 chromium 可执行文件
+      if (chromiumDir) {
+        const chromePath = path.join(playwrightCachePath, chromiumDir, 'chrome-linux', 'chrome');
+        chromiumOk = fs.existsSync(chromePath);
+        if (chromiumOk) {
+          console.log(`   📦 chromium: ${chromiumDir} ✓`);
+        }
+      }
+      
+      // 验证 headless shell 可执行文件
+      if (headlessDir) {
+        const headlessPath = path.join(playwrightCachePath, headlessDir, 'chrome-linux', 'headless_shell');
+        headlessOk = fs.existsSync(headlessPath);
+        if (headlessOk) {
+          console.log(`   📦 headless_shell: ${headlessDir} ✓`);
+        }
+      }
+      
+      // 验证 ffmpeg 可执行文件
+      if (ffmpegDir) {
+        const ffmpegPath = path.join(playwrightCachePath, ffmpegDir, 'ffmpeg-linux');
+        ffmpegOk = fs.existsSync(ffmpegPath);
+        if (ffmpegOk) {
+          console.log(`   📦 ffmpeg: ${ffmpegDir} ✓`);
+        }
+      }
+      
+      if (chromiumOk && headlessOk && ffmpegOk) {
+        console.log(`   ✅ Playwright 浏览器缓存完整，跳过下载`);
+        return;
+      } else {
+        console.log(`   ⚠️ Playwright 缓存不完整: chromium=${chromiumOk}, headless=${headlessOk}, ffmpeg=${ffmpegOk}`);
+      }
+    }
+    
+    // 下载 Playwright 浏览器（使用当前安装的 Playwright 版本）
+    console.log(`   ⚙️ 正在下载 Playwright 浏览器...`);
     const playwrightPath = path.resolve(__dirname, '../node_modules/playwright');
     if (!fs.existsSync(playwrightPath)) {
         console.log('Playwright 未安装，请先运行 npm install playwright');
         process.exit(1);
     }
     
-    // 直接使用 node 调用 playwright 的安装脚本
     const playwrightCliPath = path.resolve(playwrightPath, 'cli.js');
-    await execPromise(`node "${playwrightCliPath}" install chromium`);
-    
-    // 安装成功，静默完成
+    // 使用 --force 确保下载与当前 Playwright 版本匹配的浏览器
+    await execPromise(`node "${playwrightCliPath}" install --force chromium chromium-headless-shell ffmpeg`);
+    console.log(`   ✅ Playwright 浏览器下载完成`);
   } catch (error) {
     console.error('❌ Playwright 浏览器安装失败:', error);
     process.exit(1);

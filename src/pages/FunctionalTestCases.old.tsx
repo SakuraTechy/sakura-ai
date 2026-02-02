@@ -565,8 +565,8 @@ export function FunctionalTestCases() {
                              focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">全部状态</option>
-                    <option value="PUBLISHED">已发布</option>
                     <option value="DRAFT">草稿</option>
+                    <option value="PUBLISHED">已发布</option>
                     <option value="ARCHIVED">已归档</option>
                   </select>
                 </div>

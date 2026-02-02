@@ -47,7 +47,7 @@ import { FunctionalCaseSelectModal } from '../components/FunctionalCaseSelectMod
 import { getCaseTypeInfo } from '../utils/caseTypeHelper';
 import { Tag, Tooltip } from 'antd';
 import { useAuth } from '../contexts/AuthContext';
-import { formatDateTime } from '../../server/utils/timezone';
+import { formatDateTime } from '../utils/dateUtils';
 import ExecutionEngineGuide from '../components/ExecutionEngineGuide';
 
 export function TestPlanDetail() {

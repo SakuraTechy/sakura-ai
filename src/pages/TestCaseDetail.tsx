@@ -479,8 +479,8 @@ export function TestCaseDetail() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="active">启用</option>
                   <option value="draft">草稿</option>
+                  <option value="active">启用</option>
                   <option value="disabled">禁用</option>
                 </select>
               </div>

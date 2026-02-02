@@ -651,6 +651,7 @@ model functional_test_executions {
   @@index([executed_at])
   @@index([final_result])
   @@index([executor_project])
+  @@index([test_case_id, executed_at(sort: Desc)]) // 🔧 复合索引优化执行历史查询
 }
 
 enum system_status {

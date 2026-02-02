@@ -1,0 +1,140 @@
+# Sakura AI - Docker Compose 配置（适用于 CentOS 7 宿主机的容器化部署方案）
+# 
+# 使用方法：
+#   docker compose -f docker-compose.alpine.yml up -d
+#   docker compose -f docker-compose.alpine.yml down -v
+
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: sakura-ai-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: sakura_ai
+      MYSQL_USER: sakura_ai
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - sakura-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Sakura AI 应用服务
+  sakura-ai:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.alpine
+    container_name: sakura-ai-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "5173:5173"
+    environment:
+      # 数据库配置
+      DATABASE_URL: mysql://sakura_ai:${DB_PASSWORD}@mysql:3306/sakura_ai
+      
+      # 应用配置
+      #NODE_ENV: production
+      PORT: 3001
+      SERVER_HOST: 0.0.0.0
+      
+      # JWT 配置
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # Playwright 配置
+      PLAYWRIGHT_HEADLESS: "true"
+      PLAYWRIGHT_BROWSER: chromium
+      #PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      #PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      
+      # AI 配置
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-openai/gpt-4o}
+      
+      # RAG 配置（可选）
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-aliyun}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+    volumes:
+      # 持久化数据
+      - ../uploads:/app/uploads
+      - ../artifacts:/app/artifacts
+      - ../screenshots:/app/screenshots
+      - ../logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sakura-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Qdrant 向量数据库（可选 - RAG 功能）
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: sakura-ai-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - sakura-network
+    profiles:
+      - rag
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: sakura-ai-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../config/nginx-alpine.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../dist:/usr/share/nginx/html:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - sakura-ai
+    networks:
+      - sakura-network
+    profiles:
+      - nginx
+
+volumes:
+  mysql-data:
+    driver: local
+  qdrant-data:
+    driver: local
+  nginx-logs:
+    driver: local
+
+networks:
+  sakura-network:
+    # 使用默认的 bridge 网络
+    # external: true
+    # name: bridge
+    # 使用自定义的 bridge 网络
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.169.0.0/24    # 子网范围
+          gateway: 192.169.0.1      # 网关地址

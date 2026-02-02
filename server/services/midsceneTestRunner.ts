@@ -71,8 +71,12 @@ export class MidsceneTestRunner {
     enableVideo?: boolean;
     testCaseId?: number; // 🔥 测试用例ID，用于生成稳定的缓存ID
   } = {}): Promise<void> {
+    // 🔥 在 Linux 服务器上强制使用 headless 模式
+    const isLinux = process.platform === 'linux';
+    const defaultHeadless = isLinux ? true : false;
+    
     const {
-      headless = false,
+      headless = defaultHeadless,
       enableTrace = true,
       enableVideo = true,
       testCaseId // 🔥 测试用例ID
@@ -80,32 +84,68 @@ export class MidsceneTestRunner {
 
     // 🔥 保存测试用例ID
     this.testCaseId = testCaseId || null;
+    
+    // 🔥 如果在 Linux 上且 headless 为 false，强制改为 true 并警告
+    const finalHeadless = isLinux ? true : headless;
+    if (isLinux && headless === false) {
+      console.log(`⚠️ [${runId}] Linux 服务器环境检测到，强制启用 headless 模式`);
+    }
 
     // 🔥 启用Midscene DEBUG模式，打印AI服务消耗的时间和token使用情况
     process.env.DEBUG = 'midscene:*,midscene:cache:*,midscene:ai:profile:stats';
     console.log(`✅ [${runId}] 已启用 Midscene DEBUG 模式: DEBUG=midscene:*,midscene:cache:*,midscene:ai:profile:stats`);
 
-    console.log(`🚀 [${runId}] 初始化 Midscene Test Runner...`);
+    console.log(`🚀 [${runId}] 初始化 Midscene Test Runner (headless: ${finalHeadless})...`);
     // this.addLog(runId, '🚀 初始化 Midscene Test Runner...', 'info');
     
     try {
       // 启动浏览器
+      // CentOS 7 兼容性配置
+      const launchArgs = [
+        '--start-maximized',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions'
+      ];
+
+      // 获取 Chromium 可执行文件路径（如果设置了环境变量则使用系统 Chromium，否则使用 Playwright 自带的）
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || 
+                            process.env.CHROME_PATH || 
+                            process.env.CHROMIUM_PATH ||
+                            undefined; // undefined 表示使用 Playwright 默认路径
+      
       this.browser = await chromium.launch({
-        headless,
-        args: ['--start-maximized']
+        headless: finalHeadless,
+        args: launchArgs,
+        ...(executablePath && { executablePath })
       });
+
+      if (executablePath) {
+        console.log(`🌐 [${runId}] 使用系统 Chromium: ${executablePath}`);
+      }
 
       // 创建运行目录
       const runDir = path.join(this.artifactsDir, runId);
       await fs.mkdir(runDir, { recursive: true });
 
       // 配置 context 选项
+      // 🔥 Linux headless 模式下必须明确设置视口大小，否则页面显示不完整
       const contextOptions: any = {
-        viewport: null, // 使用全屏
+        viewport: finalHeadless ? { width: 1920, height: 1080 } : null, // headless 使用固定视口，有头模式使用全屏
         ignoreHTTPSErrors: true,
         acceptDownloads: true,
         downloadsPath: runDir,
+        // 🔥 设备缩放比例，确保高清截图（仅在 headless 模式下设置，viewport 为 null 时不能设置）
+        ...(finalHeadless && { deviceScaleFactor: 1 }),
+        // 🔥 确保页面完全加载
+        hasTouch: false,
+        isMobile: false,
       };
+
+      console.log(`📐 [${runId}] 视口配置: ${finalHeadless ? '1920x1080 (headless)' : '全屏 (有头模式)'}`);
 
       // 启用 trace 录制
       if (enableTrace) {
