@@ -43,5 +43,16 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       exclude: ['lucide-react'],
     },
+    // 🔥 构建配置：排除 server 目录，避免 Vite 解析后端代码
+    build: {
+      rollupOptions: {
+        external: [
+          // 排除所有 server 目录的导入
+          /^\.\.\/\.\.\/server\//,
+          /^\.\.\/server\//,
+          /^server\//,
+        ],
+      },
+    },
   };
 });

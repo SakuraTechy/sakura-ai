@@ -450,7 +450,7 @@ export function Layout({ children }: LayoutProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  {currentPage?.name || '测试执行详情'}
+                  {currentPage?.name || 'AI 智能生成器'}
                 </motion.h1>
               </div>
             </div>

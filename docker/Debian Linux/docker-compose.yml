@@ -4,8 +4,6 @@
 #   docker compose -f docker-compose.yml up -d
 #   docker compose -f docker-compose.yml down -v
 
-version: '3.8'
-
 services:
   # MySQL 数据库
   mysql:
@@ -35,8 +33,9 @@ services:
   # Sakura AI 应用服务
   sakura-ai:
     build:
-      context: .
-      dockerfile: Dockerfile.debian
+      context: ../..
+      dockerfile: docker/Debian Linux/Dockerfile.debian
+    image: sakura-ai:latest  # 🔥 显式指定镜像名称
     container_name: sakura-ai-app
     restart: unless-stopped
     ports:
@@ -58,7 +57,8 @@ services:
       PLAYWRIGHT_HEADLESS: "true"
       PLAYWRIGHT_BROWSER: chromium
       # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      # Debian 系统 Chromium 路径是 /usr/bin/chromium
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
       
       # AI 配置
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}

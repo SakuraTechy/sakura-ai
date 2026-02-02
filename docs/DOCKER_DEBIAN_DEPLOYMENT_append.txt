@@ -1,0 +1,381 @@
+﻿### 第三步：一键部署
+
+```bash
+# 方式 1：使用安装脚本（推荐）
+chmod +x docker-install.sh
+./docker-install.sh install
+
+# 方式 2：手动启动
+docker compose up -d
+
+# 查看服务状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f sakura-ai
+```
+
+### 第四步：初始化数据库
+
+```bash
+# 等待 MySQL 启动完成（约 30 秒）
+docker compose logs mysql | grep "ready for connections"
+
+# 进入应用容器
+docker compose exec sakura-ai bash
+
+# 应用数据库迁移
+npx prisma migrate deploy
+
+# 生成 Prisma 客户端
+npx prisma generate
+
+# 退出容器
+exit
+```
+
+---
+
+## 🔧 服务管理
+
+### 使用安装脚本管理（推荐）
+
+```bash
+# 启动服务
+./docker-install.sh start
+
+# 停止服务
+./docker-install.sh stop
+
+# 重启服务
+./docker-install.sh restart
+
+# 查看状态
+./docker-install.sh status
+
+# 查看日志
+./docker-install.sh logs          # 应用日志
+./docker-install.sh logs mysql    # 数据库日志
+./docker-install.sh logs qdrant   # Qdrant 日志
+
+# 升级更新
+./docker-install.sh upgrade
+
+# 备份数据
+./docker-install.sh backup
+
+# 恢复数据
+./docker-install.sh restore backup_20260202.tar.gz
+```
+
+### 使用 Docker Compose 管理
+
+```bash
+# 启动所有服务
+docker compose up -d
+
+# 启动指定服务
+docker compose up -d sakura-ai
+
+# 停止所有服务
+docker compose down
+
+# 停止并删除数据卷（危险！）
+docker compose down -v
+
+# 重启服务
+docker compose restart
+
+# 查看日志
+docker compose logs -f
+docker compose logs -f sakura-ai
+
+# 查看服务状态
+docker compose ps
+
+# 进入容器
+docker compose exec sakura-ai bash
+```
+
+---
+
+## 🎯 启用可选服务
+
+### 启用 RAG 知识库（Qdrant）
+
+```bash
+# 启动 Qdrant 服务
+docker compose --profile rag up -d
+
+# 验证 Qdrant 运行
+curl http://localhost:6333/health
+
+# 访问 Qdrant 管理界面
+# http://your-server-ip:6333/dashboard
+```
+
+### 启用 Nginx 反向代理
+
+```bash
+# 启动 Nginx 服务
+docker compose --profile nginx up -d
+
+# 验证 Nginx 运行
+curl http://localhost
+
+# 配置 SSL 证书（可选）
+# 将证书文件放到 docker/Debian Linux/ssl/ 目录
+# 修改 config/nginx.conf 配置
+```
+
+---
+
+## 📊 监控和维护
+
+### 查看资源使用
+
+```bash
+# 查看容器资源使用情况
+docker stats
+
+# 查看磁盘使用
+docker system df
+
+# 清理未使用的资源
+docker system prune -a
+```
+
+### 备份数据
+
+```bash
+# 使用脚本备份（推荐）
+./docker-install.sh backup
+
+# 手动备份 MySQL 数据库
+docker compose exec mysql \
+  mysqldump -u root -p\ sakura_ai > backup_\.sql
+
+# 备份上传文件
+tar -czf uploads_backup_\.tar.gz uploads
+
+# 备份测试产物
+tar -czf artifacts_backup_\.tar.gz artifacts
+```
+
+### 恢复数据
+
+```bash
+# 使用脚本恢复（推荐）
+./docker-install.sh restore backup_20260202.tar.gz
+
+# 手动恢复 MySQL 数据库
+docker compose exec -T mysql \
+  mysql -u root -p\ sakura_ai < backup_20260202.sql
+
+# 恢复上传文件
+tar -xzf uploads_backup_20260202.tar.gz
+```
+
+---
+
+## 🔄 更新应用
+
+### 方式一：使用脚本更新（推荐）
+
+```bash
+./docker-install.sh upgrade
+```
+
+### 方式二：手动更新
+
+```bash
+# 拉取最新代码
+git pull origin main
+
+# 重新构建并启动
+docker compose up -d --build
+
+# 应用数据库迁移
+docker compose exec sakura-ai npx prisma migrate deploy
+```
+
+---
+
+## 🛠️ 常见问题
+
+### 1. 容器启动失败
+
+**问题**：`docker compose up` 失败
+
+**解决方案**：
+
+```bash
+# 查看详细错误日志
+docker compose logs
+
+# 检查端口占用
+sudo netstat -tulpn | grep -E '3001|3306|6333'
+
+# 检查 .env 文件是否存在
+ls -la .env
+
+# 检查 Docker 磁盘空间
+docker system df
+```
+
+### 2. 数据库连接失败
+
+**问题**：`Error: Can't connect to MySQL server`
+
+**解决方案**：
+
+```bash
+# 检查 MySQL 容器状态
+docker compose ps mysql
+
+# 查看 MySQL 日志
+docker compose logs mysql
+
+# 测试数据库连接
+docker compose exec mysql \
+  mysql -u sakura_ai -p\ -e "SELECT 1"
+```
+
+### 3. Playwright 浏览器启动失败
+
+**问题**：`Error: browserType.launch: Failed to launch chromium`
+
+**解决方案**：
+
+```bash
+# 检查 Playwright 环境变量
+docker compose exec sakura-ai env | grep PLAYWRIGHT
+
+# 测试 Chromium 启动
+docker compose exec sakura-ai \
+  node -e "require('playwright').chromium.launch().then(b => b.close())"
+
+# 查看 Playwright 浏览器路径
+docker compose exec sakura-ai \
+  ls -la /root/.cache/ms-playwright/
+```
+
+### 4. 内存不足
+
+**问题**：容器频繁重启或 OOM
+
+**解决方案**：
+
+```bash
+# 修改 docker-compose.yml 限制内存
+services:
+  sakura-ai:
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+# 重启服务
+docker compose up -d
+```
+
+### 5. 权限问题
+
+**问题**：`EACCES: permission denied`
+
+**解决方案**：
+
+```bash
+# 修改宿主机目录权限
+sudo chown -R 1000:1000 uploads artifacts screenshots logs
+
+# 或在容器内修改
+docker compose exec sakura-ai \
+  chown -R node:node /app/uploads /app/artifacts /app/screenshots /app/logs
+```
+
+---
+
+## �� 安全加固
+
+### 1. 使用 Docker Secrets
+
+```bash
+# 创建 secrets
+echo "your_db_password" | docker secret create db_password -
+echo "your_jwt_secret" | docker secret create jwt_secret -
+
+# 修改 docker-compose.yml 使用 secrets
+```
+
+### 2. 限制容器权限
+
+```yaml
+services:
+  sakura-ai:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+```
+
+### 3. 配置防火墙
+
+```bash
+# 只允许必要端口
+sudo firewall-cmd --permanent --add-port=3001/tcp
+sudo firewall-cmd --permanent --add-port=5173/tcp
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --reload
+```
+
+---
+
+## 📈 性能优化
+
+### 1. 使用多阶段构建
+
+Dockerfile.debian 已使用多阶段构建，减小镜像体积。
+
+### 2. 配置资源限制
+
+```yaml
+services:
+  sakura-ai:
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+```
+
+### 3. 使用 Docker 缓存
+
+```bash
+# 使用 BuildKit 加速构建
+export DOCKER_BUILDKIT=1
+docker compose build --no-cache
+```
+
+---
+
+## 📞 技术支持
+
+如遇到部署问题，请：
+
+1. 查看日志：`docker compose logs`
+2. 检查容器状态：`docker compose ps`
+3. 查看资源使用：`docker stats`
+4. 提交 Issue：[GitHub Issues](https://github.com/SakuraTechy/sakura-ai/issues)
+
+---
+
+**返回**: [README](../README.md) | [Alpine 部署](DOCKER_ALPINE_DEPLOYMENT.md)

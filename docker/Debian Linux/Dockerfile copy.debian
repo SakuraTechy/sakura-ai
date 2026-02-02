@@ -17,8 +17,8 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # 编译工具（better-sqlite3 需要）
     python3 make g++ \
-    # Chromium 浏览器（Debian 中系统 Chromium 路径是 /usr/bin/chromium。）
-    # chromium \
+    # Chromium 浏览器（Debian 中系统 Chromium 路径是 /usr/bin/chromium）
+    chromium \
     # ffmpeg（Playwright 视频录制需要）
     # ffmpeg \
     # Playwright Chromium 运行依赖
@@ -35,13 +35,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-cjk fonts-noto-color-emoji fonts-wqy-zenhei \
     # 工具
     bash curl git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "=== 验证系统 Chromium ===" \
+    && which chromium && ls -la /usr/bin/chromium* \
+    && chromium --version || echo "Chromium 验证失败"
 
 # 环境变量配置
 ENV NODEJS_ORG_MIRROR=https://npmmirror.com/mirrors/node \
-    PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
-    # Playwright 使用系统 Chromium
-    #PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma \
+    # Playwright 使用系统 Chromium（Debian 路径是 /usr/bin/chromium）
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
     
 # 配置 npm 镜像源
 RUN npm config set registry https://registry.npmmirror.com
@@ -55,15 +58,32 @@ ENV npm_config_sharp_binary_host=https://npmmirror.com/mirrors/sharp
 ENV npm_config_sharp_libvips_binary_host=https://npmmirror.com/mirrors/sharp-libvips
 
 # 安装依赖
-# 跨平台构建：需要强制安装 Linux 版本的原生模块
+# 1. npm ci 安装所有依赖（跳过 sharp 的可选依赖）
+# 2. 单独安装 sharp 的 Linux 原生模块
+# 3. 手动安装 rollup 的 Linux 原生模块
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --legacy-peer-deps --ignore-scripts && \
-    npm install @img/sharp-linux-x64 @rollup/rollup-linux-x64-gnu --legacy-peer-deps && \
-    npm rebuild
+    npm install @img/sharp-linux-x64 --legacy-peer-deps && \
+    npm install @rollup/rollup-linux-x64-gnu --save-optional --legacy-peer-deps && \
+    npm rebuild && \
+    echo "=== 验证 sharp ===" && \
+    node -e "require('sharp')" && echo "sharp OK" || echo "sharp FAILED" && \
+    echo "=== 验证 rollup ===" && \
+    ls node_modules/@rollup/ | grep linux && echo "rollup OK" || echo "rollup FAILED"
 
 # 安装 Playwright 浏览器
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
-RUN npx playwright install chromium ffmpeg
+
+# 使用缓存加速下载，然后复制到镜像中
+RUN --mount=type=cache,id=playwright,target=/tmp/pw-cache \
+    export PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-cache && \
+    npx playwright install ffmpeg && \
+    mkdir -p /root/.cache/ms-playwright && \
+    cp -r /tmp/pw-cache/* /root/.cache/ms-playwright/ && \
+    echo "=== Playwright 缓存目录 ===" && \
+    ls -la /root/.cache/ms-playwright/ && \
+    echo "=== 验证 ffmpeg ===" && \
+    ls -la /root/.cache/ms-playwright/ffmpeg-*/ 2>/dev/null || echo "ffmpeg 未找到"
 
 # 复制应用代码
 COPY . .

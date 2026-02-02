@@ -1326,9 +1326,149 @@ git add "docker/Debian Linux/docker-install.sh" "docker/Alpine Linux/docker-inst
 git commit -m "fix: 自动转换 .env 文件的 Windows 换行符为 Unix 格式"
 ```
 
-## 2026-01-31
+## 2026-02-02
+
+### fix: 修正 docker-compose.yml 构建上下文和镜像名称
+
+**问题描述：**
+- 镜像名称为 `sakura-ai-sakura-ai:latest`（重复）
+- 构建上下文为当前目录 `.`，无法访问项目根目录的文件
+
+**根本原因：**
+1. `build.context: .` 指向 `docker/Debian Linux` 目录
+2. 但 Dockerfile 需要访问项目根目录的 `package.json`、`src/`、`server/` 等
+3. Docker Compose 默认命名：`<项目名>-<服务名>:latest`
+
+**修改文件：**
+- `docker/Debian Linux/docker-compose.yml`
+
+**修复内容：**
+
+1. **修正构建上下文**：
+   ```yaml
+   build:
+     context: ../..              # 指向项目根目录
+     dockerfile: docker/Debian Linux/Dockerfile.debian  # 相对于根目录的 Dockerfile 路径
+   ```
+
+2. **显式指定镜像名称**：
+   ```yaml
+   image: sakura-ai:latest  # 避免自动生成重复名称
+   ```
+
+**效果：**
+- ✅ 镜像名称：`sakura-ai:latest`（简洁）
+- ✅ 构建上下文正确指向项目根目录
+- ✅ Dockerfile 能够访问所有项目文件
+- ✅ 符合之前修复的 Vite 构建问题（需要访问根目录）
+
+---
+
+### chore: 移除 docker-compose.yml 中已废弃的 version 字段
+
+**问题描述：**
+- Docker Compose 警告：`version` is obsolete
+- Docker Compose v2 不再需要 `version` 字段
+
+**修改文件：**
+- `docker/Debian Linux/docker-compose.yml` - 移除 `version: '3.8'`
+
+**说明：**
+- Docker Compose v2 会自动使用最新的 Compose 规范
+- 移除 `version` 字段可以消除警告信息
+- 不影响任何功能
+
+---
+
+### fix: 修复 Debian Docker 中系统 Chromium 路径错误
+
+**问题描述：**
+- 使用系统 Chromium 时报错：`Failed to launch chromium because executable doesn't exist at /usr/bin/chromium-browser`
+- Debian 系统中 Chromium 的实际路径是 `/usr/bin/chromium`，而不是 `/usr/bin/chromium-browser`
+
+**修改文件：**
+- `docker/Debian Linux/Dockerfile.debian` - 修正环境变量和添加验证步骤
+- `docker/Debian Linux/docker-compose.yml` - 修正环境变量
+
+**修复内容：**
+
+1. **Dockerfile.debian**：
+   - 修正环境变量：`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`
+   - 添加系统 Chromium 验证步骤：
+     ```bash
+     which chromium && ls -la /usr/bin/chromium* && chromium --version
+     ```
+
+2. **docker-compose.yml**：
+   - 修正环境变量：`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium`
+   - 添加注释说明 Debian 系统路径
+
+**不同系统的 Chromium 路径：**
+- Debian/Ubuntu: `/usr/bin/chromium`
+- Alpine Linux: `/usr/bin/chromium-browser`
+- CentOS/RHEL: `/usr/bin/chromium-browser`
+
+**效果：**
+- ✅ Playwright 能够正确找到系统 Chromium
+- ✅ 测试执行不再报 "executable doesn't exist" 错误
+- ✅ 构建时验证 Chromium 安装和路径
+
+---
 
 ### fix: 修复 Docker 构建时 Vite 解析 server 依赖导致的 Prisma 导出错误
+
+**问题描述：**
+- Docker 构建时报错：`"PrismaClient" is not exported by "src/generated/prisma/index.js"`
+- 错误发生在 `vite build` 阶段
+- 原因：`llmConfigManager.ts` 中动态导入了 server 模块，Vite 静态分析时尝试解析整个 server 依赖链
+
+**根本原因：**
+1. `llmConfigManager.ts` 是前后端共享文件，包含动态导入：
+   ```typescript
+   const module = await import('../../server/services/settingsService.js');
+   ```
+2. Vite 在构建时会静态分析所有 import 语句（包括动态 import）
+3. 这导致 Vite 尝试解析 `server/services/settingsService.ts`
+4. settingsService 导入了 `databaseService.ts`
+5. databaseService 导入了 Prisma 客户端
+6. Prisma 客户端在前端构建时不可用，导致构建失败
+
+**修改文件：**
+- `vite.config.ts` - 添加 build.rollupOptions.external 配置
+
+**修复内容：**
+
+在 Vite 配置中添加 `build.rollupOptions.external`，排除所有 server 目录的导入：
+
+```typescript
+build: {
+  rollupOptions: {
+    external: [
+      // 排除所有 server 目录的导入
+      /^\.\.\/\.\.\/server\//,
+      /^\.\.\/server\//,
+      /^server\//,
+    ],
+  },
+}
+```
+
+**效果：**
+- ✅ Vite 构建时不再尝试解析 server 目录的代码
+- ✅ 动态 import 在运行时仍然有效（后端环境）
+- ✅ 前端构建成功，不再报 Prisma 导出错误
+- ✅ 前后端共享代码（llmConfigManager）可以正常工作
+
+**技术说明：**
+- `external` 配置告诉 Rollup 不要将这些模块打包到前端代码中
+- 动态 import 在前端环境中会因为 `typeof window !== 'undefined'` 检查而跳过
+- 后端环境中动态 import 会正常执行，加载后端模块
+
+---
+
+## 2026-01-31
+
+### fix: 修复 Docker 构建时 Vite 解析 server 依赖导致的 Prisma 导出错误（已废弃）
 
 **问题描述：**
 - Docker 构建时报错：`"PrismaClient" is not exported by "src/generated/prisma/index.js"`
@@ -1346,3 +1486,141 @@ git commit -m "fix: 自动转换 .env 文件的 Windows 换行符为 Unix 格式
 3. 修改 docker-compose.yml 构建上下文为项目根目录
 4. 优化 Dockerfile 中 Prisma 客户端生成顺序
 5. 优化 docker-install.sh 迁移失败时的提示信息
+
+
+## 2026-02-02
+
+### docs: 在 README.md 中添加 Docker Debian 部署详细说明
+
+**问题描述：**
+- README.md 中 Docker 部署部分内容过于简略
+- 缺少详细的部署步骤、服务管理、故障排除等信息
+- 用户需要查看单独的文档才能了解完整的部署流程
+
+**修改文件：**
+- `README.md` - 扩展 Docker 部署章节
+
+**新增内容：**
+
+1. **为什么选择 Docker 部署**：
+   - 添加传统部署 vs Docker 部署对比表
+   - 说明 Docker 解决的核心问题（系统兼容性、环境配置、维护成本等）
+
+2. **前置要求**：
+   - 详细的宿主机配置要求表（CPU、内存、磁盘、操作系统）
+   - CentOS 7 和 Ubuntu 的 Docker 安装步骤
+   - Docker 版本验证命令
+
+3. **快速部署**：
+   - 四步部署流程（克隆项目、配置环境变量、一键部署、初始化数据库）
+   - 必填和可选配置项的详细说明
+   - 两种部署方式（脚本安装 vs 手动启动）
+
+4. **服务管理**：
+   - 使用安装脚本管理（推荐）：start/stop/restart/status/logs/upgrade/backup/restore
+   - 使用 Docker Compose 管理：详细的命令示例
+
+5. **启用可选服务**：
+   - RAG 知识库（Qdrant）启用步骤
+   - Nginx 反向代理配置说明
+
+6. **监控和维护**：
+   - 资源使用监控命令
+   - 数据备份和恢复步骤（脚本方式 + 手动方式）
+
+7. **更新应用**：
+   - 脚本更新（推荐）
+   - 手动更新步骤
+
+8. **常见问题**：
+   - 容器启动失败
+   - 数据库连接失败
+   - Playwright 浏览器启动失败
+   - 内存不足
+   - 权限问题
+   - 每个问题都包含诊断命令和解决方案
+
+**效果：**
+- ✅ 用户可以在 README 中直接了解完整的 Docker 部署流程
+- ✅ 减少查阅多个文档的需要
+- ✅ 提供详细的故障排除指南
+- ✅ 保持与 DOCKER_DEBIAN_DEPLOYMENT.md 的一致性
+- ✅ 提升用户部署体验
+
+**参考文档：**
+- 基于 `docs/DOCKER_ALPINE_DEPLOYMENT.md` 的结构
+- 适配 Debian 系统的具体配置
+- 整合 `docker-install.sh` 脚本的使用说明
+
+
+### docs: 创建 DOCKER_DEBIAN_DEPLOYMENT.md 完整部署文档
+
+**问题描述：**
+- `DOCKER_DEBIAN_DEPLOYMENT.md` 文件为空
+- 缺少 Debian Docker 部署的详细文档
+
+**新增文件：**
+- `docs/DOCKER_DEBIAN_DEPLOYMENT.md` - 完整的 Debian Docker 部署指南
+
+**文档内容：**
+
+1. **为什么选择 Debian + Docker**：
+   - CentOS 7 的限制说明（glibc 版本、官方仓库、编译复杂度）
+   - Debian + Docker 的优势（完全兼容、现代化、稳定可靠、容器化、镜像适中）
+
+2. **前置要求**：
+   - 宿主机配置要求表（CPU、内存、磁盘、操作系统、Docker 版本）
+   - CentOS 7 和 Ubuntu 的 Docker 安装详细步骤
+
+3. **快速部署（四步流程）**：
+   - 第一步：克隆项目
+   - 第二步：配置环境变量（必填和可选配置项）
+   - 第三步：一键部署（脚本安装 + 手动启动）
+   - 第四步：初始化数据库
+
+4. **服务管理**：
+   - 使用安装脚本管理（start/stop/restart/status/logs/upgrade/backup/restore）
+   - 使用 Docker Compose 管理（详细命令示例）
+
+5. **启用可选服务**：
+   - RAG 知识库（Qdrant）启用和验证
+   - Nginx 反向代理配置
+
+6. **监控和维护**：
+   - 资源使用监控（docker stats、docker system df）
+   - 数据备份和恢复（脚本方式 + 手动方式）
+
+7. **更新应用**：
+   - 脚本更新（推荐）
+   - 手动更新步骤
+
+8. **常见问题（5个）**：
+   - 容器启动失败
+   - 数据库连接失败
+   - Playwright 浏览器启动失败
+   - 内存不足
+   - 权限问题
+   - 每个问题都包含详细的诊断命令和解决方案
+
+9. **安全加固**：
+   - 使用强密码
+   - 限制容器权限
+   - 配置防火墙
+
+10. **性能优化**：
+    - 多阶段构建
+    - 资源限制配置
+    - Docker 缓存使用
+
+**效果：**
+- ✅ 提供完整的 Debian Docker 部署指南
+- ✅ 与 README.md 中的 Docker 部署章节保持一致
+- ✅ 参考 DOCKER_ALPINE_DEPLOYMENT.md 的结构
+- ✅ 适配 Debian 系统的具体配置
+- ✅ 包含详细的故障排除和最佳实践
+- ✅ 用户可以按照文档完成从零到部署的全过程
+
+**参考文档：**
+- 基于 `docs/DOCKER_ALPINE_DEPLOYMENT.md` 的结构
+- 整合 `docker-install.sh` 脚本的使用说明
+- 适配 Debian 系统特性（Chromium 路径、包管理等）
