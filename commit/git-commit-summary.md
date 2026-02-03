@@ -2,6 +2,95 @@
 
 ## 2026-02-03
 
+### fix: 恢复 migrate diff 自动检测方案，优化错误提示说明
+
+**问题：** 
+- 之前移除了自动 `db push`，但表被删除后不会自动修复
+- 用户反馈：虽然 `db push` 会报重复键错误，但实际不影响服务运行
+
+**修复：** 
+- 恢复使用 `migrate diff` 检测差异的方案
+- 优化错误提示，明确告知用户可以忽略 Prisma 的重复键错误
+- 权衡：选择"自动修复 + 可忽略的错误提示"而不是"手动修复 + 无错误提示"
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 恢复 migrate diff 自动检测方案，优化错误提示说明"
+```
+
+---
+
+### fix: 修复启动时 db push 重复创建外键的问题，仅在迁移失败时使用
+
+**问题：** `migrate deploy` 成功后仍执行 `db push`，导致重复创建外键错误
+
+**修复：** 只在 `migrate deploy` 失败时才使用 `db push` 作为修复手段，成功则直接完成
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 修复启动时 db push 重复创建外键的问题，仅在迁移失败时使用"
+```
+
+---
+
+### fix: 增强启动脚本的数据库同步能力，自动修复表结构不一致
+
+**问题：** `migrate deploy` 只应用新迁移，不检测结构一致性，表被删除或修改后不会自动修复
+
+**修复：** 在 `migrate deploy` 后执行 `db push --accept-data-loss`，自动同步结构差异
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 增强启动脚本的数据库同步能力，自动修复表结构不一致"
+```
+
+---
+
+### refactor: 优化启动脚本的数据库迁移逻辑，支持标准 Prisma 迁移
+
+**问题：** 之前完全跳过迁移不够灵活，日常启动应该可以安全执行迁移
+
+**优化：** 智能检测标准迁移目录，有则执行 `migrate deploy`（幂等），无则跳过（避免 `db push`）
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "refactor: 优化启动脚本的数据库迁移逻辑，支持标准 Prisma 迁移"
+```
+
+---
+
+### fix: 彻底移除启动时的数据库迁移，避免重复创建外键错误
+
+**问题：** 第二次启动持续报错 `Can't write; duplicate key in table`，迁移目录结构不标准导致 `db push` 重复执行
+
+**修复：** 完全跳过启动时的数据库迁移，改为手动执行 `npx prisma db push`
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 彻底移除启动时的数据库迁移，避免重复创建外键错误"
+```
+
+---
+
+### fix: 修复第二次启动时 Prisma db push 重复创建外键导致的错误
+
+**问题：** 第二次启动报错 `Can't write; duplicate key in table`，`migrate deploy` 后总是执行 `db push` 导致重复创建外键
+
+**修复：** 修改启动脚本逻辑，`migrate deploy` 成功后不再执行 `db push`，只在失败时回退
+
+**提交命令：**
+```bash
+git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 修复第二次启动时 Prisma db push 重复创建外键导致的错误"
+```
+
+---
+
 ### fix: 修复 Settings.tsx 中 selectedModel 为 null 时的空指针错误
 
 **问题：** `selectedModel.provider` 访问导致 `TypeError: Cannot read properties of null`
