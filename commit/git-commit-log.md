@@ -2,6 +2,62 @@
 
 ## 2026-02-03
 
+### fix: 修复 Settings.tsx 中 selectedModel 为 null 时访问 provider 属性导致的错误
+
+**问题描述：**
+- 前端设置页面报错：`TypeError: Cannot read properties of null (reading 'provider')`
+- 当 `selectedModel` 为 `null` 时，代码直接访问 `selectedModel.provider` 导致空指针错误
+
+**根本原因：**
+在多处代码中使用了 `selectedModel.provider` 而不是 `selectedModel?.provider`，缺少可选链操作符保护。
+
+**修改文件：**
+- `src/pages/Settings.tsx` - 添加可选链操作符保护
+
+**修复内容：**
+
+修复了以下位置的空指针访问（共 15 处）：
+
+1. **API密钥标签提示**（第 803 行）：
+   ```typescript
+   // 修改前
+   selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local'
+   
+   // 修改后
+   selectedModel?.requiresCustomAuth === false && selectedModel?.provider === 'Local'
+   ```
+
+2. **占位符文本**（第 816 行）：
+   ```typescript
+   // 修改前
+   selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local'
+   
+   // 修改后
+   selectedModel?.requiresCustomAuth === false && selectedModel?.provider === 'Local'
+   ```
+
+3. **帮助文本中的所有 provider 判断**（第 852-903 行）：
+   - 所有 `selectedModel.provider` 改为 `selectedModel?.provider`
+   - 包括：Local、百度、阿里云、DeepSeek、月之暗面、智谱AI、OpenRouter、Zenmux、NewApi
+   - 默认情况添加回退值：`${selectedModel?.provider || '模型提供商'}`
+
+4. **customBaseUrl 分支**（第 907 行）：
+   ```typescript
+   // 修改前
+   `从 ${selectedModel.provider} 获取API密钥`
+   
+   // 修改后
+   `从 ${selectedModel?.provider || '模型提供商'} 获取API密钥`
+   ```
+
+**效果：**
+- ✅ 修复了 `selectedModel` 为 `null` 时的空指针错误
+- ✅ 所有访问 `provider` 属性的地方都使用了可选链操作符
+- ✅ 添加了回退值，提升用户体验
+- ✅ 页面不再因为空值而崩溃
+
+---
+
 ### fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题
 
 **问题描述：**

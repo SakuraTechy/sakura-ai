@@ -2,6 +2,20 @@
 
 ## 2026-02-03
 
+### fix: 修复 Settings.tsx 中 selectedModel 为 null 时的空指针错误
+
+**问题：** `selectedModel.provider` 访问导致 `TypeError: Cannot read properties of null`
+
+**修复：** 所有 `selectedModel.provider` 改为 `selectedModel?.provider`（15 处）
+
+**提交命令：**
+```bash
+git add src/pages/Settings.tsx commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 修复 Settings.tsx 中 selectedModel 为 null 时访问 provider 属性导致的错误"
+```
+
+---
+
 ### fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题
 
 **问题：** MySQL TIMESTAMP 字段必须有默认值或设置为可空

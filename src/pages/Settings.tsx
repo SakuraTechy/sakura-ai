@@ -800,7 +800,7 @@ export function Settings() {
           {/* API密钥 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              API 密钥 {selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local' && (
+              API 密钥 {selectedModel?.requiresCustomAuth === false && selectedModel?.provider === 'Local' && (
                 <span className="text-gray-500 font-normal">（本地模型可选）</span>
               )}
               {selectedModel?.requiresCustomAuth !== false && (
@@ -813,7 +813,7 @@ export function Settings() {
                 value={formData.apiKey}
                 onChange={(e) => handleFieldChange('apiKey', e.target.value)}
                 placeholder={
-                  selectedModel?.requiresCustomAuth === false && selectedModel.provider === 'Local'
+                  selectedModel?.requiresCustomAuth === false && selectedModel?.provider === 'Local'
                     ? '本地模型无需API密钥（可选）'
                     : 'sk-or-v1-...'
                 }
@@ -849,62 +849,62 @@ export function Settings() {
               {selectedModel?.requiresCustomAuth !== false
                 ? (() => {
                     // 需要自定义认证的云端模型
-                    if (selectedModel.provider === 'Local') {
+                    if (selectedModel?.provider === 'Local') {
                       return '本地模型（Ollama、LM Studio等）通常不需要API密钥，如果您的本地服务配置了认证，请填写对应的密钥';
-                    } else if (selectedModel.provider === '百度') {
+                    } else if (selectedModel?.provider === '百度') {
                       return (
                         <>
                           从 <a href="https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">百度智能云千帆</a> 获取API密钥（免费额度充足，需要Access Token）
                         </>
                       );
-                    } else if (selectedModel.provider === '阿里云') {
+                    } else if (selectedModel?.provider === '阿里云') {
                       return (
                         <>
                           从 <a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">阿里云通义千问</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === 'DeepSeek') {
+                    } else if (selectedModel?.provider === 'DeepSeek') {
                       return (
                         <>
                           从 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">DeepSeek平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === '月之暗面') {
+                    } else if (selectedModel?.provider === '月之暗面') {
                       return (
                         <>
                           从 <a href="https://platform.moonshot.cn/console/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">月之暗面Kimi平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === '智谱AI') {
+                    } else if (selectedModel?.provider === '智谱AI') {
                       return (
                         <>
                           从 <a href="https://bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">智谱AI平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === 'OpenRouter') {
+                    } else if (selectedModel?.provider === 'OpenRouter') {
                       return (
                         <>
                           从 <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenRouter平台</a> 获取API密钥（支持多家厂商模型）
                         </>
                       );
-                    } else if (selectedModel.provider === 'Zenmux' || selectedModel.provider === 'Google (Zenmux)') {
+                    } else if (selectedModel?.provider === 'Zenmux' || selectedModel?.provider === 'Google (Zenmux)') {
                       return (
                         <>
                           从 <a href="https://zenmux.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Zenmux平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
-                    } else if (selectedModel.provider === 'NewApi') {
+                    } else if (selectedModel?.provider === 'NewApi') {
                       return (
                         <>
                           从 <a href="https://claude.ticketpro.cc/register?aff=X1E2" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">NewApi平台</a> 获取API密钥（兼容OpenAI格式）
                         </>
                       );
                     } else {
-                      return `从 ${selectedModel.provider} 获取认证密钥（参考项目文档配置）`;
+                      return `从 ${selectedModel?.provider || '模型提供商'} 获取认证密钥（参考项目文档配置）`;
                     }
                   })()
                 : selectedModel?.customBaseUrl
-                ? `从 ${selectedModel.provider} 获取API密钥`
+                ? `从 ${selectedModel?.provider || '模型提供商'} 获取API密钥`
                 : (
                   <>
                     从 <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenRouter</a> 获取API密钥
