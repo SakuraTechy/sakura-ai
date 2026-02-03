@@ -791,7 +791,7 @@ model ai_element_cache {
   
   // 时间信息
   created_at       DateTime  @default(now()) @db.Timestamp(0)
-  expires_at       DateTime  @db.Timestamp(0)          // 过期时间
+  expires_at       DateTime? @db.Timestamp(0)          // 过期时间
   
   // @@index([url]) // 移除：VARCHAR(500) 超过 MySQL 5.7 索引长度限制
   @@index([expires_at])
@@ -816,7 +816,7 @@ model ai_assertion_cache {
   
   // 时间信息
   created_at       DateTime  @default(now()) @db.Timestamp(0)
-  expires_at       DateTime  @db.Timestamp(0)          // 过期时间
+  expires_at       DateTime? @db.Timestamp(0)          // 过期时间
   
   @@index([expires_at])
   @@index([created_at])
@@ -839,7 +839,7 @@ model ai_operation_cache {
   
   // 时间信息
   created_at       DateTime  @default(now()) @db.Timestamp(0)
-  expires_at       DateTime  @db.Timestamp(0)          // 过期时间
+  expires_at       DateTime? @db.Timestamp(0)          // 过期时间
   
   @@index([expires_at])
   @@index([created_at])

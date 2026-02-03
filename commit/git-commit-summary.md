@@ -1,6 +1,48 @@
 # Git 提交汇总
 
-## 最新提交：2026-02-02
+## 2026-02-03
+
+### fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题
+
+**问题：** MySQL TIMESTAMP 字段必须有默认值或设置为可空
+
+**修复：** 将三个 AI 缓存表的 `expires_at` 字段改为可空（`DateTime?`）
+
+**同步方式：** `npx prisma db push`（无需 shadow database 权限）
+
+**提交命令：**
+```bash
+git add prisma/schema.prisma commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题"
+```
+
+---
+
+```bash
+git add README.md commit/git-commit-log.md commit/git-commit-summary.md
+git commit -m "docs: 添加 Windows 系统 Docker 安装说明
+
+- 在 README.md 中新增 Windows 平台 Docker 安装指南
+- 提供 Docker Desktop（推荐）和 WSL2 两种安装方式
+- 完善跨平台部署文档（支持 CentOS、Ubuntu、Windows）"
+```
+
+---
+
+**近期更新（2026-01-28 ~ 2026-02-03）**
+
+- Windows Docker 安装说明
+- NewApi 模型配置支持
+
+- NewApi 模型配置支持
+- README GitHub 样式修复
+- Docker Debian 完整部署（文档+脚本+Chromium路径）
+- Vite 构建排除 server 依赖
+- LLM 配置（本地模型+容错）
+- Playwright 方案（Alpine→Debian）
+- 性能优化（构建93MB→5MB+数据库索引）
+
+详细日志：`commit/git-commit-log.md`
 
 ### 提交命令
 

@@ -27,6 +27,6 @@
 # AI规范
 - 1.在不要求生成并创建相关功能说明文档时，不用自己生成创建文档，节省token为原则
 - 2.修改文件直接修改，不用命令修改，节省token为原则
-- 3.修改的内容需要在git-commit-log.md文件自动增量添加当修改内容的Git提交说明
-- 4.总结 git-commit-log.md 内容精简到 git-commit-summary.md 文件中，用于最后提交使用
+- 3.修改的内容需要在git-commit-log.md文件按日期倒叙，最新的展示最前面，自动增量添加当修改内容的Git提交说明
+- 4.总结 git-commit-log.md 精简到 git-commit-summary.md 文件中按日期倒叙，最新的展示最前面，用于最后提交使用
 

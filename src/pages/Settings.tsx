@@ -893,6 +893,12 @@ export function Settings() {
                           从 <a href="https://zenmux.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Zenmux平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
+                    } else if (selectedModel.provider === 'NewApi') {
+                      return (
+                        <>
+                          从 <a href="https://claude.ticketpro.cc/register?aff=X1E2" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">NewApi平台</a> 获取API密钥（兼容OpenAI格式）
+                        </>
+                      );
                     } else {
                       return `从 ${selectedModel.provider} 获取认证密钥（参考项目文档配置）`;
                     }

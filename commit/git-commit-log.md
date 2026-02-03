@@ -1,5 +1,71 @@
 # Git 提交日志
 
+## 2026-02-03
+
+### fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题
+
+**问题描述：**
+- 执行 Prisma 迁移时报错：`Invalid default value for 'expires_at'`
+- MySQL 的 TIMESTAMP 类型字段必须有默认值或设置为可空
+- 三个 AI 缓存表（`ai_element_cache`、`ai_assertion_cache`、`ai_operation_cache`）的 `expires_at` 字段既没有默认值也不是可空的
+
+**根本原因：**
+MySQL 对 TIMESTAMP 类型有严格限制：
+- 必须有 `DEFAULT` 值（如 `CURRENT_TIMESTAMP`）
+- 或者设置为可空（`NULL`）
+- 否则会报错：`Invalid default value`
+
+**修改文件：**
+- `prisma/schema.prisma` - 修改三个 AI 缓存表的 `expires_at` 字段定义
+
+**修复内容：**
+将 `expires_at` 字段从 `DateTime` 改为 `DateTime?`（可空）：
+
+```prisma
+// 修改前
+expires_at       DateTime  @db.Timestamp(0)
+
+// 修改后
+expires_at       DateTime? @db.Timestamp(0)
+```
+
+**影响的表：**
+1. `ai_element_cache` - AI元素识别缓存表
+2. `ai_assertion_cache` - AI断言解析缓存表
+3. `ai_operation_cache` - AI操作步骤解析缓存表
+
+**同步方式：**
+由于数据库用户没有创建 shadow database 的权限，使用 `prisma db push` 直接同步：
+```bash
+npx prisma db push
+```
+
+**效果：**
+- ✅ 数据库 schema 同步成功
+- ✅ 三个 AI 缓存表的 `expires_at` 字段现在可以为 NULL
+- ✅ 避免了 MySQL TIMESTAMP 默认值错误
+- ✅ 保持了与 `api_tokens` 表中 `expires_at` 字段的一致性
+
+---
+
+### fix: 修复 README.md 在 GitHub 上样式不生效的问题
+
+**问题描述**：
+- README.md 中使用了内联 HTML style 属性
+- GitHub Markdown 渲染器不支持内联 style 属性，导致样式不生效
+
+**修改内容**：
+- 将带有 style 属性的 div 标签改为标准 Markdown 语法
+- 使用 `#` 标题和 `###` 副标题替代内联样式
+- 保持了视觉层次结构和可读性
+
+**影响范围**：
+- README.md 文件头部标题区域
+
+**测试验证**：
+- 修改后的 Markdown 语法在 GitHub 上可以正常渲染
+- 标题层次清晰，符合 GitHub Markdown 规范
+
 ## 2026-02-02
 
 ### fix: 优化前端设置页面本地模型API密钥提示和修复所有模型超链接
@@ -1624,3 +1690,63 @@ build: {
 - 基于 `docs/DOCKER_ALPINE_DEPLOYMENT.md` 的结构
 - 整合 `docker-install.sh` 脚本的使用说明
 - 适配 Debian 系统特性（Chromium 路径、包管理等）
+
+
+### feat: 添加 NewApi 模型配置支持
+
+**新增功能**：
+- 添加 NewApi 平台模型配置，支持自动获取所有可用模型
+- 兼容 OpenAI 格式，支持多家厂商模型
+
+**修改文件**：
+- `src/services/modelRegistry.ts` - 添加 newapi-series 配置
+- `src/pages/Settings.tsx` - 添加 NewApi 平台超链接
+
+**配置详情**：
+```typescript
+{
+  id: 'newapi-series',
+  name: 'NewApi 全部模型 (自动获取)',
+  provider: 'NewApi',
+  openRouterModel: 'gpt-4',
+  customBaseUrl: 'https://api.newapi.pro/v1',
+  requiresCustomAuth: true,
+  capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
+  description: 'NewApi平台，可自动获取所有可用模型，兼容OpenAI格式，支持多家厂商模型',
+  costLevel: 'medium'
+}
+```
+
+**效果**：
+- 用户可以在设置页面选择 NewApi 平台
+- 自动获取 NewApi 平台的所有可用模型
+- 提供 NewApi 平台的 API 密钥获取链接
+
+---
+
+
+**测试验证**：
+- NewApi 配置正确，API 端点可访问
+- 401 错误是预期行为（需要有效的 API 密钥）
+- 用户配置有效密钥后即可正常使用
+
+
+## 2026-02-03
+
+### docs: 添加 Windows 系统 Docker 安装说明
+
+**变更内容**：
+- 在 README.md 的 Docker 安装部分添加 Windows 系统安装指南
+- 提供两种安装方式：
+  1. Docker Desktop（推荐方式）- 适合普通用户
+  2. WSL2 + Docker（高级方式）- 适合开发者
+- 包含详细的安装步骤和系统要求说明
+- 添加注意事项提醒（Windows 版本、Hyper-V 要求等）
+
+**影响范围**：
+- 文档更新，不影响代码功能
+- 完善了跨平台部署文档（CentOS、Ubuntu、Windows）
+
+**相关文件**：
+- README.md
+
