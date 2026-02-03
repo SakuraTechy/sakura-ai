@@ -81,7 +81,7 @@ screenshots/index/
 screenshots/*_screenshots.json
 
 # PNG files (except public assets and documentation)
-*.png
+#*.png
 !public/*.png
 !src/assets/*.png
 !docs/images/*.png
