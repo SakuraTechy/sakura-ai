@@ -79,7 +79,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            Sakura AI
+            DNS AIgen
           </motion.span>
           {size !== 'sm' && (
             <motion.span 
