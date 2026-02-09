@@ -1,0 +1,117 @@
+# Sakura AI - Docker Compose（Bridge 网络模式）
+# 
+# 使用场景：
+#   - 不需要访问宿主机内网 IP
+#   - 需要网络隔离和安全性
+#   - 标准的容器化部署
+# 
+# 使用方法：
+#   docker compose -f docker-compose.bridge.yml up -d
+
+networks:
+  sakura-network:
+    # 使用默认的 bridge 网络配置，继承宿主机路由
+    driver: bridge
+    # 不指定 ipam 配置，让 Docker 自动分配
+    # 这样可以更好地继承宿主机的网络路由
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: sakura-ai-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: sakura_ai
+      MYSQL_USER: sakura_ai
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - sakura-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
+  # Sakura AI 应用服务
+  sakura-ai:
+    build:
+      context: ../..
+      dockerfile: docker/Debian Linux/Dockerfile.debian
+    image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
+    container_name: sakura-ai-app
+    restart: unless-stopped
+    networks:
+      - sakura-network
+    ports:
+      - "3001:3001"
+      - "5173:5173"
+    # 🔥 添加 extra_hosts 让容器通过宿主机访问内网 IP
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 数据库配置（bridge 模式下使用服务名）
+      DATABASE_URL: mysql://sakura_ai:${DB_PASSWORD}@mysql:3306/sakura_ai
+      
+      # 应用配置
+      PORT: 3001
+      SERVER_HOST: 0.0.0.0
+      
+      # JWT 配置
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # Playwright 配置
+      PLAYWRIGHT_HEADLESS: "true"
+      PLAYWRIGHT_BROWSER: chromium
+      
+      # AI 配置
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-openai/gpt-4o}
+      
+      # RAG 配置（可选）
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-aliyun}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./artifacts:/app/artifacts
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Qdrant 向量数据库（可选 - RAG 功能）
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: sakura-ai-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - sakura-network
+    profiles:
+      - rag
+
+volumes:
+  mysql-data:
+    driver: local
+  qdrant-data:
+    driver: local

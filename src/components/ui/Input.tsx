@@ -139,13 +139,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           {...props}
         />
         
-        <div className=\"absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1\">
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
           {/* Status Icons */}
           {error && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className=\"text-red-500\"
+              className="text-red-500"
             >
               <AlertCircle size={16} />
             </motion.div>
@@ -155,7 +155,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className=\"text-green-500\"
+              className="text-green-500"
             >
               <CheckCircle2 size={16} />
             </motion.div>
@@ -164,9 +164,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           {/* Password Toggle */}
           {isPassword && (
             <motion.button
-              type=\"button\"
+              type="button"
               onClick={handleTogglePassword}
-              className=\"text-gray-600 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors\"
+              className="text-gray-600 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -176,7 +176,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           
           {/* Custom Right Icon */}
           {rightIcon && !error && !success && !isPassword && (
-            <div className=\"text-gray-600 dark:text-gray-500\">
+            <div className="text-gray-600 dark:text-gray-500">
               {rightIcon}
             </div>
           )}
@@ -185,7 +185,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         {/* Focus Ring Animation */}
         {isFocused && (
           <motion.div
-            className=\"absolute inset-0 rounded-xl border-2 border-blue-500 pointer-events-none\"
+            className="absolute inset-0 rounded-xl border-2 border-blue-500 pointer-events-none"
             initial={{ opacity: 0, scale: 1.02 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}

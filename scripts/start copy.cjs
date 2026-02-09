@@ -83,71 +83,129 @@ function checkDependencies() {
   return Promise.resolve();
 }
 
-// 等待数据库就绪
+// 等待数据库就绪（Docker 环境）
 async function waitForDatabase() {
-  // 检查是否需要等待数据库（Docker 环境或配置了远程数据库）
+  // 只在 Docker 环境中执行数据库等待
   const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
-  const dbUrl = process.env.DATABASE_URL || '';
-  
-  // 如果不是 Docker 环境且数据库是本地 localhost，跳过等待
-  // if (!isDocker && dbUrl.includes('localhost')) {
-  //   return;
-  // }
+  if (!isDocker) {
+    return;
+  }
 
-  const maxRetries = 30;
-  const retryInterval = 10000; // 10秒
-  let retryCount = 0;
+  // 🔥 Docker 环境：跳过数据库等待检查
+  // 原因：
+  // 1. MySQL 容器初始化需要时间（30-60秒）
+  // 2. depends_on 已确保 MySQL 容器先启动
+  // 3. 应用会在启动时自动重试数据库连接
+  // 4. 避免启动脚本卡住
   
-  // 从环境变量解析数据库连接信息
-  const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+  console.log('   ℹ️  Docker 环境：跳过数据库连接检查');
+  console.log('   💡 MySQL 容器正在初始化，应用会自动重试连接');
+  console.log('   💡 如需检查数据库状态，请使用: docker compose logs mysql');
   
-  if (!match) {
-    console.log('   ⚠️  无法解析 DATABASE_URL，跳过数据库连接检查');
+  // 等待 5 秒，给 MySQL 容器一些启动时间
+  console.log('   ⏳ 等待 5 秒后继续...');
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  return;
+}
+
+// 数据库连接等待函数
+async function waitForDatabaseConnection(dbHost, dbPort, dbUser, dbPassword, dbName) {
+  console.log('   ⏳ 等待数据库就绪...');
+  console.log(`   📊 数据库: ${dbHost}:${dbPort}/${dbName}`);
+  console.log(`   👤 用户: ${dbUser}`);
+  console.log(`   🔑 密码: ***`);
+  console.log(`   🔗 完整连接: mysql://${dbUser}:***@${dbHost}:${dbPort}/${dbName}`);
+
+  // 检查 mysql 命令是否可用
+  const hasMysqlClient = await new Promise(resolve => {
+    exec('which mysql', { timeout: 2000 }, (error) => {
+      resolve(!error);
+    });
+  });
+
+  if (!hasMysqlClient) {
+    console.log('   ℹ️  MySQL 客户端未安装，跳过数据库连接测试');
+    console.log('   ⏳ 等待 5 秒后继续...');
     await new Promise(resolve => setTimeout(resolve, 5000));
     return;
   }
+
+  // 🔥 快速测试：先尝试连接，如果失败则重试（最多等待 30 秒）
+  console.log('   🔍 测试数据库连接（最多等待 30 秒）...');
+  const maxAttempts = 10;
+  const attemptInterval = 3000;
   
-  const [, user, password, host, port, database] = match;
-  
-  console.log(`   🔗 连接目标: ${user}:${password}@${host}:${port}/${database}`);
-  
-  while (retryCount < maxRetries) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // 使用 Node.js mysql2 包测试连接（跨平台，不依赖系统工具）
-      const mysql = require('mysql2/promise');
-      const connection = await mysql.createConnection({
-        host: host,
-        port: parseInt(port),
-        user: user,
-        password: password,
-        connectTimeout: 5000
-      });
+      // mysqladmin 的 -p 参数：-p 和密码之间不能有空格
+      const pingCmd = `mysqladmin ping -h"${dbHost}" -P"${dbPort}" -u"${dbUser}" -p"${dbPassword}" --connect-timeout=2 --silent 2>&1`;
       
-      // 测试连接
-      await connection.ping();
-      await connection.end();
+      // 打印命令（隐藏密码）
+      if (attempt === 1) {
+        const safePingCmd = `mysqladmin ping -h"${dbHost}" -P"${dbPort}" -u"${dbUser}" -p"***" --connect-timeout=2 --silent`;
+        console.log(`   🔧 执行命令: ${safePingCmd}`);
+      }
       
-      console.log(`   ✅ 数据库已就绪 (尝试 ${retryCount + 1}/${maxRetries})`);
+      // 🔥 添加超时保护，防止 execPromise 卡住
+      const pingPromise = execPromise(pingCmd);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Command timeout')), 5000)
+      );
+      
+      await Promise.race([pingPromise, timeoutPromise]);
+      console.log(`   ✅ 数据库连接成功 (尝试 ${attempt}/${maxAttempts})`);
+      
+      // 检查数据库是否存在
+      try {
+        const checkDbCmd = `mysql -h"${dbHost}" -P"${dbPort}" -u"${dbUser}" -p"${dbPassword}" --connect-timeout=2 -e "USE ${dbName};" 2>/dev/null`;
+        const checkPromise = execPromise(checkDbCmd);
+        const checkTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Command timeout')), 5000)
+        );
+        await Promise.race([checkPromise, checkTimeout]);
+        console.log(`   ✅ 数据库 ${dbName} 已存在`);
+      } catch (error) {
+        console.log(`   ⚠️  数据库 ${dbName} 不存在，尝试创建...`);
+        try {
+          const createDbCmd = `mysql -h"${dbHost}" -P"${dbPort}" -u"${dbUser}" -p"${dbPassword}" --connect-timeout=2 -e "CREATE DATABASE IF NOT EXISTS ${dbName} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"`;
+          const createPromise = execPromise(createDbCmd);
+          const createTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Command timeout')), 5000)
+          );
+          await Promise.race([createPromise, createTimeout]);
+          console.log('   ✅ 数据库创建成功');
+        } catch (createError) {
+          console.log('   ⚠️  数据库创建失败，可能已存在或权限不足');
+        }
+      }
       return;
     } catch (error) {
-      retryCount++;
-      if (retryCount < maxRetries) {
-        process.stdout.write(`\r   ⏳ 等待数据库启动... (${retryCount}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, retryInterval));
-      } else {
-        console.log(`\n   ❌ 数据库连接失败，无法启动应用`);
-        console.log(`   💡 连接信息: ${user}@${host}:${port}`);
-        console.log(`   💡 请检查：`);
-        console.log(`      1. 数据库服务是否正常运行`);
-        console.log(`      2. 网络连接是否正常`);
-        console.log(`      3. DATABASE_URL 配置是否正确`);
-        console.log(`      4. 用户名和密码是否正确`);
-        if (isDocker) {
-          console.log(`      5. Docker 容器状态: docker compose ps`);
-          console.log(`      6. 数据库日志: docker compose logs mysql`);
+      if (attempt < maxAttempts) {
+        if (attempt === 1 || attempt % 3 === 0) {
+          console.log(`   ⏳ 数据库未就绪，等待中... (${attempt}/${maxAttempts})`);
+          // 打印错误信息（仅前3次）
+          if (attempt <= 3 && error.message && error.message !== 'Command timeout') {
+            const errorMsg = error.message.split('\n')[0];
+            if (errorMsg && errorMsg.length < 200) {
+              console.log(`   ⚠️  错误: ${errorMsg}`);
+            }
+          }
         }
-        console.log(`   💡 错误详情: ${error.message}`);
-        process.exit(1);
+        await new Promise(resolve => setTimeout(resolve, attemptInterval));
+      } else {
+        console.log(`   ⚠️  无法连接到数据库 ${dbHost}:${dbPort} (已尝试 ${maxAttempts} 次)`);
+        console.log('   💡 可能的原因：');
+        console.log('      1. 数据库容器还在启动中（MySQL 初始化需要时间）');
+        console.log('      2. 数据库服务未启动');
+        console.log('      3. 用户名或密码错误（可能需要删除旧数据卷）');
+        console.log('      4. 防火墙阻止了连接');
+        console.log('   💡 解决方案：');
+        console.log('      - 删除旧数据卷: docker compose down -v');
+        console.log('      - 重新启动: docker compose up -d');
+        console.log('   ⏳ 跳过数据库检查，继续启动...');
+        console.log('   💡 应用会在启动时自动重试连接数据库');
+        return;
       }
     }
   }
@@ -181,7 +239,7 @@ async function runDatabaseMigrations() {
         
         // Docker 环境下支持重试
         const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
-        const maxRetries = isDocker ? 3 : 1;
+        const maxRetries = isDocker ? 5 : 1;
         let retryCount = 0;
         
         const attemptMigration = () => {
@@ -199,8 +257,8 @@ async function runDatabaseMigrations() {
             } else {
               retryCount++;
               if (retryCount < maxRetries) {
-                console.log(`   ⚠️  迁移失败（退出码: ${code}），等待 3 秒后重试... (${retryCount}/${maxRetries})`);
-                setTimeout(attemptMigration, 3000);
+                console.log(`   ⚠️  迁移失败（退出码: ${code}），等待 2 秒后重试... (${retryCount}/${maxRetries})`);
+                setTimeout(attemptMigration, 2000);
               } else {
                 console.log(`   ⚠️  迁移失败（退出码: ${code}），尝试使用 db push 修复...`);
                 executeDbPushForRepair(resolve);
@@ -212,8 +270,8 @@ async function runDatabaseMigrations() {
             retryCount++;
             if (retryCount < maxRetries) {
               console.warn('   ⚠️  迁移执行出错:', error.message);
-              console.log(`   🔄 等待 3 秒后重试... (${retryCount}/${maxRetries})`);
-              setTimeout(attemptMigration, 3000);
+              console.log(`   🔄 等待 2 秒后重试... (${retryCount}/${maxRetries})`);
+              setTimeout(attemptMigration, 2000);
             } else {
               console.warn('   ⚠️  迁移执行出错:', error.message);
               console.log('   🔄 尝试使用 db push 修复数据库结构...');
@@ -662,22 +720,22 @@ async function startServices() {
   
   console.log('📍 访问地址:');
   console.log('   - 本地访问:');
-  console.log(`     • 后端: http://localhost:${BACKEND_PORT}`);
   console.log(`     • 前端: http://localhost:${FRONTEND_PORT}`);
-  
+  console.log(`     • 后端: http://localhost:${BACKEND_PORT}`);
+
   if (lanIps.length > 0) {
     console.log('   - 内网访问 (推荐):');
     lanIps.forEach(ip => {
-      console.log(`     • 后端: http://${ip}:${BACKEND_PORT}`);
       console.log(`     • 前端: http://${ip}:${FRONTEND_PORT}`);
+      console.log(`     • 后端: http://${ip}:${BACKEND_PORT}`);
     });
   }
   
   if (linkLocalIps.length > 0) {
     console.log('   - 链路本地地址 (仅同链路可用):');
     linkLocalIps.forEach(ip => {
-      console.log(`     • 后端: http://${ip}:${BACKEND_PORT}`);
       console.log(`     • 前端: http://${ip}:${FRONTEND_PORT}`);
+      console.log(`     • 后端: http://${ip}:${BACKEND_PORT}`);
     });
   }
   console.log('🔑 登录凭据:');

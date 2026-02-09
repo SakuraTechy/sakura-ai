@@ -130,8 +130,8 @@ export class TestExecutionService {
     this.streamService = streamService || new StreamService({
       fps: 2,
       jpegQuality: 85,  // 🔥 提高质量：从60提升到85，提供更清晰的画面
-      width: 1920,       // 🔥 提高分辨率：从1024提升到1920，支持高清显示
-      height: 1080,      // 🔥 提高分辨率：从768提升到1080，支持高清显示
+      width: 1920,       // 🔥 统一分辨率：与视频录制保持一致
+      height: 1080,      // 🔥 统一分辨率：与视频录制保持一致
       maskSelectors: []
     });
 

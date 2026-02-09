@@ -1,5 +1,5 @@
 /* Type declarations for theme.js */
-export const themeTokens: {
+declare const themeTokens: {
   colors: any;
   spacing: Record<string, string>;
   borderRadius: Record<string, string>;
@@ -7,7 +7,8 @@ export const themeTokens: {
   typography: any;
 };
 
-export const antdThemeConfig: any;
-export const darkThemeConfig: any;
+declare const antdThemeConfig: any;
+declare const darkThemeConfig: any;
 
+export { themeTokens, antdThemeConfig, darkThemeConfig };
 export type ThemeTokens = typeof themeTokens;

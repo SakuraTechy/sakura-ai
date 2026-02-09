@@ -1,329 +1,124 @@
-# Git 提交汇总
+# Git 提交摘要
+
+## 2026-02-06
+- perf: 深度优化镜像体积，从 4.83GB 减小到约 3.5GB（深度清理 node_modules 节省 ~500MB，移除中日韩字体包节省 ~300MB，总计减少 27-33%）
+- fix: 修复 Playwright 浏览器在清理步骤中被误删的问题（安装和清理合并到同一层，只删除文档保留可执行文件，修复 headless_shell 不存在错误）
+- perf: 优化 Dockerfile 构建顺序，充分利用 Docker 层缓存加快构建速度（依赖→Prisma→代码→构建，代码修改只需 2-3 分钟 vs 首次 15-20 分钟）
+- refactor: 优化多阶段构建，在构建阶段安装所有系统依赖（构建工具 + 运行时依赖，利用层缓存）
+- refactor: 移除运行阶段重复的 Playwright 验证步骤（构建阶段已验证，避免重复操作）
+- perf: 使用 Docker 缓存挂载加速 Playwright 浏览器下载（首次下载后缓存，后续构建秒级完成，节省 ~400MB 带宽）
+- refactor: 简化 Dockerfile 中的 Playwright 验证逻辑（使用简单的 ls 命令，避免复杂的 find 逻辑）
+- fix: 修复 Dockerfile 中 ffmpeg 查找逻辑，添加详细调试信息（优化 find 命令，精确匹配文件名）
+- refactor: 进一步优化 Dockerfile，合并镜像源配置和依赖安装（减少 Docker 层数，移除重复配置）
+- refactor: 优化 Dockerfile 镜像源配置，使用环境变量统一管理（NPM_REGISTRY 和 DEBIAN_MIRROR，便于切换和维护）
+- refactor: 只使用 Playwright 自带的 ffmpeg，移除系统 ffmpeg 依赖（减少镜像体积，避免版本冲突，Playwright 自动管理）
+- fix: 修复 Dockerfile 中 ffmpeg 未生效的问题（优化安装验证流程，添加测试脚本）
+- fix: 数据库连接失败时终止启动流程，避免后续错误（调用 process.exit(1)，显示详细错误信息）
+- refactor: 优化数据库等待逻辑，支持所有环境（Docker/远程数据库/本地开发，智能判断是否需要等待）
+- refactor: 使用 Node.js mysql2 包替代 mysqladmin 进行数据库连接检查（避免 MariaDB 客户端兼容性问题，使用项目已有依赖）
+- fix: 修复 Dockerfile 中 MySQL 客户端兼容性问题，安装 MySQL 官方客户端（MariaDB 客户端与 MySQL 8.0 不兼容，需重新构建镜像）
+- fix: 移除 start.cjs 中的调试日志，避免输出敏感密码信息（容器内必须用服务名 mysql 而非 localhost）
+- fix: 优化 start.cjs 数据库等待逻辑，直接使用 DATABASE_URL 中的服务名（Docker 内部 DNS 自动解析服务名到容器 IP）
+- fix: 修复 start.cjs 中 mysqladmin 命令的密码参数格式（-p 和密码之间不能有空格，移除调试日志）
+- perf: 优化 Docker Compose 启动顺序，智能等待数据库就绪（MySQL healthcheck 5秒间隔/60次重试，sakura-ai 120秒宽限期，start.cjs 智能重试机制，迁移重试3次）
+- refactor: 移除 sakura.sh install 中的重复数据库迁移逻辑（应用启动时自动迁移）
+- docs: 在 README 中添加换行符语法错误的故障排除说明（三种解决方法和预防措施）
+- fix: 创建换行符修复脚本，解决 Windows CRLF 导致的 bash 语法错误
+- docs: 更新 Docker 部署文档，同步 build 和 push 命令分离说明（更新所有相关章节和示例）
+- refactor: 分离 Docker 镜像构建和推送命令，提高灵活性（build 只构建，push 只推送）
+- refactor: Docker 环境完全跳过数据库等待检查（只等待5秒，应用自动重试连接）
+- fix: 添加命令超时保护，防止容器中数据库等待卡住（5秒超时，Promise.race 机制）
+- fix: 修复 test-db-connection.sh 的 Bad substitution 错误（移除 bash 特有语法）
+- feat: 创建数据库连接测试脚本（诊断 MySQL 连接问题，检查用户和数据库状态）
+- fix: 注释外部数据库配置，使用 Docker 内置 MySQL（保持默认密码占位符）
+- fix: 修复 Docker .env 文件配置，设置正确的数据库密码（移除占位符，使用实际密码）
+- feat: 添加数据库连接命令和错误信息打印（方便调试连接问题）
+- refactor: 重构数据库等待逻辑，优先使用 Docker 内置 MySQL（默认连接 mysql:3306，支持外部数据库可选）
+- fix: 优化数据库等待逻辑，增加重试次数和智能日志输出（30秒等待，减少日志噪音）
+- fix: 优化启动脚本数据库等待逻辑，避免长时间卡住（15秒快速超时，添加详细故障排查提示）
+- fix: 修改 Docker 配置默认使用内置 MySQL，支持外部数据库可选（DATABASE_URL 环境变量优先级）
+- fix: 将 docker-compose.yml 改回 bridge 网络模式，解决 Windows host 模式限制（容器间无法通信）
+- fix: 修复 host 网络模式下服务无法访问的问题（SERVER_HOST 改为 0.0.0.0，数据库连接改为 localhost）
+- docs: 移除 host 网络模式下的无效 networks 配置，添加说明注释
+- feat: 创建混合网络模式配置文件（应用 host 模式，数据库 bridge 模式）
+- feat: 创建纯 host 网络模式配置文件
+- fix: 移除自定义子网配置，使用 Docker 默认网络以继承宿主机路由
+- fix: 清理 host 网络模式下的无效配置项，添加 Windows 使用说明
+- fix: 添加 extra_hosts 配置尝试解决容器访问特定内网 IP 的问题（受限于 Windows Docker 网络架构）
+- docs: 说明 Windows Docker Desktop 的 host 网络模式限制，推荐使用 bridge 模式
+- fix: 添加 Vite 前端服务器环境变量，确保监听所有网络接口（VITE_HOST=0.0.0.0）
+- fix: 修复 host 网络模式下应用无法访问的问题，MySQL 也切换到 host 模式
+- feat: 切换到 host 网络模式，支持容器访问宿主机内网 IP
+- fix: 在 Dockerfile 中添加 iputils-ping 包，提供网络诊断工具
+- refactor: 将 MySQL 诊断逻辑整合到 sakura.sh，删除独立的 troubleshoot-mysql.sh
+- fix: 优化 MySQL healthcheck 配置，给首次初始化足够的时间（3 分钟宽限期）
+- feat: 添加 MySQL 启动失败诊断工具
+- refactor: 将数据库等待逻辑整合到 start.cjs，删除独立的 docker-entrypoint.sh 脚本
+- fix: 添加数据库连接重试机制，解决 MySQL 初始化时间过长导致的启动失败问题
+
+## 2026-02-05
+- docs: 创建 Docker 镜像使用方式详细指南（三种方式对比和使用说明）
+- docs: 优化 docker-compose.yml 配置说明，明确镜像来源和使用方式
+- refactor: 优化构建脚本，移除对 docker-compose.yml 的依赖，直接使用 docker build 命令
+- feat: 创建宿主机网络连接测试脚本，诊断内网访问问题
+- fix: 修复 Windows 端口转发脚本中的 PowerShell 变量引用语法错误
+- refactor: 整合 Docker 管理脚本为统一的 sakura.sh
+- feat: 创建网络连接测试脚本，诊断容器访问内网问题
+- feat: 优化 Windows docker-compose 配置，添加网络权限和 DNS 设置
+- feat: 创建 Windows 端口转发配置脚本，解决容器访问内网问题
+- feat: 创建 Windows 专用 docker-compose 配置，解决 host 网络模式不兼容问题
+- fix: 修复 host 网络模式下数据库连接失败的问题（mysql:3306 → localhost:3306）
+- feat: 创建 start.sh 脚本，支持使用 host 网络模式启动容器
+- fix: 使用 host 网络模式解决容器无法访问内网系统的问题（替代 extra_hosts）
+- fix: 配置 Docker 容器访问宿主机网络，解决 UI 自动化无法连接内网系统的问题
+- fix: 添加 ffmpeg 和完整的 Playwright 运行时依赖，确保 UI 自动化正常执行
+- fix: 修复 Dockerfile 中 npm prune 误删运行时依赖的问题（保留 @playwright/test）
+- fix: 修复 Dockerfile 中 Playwright 安装失败问题（在构建阶段安装浏览器）
+- refactor: 整合 Dockerfile 为单一优化版本，删除多余文件（5.6GB → 3.8GB）
+- fix: 修复 ultra-v2 Dockerfile 中 Playwright 安装顺序问题（package.json 需要先复制）
+- fix: 修复 ultra-v2 Dockerfile 中 Playwright 安装失败的问题
+- fix: 修复 Docker 镜像优化无效问题，创建真正能减小体积的 ultra-v2 版本（5.6GB → 3.8GB）
+- fix: 修复 docker-compose 构建时未读取环境变量的问题
+- feat: 创建超级优化版 Dockerfile，通过激进优化策略减小镜像体积至 1.5-2GB
+- refactor: 创建统一的 Docker 镜像配置文件（config.sh），实现集中管理
+- fix: 修复 build.sh 和 docker-compose.build.yml 镜像名称不一致问题
+- fix: 修复 Docker 构建使用缓存代码的问题，创建无缓存重建脚本
+- fix: 在 Dockerfile 中添加 Vite 缓存清理步骤，避免使用旧缓存
+- fix: 修复 errorHandler.ts 中的 toast 导入错误（命名冲突）
+- fix: 修复 vite.config.ts 中的重复键警告（duplicate exclude）
+- fix: 修复 TypeScript 声明文件中的常量初始化错误（theme.d.ts）
+- feat: 创建优化版 Dockerfile，通过多阶段构建减小镜像体积（5.59GB → 2-3GB）
+- fix: 修复 Prisma 生成的类型定义文件导致的 Vite 构建错误
+
+## 2026-02-04
+- refactor: 整合构建脚本，只保留一个完整的 build.sh
+- fix: 修复一键构建脚本的镜像推送问题，采用智能镜像查找和标记逻辑
+- fix: 修复 Input.tsx 中遗漏的转义引号问题
+- feat: 创建一键式 Docker 构建脚本，集成检查、修复、构建、推送全流程
+- fix: 修复 Docker 构建时的 Prisma 类型错误和 Input.tsx 语法错误
+- chore: 添加 Docker 构建辅助脚本和故障排除文档
+- fix: 在 npm prune 后重新安装 sharp，防止可选依赖被错误清理
+- fix: 修复超级优化版 Dockerfile 中 sharp 模块运行时加载失败问题
+- fix: 修复超级优化版 Dockerfile 因 package-lock.json 不同步导致的构建失败
+- refactor: 合并并优化 .dockerignore 文件，统一构建排除规则
+- fix: 简化超级优化版 Dockerfile 为两阶段构建，解决缓存问题
+- feat: 创建超级优化版 Dockerfile，镜像体积降至 1.5-2GB
+- docs: 更新 Docker 镜像优化说明文档，添加详细对比和使用指南
+- fix: 修复优化版 Dockerfile 缺少 src 目录导致的模块找不到错误
+- fix: 修复构建脚本镜像名称不匹配问题
+- docs: 新增生产环境部署指南和配置模板
+- fix: 修复优化版 Dockerfile 的 .env 文件安全处理
+- fix: 修复优化版 Dockerfile 的 .env 文件创建逻辑
+- refactor: 简化 Docker Compose 配置，删除重复文件
+- docs: 新增 Docker 环境变量配置详细说明
+- fix: 完善 .dockerignore 环境变量文件排除规则
+- fix: 修复 Docker 容器 .env 文件创建方式，从 .env.example 复制
+- fix: 修复 Docker 容器中 .env 文件缺失问题
+- feat: 新增 Docker 镜像优化方案，减小镜像体积（5.59GB → 2-3GB）
+- refactor: 简化 Docker 镜像命名，统一使用 sakura-ai:latest
+- fix: 修复构建脚本镜像名称匹配问题
+- fix: 修复 Dockerfile 基础镜像配置，改回使用 Docker Hub 官方镜像
+- docs: 新增 Docker 构建故障排查文档
+- docs: 完善 Docker 部署文档，说明镜像访问权限配置
+- feat: 创建两套 Docker 部署方案（本地构建 + 在线镜像）
 
-## 2026-02-03
-
-### fix: 恢复 migrate diff 自动检测方案，优化错误提示说明
-
-**问题：** 
-- 之前移除了自动 `db push`，但表被删除后不会自动修复
-- 用户反馈：虽然 `db push` 会报重复键错误，但实际不影响服务运行
-
-**修复：** 
-- 恢复使用 `migrate diff` 检测差异的方案
-- 优化错误提示，明确告知用户可以忽略 Prisma 的重复键错误
-- 权衡：选择"自动修复 + 可忽略的错误提示"而不是"手动修复 + 无错误提示"
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 恢复 migrate diff 自动检测方案，优化错误提示说明"
-```
-
----
-
-### fix: 修复启动时 db push 重复创建外键的问题，仅在迁移失败时使用
-
-**问题：** `migrate deploy` 成功后仍执行 `db push`，导致重复创建外键错误
-
-**修复：** 只在 `migrate deploy` 失败时才使用 `db push` 作为修复手段，成功则直接完成
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 修复启动时 db push 重复创建外键的问题，仅在迁移失败时使用"
-```
-
----
-
-### fix: 增强启动脚本的数据库同步能力，自动修复表结构不一致
-
-**问题：** `migrate deploy` 只应用新迁移，不检测结构一致性，表被删除或修改后不会自动修复
-
-**修复：** 在 `migrate deploy` 后执行 `db push --accept-data-loss`，自动同步结构差异
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 增强启动脚本的数据库同步能力，自动修复表结构不一致"
-```
-
----
-
-### refactor: 优化启动脚本的数据库迁移逻辑，支持标准 Prisma 迁移
-
-**问题：** 之前完全跳过迁移不够灵活，日常启动应该可以安全执行迁移
-
-**优化：** 智能检测标准迁移目录，有则执行 `migrate deploy`（幂等），无则跳过（避免 `db push`）
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "refactor: 优化启动脚本的数据库迁移逻辑，支持标准 Prisma 迁移"
-```
-
----
-
-### fix: 彻底移除启动时的数据库迁移，避免重复创建外键错误
-
-**问题：** 第二次启动持续报错 `Can't write; duplicate key in table`，迁移目录结构不标准导致 `db push` 重复执行
-
-**修复：** 完全跳过启动时的数据库迁移，改为手动执行 `npx prisma db push`
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 彻底移除启动时的数据库迁移，避免重复创建外键错误"
-```
-
----
-
-### fix: 修复第二次启动时 Prisma db push 重复创建外键导致的错误
-
-**问题：** 第二次启动报错 `Can't write; duplicate key in table`，`migrate deploy` 后总是执行 `db push` 导致重复创建外键
-
-**修复：** 修改启动脚本逻辑，`migrate deploy` 成功后不再执行 `db push`，只在失败时回退
-
-**提交命令：**
-```bash
-git add scripts/start.cjs commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 修复第二次启动时 Prisma db push 重复创建外键导致的错误"
-```
-
----
-
-### fix: 修复 Settings.tsx 中 selectedModel 为 null 时的空指针错误
-
-**问题：** `selectedModel.provider` 访问导致 `TypeError: Cannot read properties of null`
-
-**修复：** 所有 `selectedModel.provider` 改为 `selectedModel?.provider`（15 处）
-
-**提交命令：**
-```bash
-git add src/pages/Settings.tsx commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 修复 Settings.tsx 中 selectedModel 为 null 时访问 provider 属性导致的错误"
-```
-
----
-
-### fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题
-
-**问题：** MySQL TIMESTAMP 字段必须有默认值或设置为可空
-
-**修复：** 将三个 AI 缓存表的 `expires_at` 字段改为可空（`DateTime?`）
-
-**同步方式：** `npx prisma db push`（无需 shadow database 权限）
-
-**提交命令：**
-```bash
-git add prisma/schema.prisma commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "fix: 修复 Prisma schema 中 AI 缓存表 expires_at 字段的默认值问题"
-```
-
----
-
-```bash
-git add README.md commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "docs: 添加 Windows 系统 Docker 安装说明
-
-- 在 README.md 中新增 Windows 平台 Docker 安装指南
-- 提供 Docker Desktop（推荐）和 WSL2 两种安装方式
-- 完善跨平台部署文档（支持 CentOS、Ubuntu、Windows）"
-```
-
----
-
-**近期更新（2026-01-28 ~ 2026-02-03）**
-
-- Windows Docker 安装说明
-- NewApi 模型配置支持
-
-- NewApi 模型配置支持
-- README GitHub 样式修复
-- Docker Debian 完整部署（文档+脚本+Chromium路径）
-- Vite 构建排除 server 依赖
-- LLM 配置（本地模型+容错）
-- Playwright 方案（Alpine→Debian）
-- 性能优化（构建93MB→5MB+数据库索引）
-
-详细日志：`commit/git-commit-log.md`
-
-### 提交命令
-
-```bash
-git add README.md docs/DOCKER_DEBIAN_DEPLOYMENT.md commit/git-commit-log.md commit/git-commit-summary.md
-git commit -m "docs: 完善 Docker Debian 部署文档
-
-新增/修改：
-1. README.md - 扩展 Docker 部署章节
-   - Docker 部署优势对比表
-   - 详细的前置要求和安装步骤
-   - 四步快速部署流程
-   - 完整的服务管理命令
-   - 可选服务启用（RAG、Nginx）
-   - 监控维护和数据备份恢复
-   - 常见问题诊断和解决方案
-
-2. docs/DOCKER_DEBIAN_DEPLOYMENT.md - 创建完整部署文档
-   - 为什么选择 Debian + Docker
-   - 前置要求和 Docker 安装
-   - 快速部署四步流程
-   - 服务管理（脚本 + Docker Compose）
-   - 可选服务启用
-   - 监控和维护
-   - 更新应用
-   - 常见问题（5个详细案例）
-   - 安全加固
-   - 性能优化
-
-效果：
-- 用户可在 README 中快速了解部署流程
-- DOCKER_DEBIAN_DEPLOYMENT.md 提供详细的部署指南
-- 完整的故障排除和最佳实践
-- 提升用户部署体验"
-```
-
-### 修改文件
-
-| 文件 | 说明 |
-|-----|------|
-| `README.md` | 扩展 Docker 部署章节，添加详细的部署和管理说明 |
-| `docs/DOCKER_DEBIAN_DEPLOYMENT.md` | 创建完整的 Debian Docker 部署指南 |
-
----
-
-## 历史提交汇总
-
----
-
-### 2026-02-02：修正 docker-compose.yml 构建配置
-
-**问题：**
-- 镜像名称重复：`sakura-ai-sakura-ai:latest`
-- 构建上下文错误：无法访问项目根目录
-
-**修复：**
-- 构建上下文改为项目根目录：`context: ../..`
-- 显式指定镜像名称：`image: sakura-ai:latest`
-- 移除废弃的 `version` 字段
-
-**效果：**
-- 镜像名称简洁清晰
-- 构建上下文正确
-- 符合 Dockerfile 的文件访问需求
-
----
-
-### 2026-02-02：修复 Debian Docker 中系统 Chromium 路径错误
-
-**问题：**
-- 使用系统 Chromium 时报错：`executable doesn't exist at /usr/bin/chromium-browser`
-- Debian 系统中 Chromium 的实际路径是 `/usr/bin/chromium`
-
-**修复：**
-- 修正环境变量：`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`
-- 添加构建时验证步骤
-- 更新 docker-compose.yml 环境变量
-
-**不同系统的 Chromium 路径：**
-- Debian/Ubuntu: `/usr/bin/chromium`
-- Alpine Linux: `/usr/bin/chromium-browser`
-
----
-
-### 2026-02-02：修复 Vite 构建时解析 server 依赖错误
-
-**问题：**
-- Docker 构建时 Vite 报错：`PrismaClient is not exported`
-- 原因：`llmConfigManager.ts` 动态导入 server 模块，Vite 静态分析时解析整个依赖链
-
-**修复：**
-- 在 `vite.config.ts` 中添加 `build.rollupOptions.external` 配置
-- 排除所有 server 目录的导入（`/^\.\.\/\.\.\/server\//` 等）
-
-**效果：**
-- Vite 构建时不再解析 server 代码
-- 动态 import 在后端运行时仍然有效
-- 前端构建成功，前后端共享代码正常工作
-
----
-
-### 2026-02-02：修复LLM配置管理器环境服务调用、本地模型验证和前端UI提示
-
-**问题：**
-- 后端环境使用错误的设置服务，导致加载错误的模型配置
-- 本地模型API密钥验证错误，强制要求所有模型都必须有API密钥
-- 配置管理器初始化失败导致服务无法启动
-- 前端UI提示不明确，部分模型超链接缺失
-
-**修复内容：**
-- llmConfigManager.ts：添加环境检测，动态选择前端/后端服务
-- llmSettingsValidation.ts：本地模型允许空密钥，云端模型必填
-- aiParser.ts：配置未就绪时回退到默认配置而不是抛出错误
-- Settings.tsx：优化本地模型提示，修复所有厂商超链接
-
----
-
-### 2026-01-30：性能优化
-
-**1. 修复执行历史查询 MySQL sort buffer 溢出**
-- 将 `include` 改为 `select`，只查询需要的字段
-- 添加复合索引：`@@index([test_case_id, executed_at(sort: Desc)])`
-
-**2. 修复中文注释乱码**
-- 修复 server 目录下 6 个文件的中文注释乱码问题
-
----
-
-### 2026-01-28：Debian Linux Docker 完整部署方案
-
-#### 1. Docker 构建性能优化
-
-**新增文件：**
-- `.dockerignore` - 排除不必要的构建文件
-- `docker/daemon.json` - Docker 镜像加速配置
-
-**性能提升：**
-- 构建上下文：93.52MB → ~5-10MB
-- 镜像拉取速度：提升 3-5 倍
-- 首次构建：5-10 分钟
-- 增量构建：1-3 分钟
-
-#### 2. Playwright 浏览器完整解决方案
-
-**关键修复：**
-1. 改用 `node:20-slim`（Debian）解决 Playwright 兼容性
-2. 安装完整浏览器组件：chromium + chromium-headless-shell + ffmpeg
-3. 配置 Debian 国内镜像源解决网络超时
-4. 统一 Playwright 版本为 1.56.1
-5. 强制 sharp 从源码编译
-6. 手动安装 rollup Linux 原生模块
-7. 调整构建顺序：先 prisma generate 再 vite build
-
-#### 3. Docker 管理脚本优化
-
-**新增功能：**
-- `install` - 首次安装
-- `start/stop/restart` - 服务管理
-- `status` - 查看服务状态
-- `logs` - 查看日志
-- `backup/restore` - 数据库备份恢复
-- `clean` - 清理所有数据
-- 自动转换 Windows 换行符
-
----
-
-## 问题解决对比
-
-| 问题 | 修复前 | 修复后 |
-|------|--------|--------|
-| **Chromium 路径** | ❌ /usr/bin/chromium-browser | ✅ /usr/bin/chromium |
-| **Vite 构建错误** | ❌ Prisma 导出错误 | ✅ 成功构建 |
-| **LLM配置管理** | ❌ 后端加载错误配置 | ✅ 正确加载数据库配置 |
-| **本地模型验证** | ❌ 强制要求API密钥 | ✅ API密钥可选 |
-| **服务启动** | ❌ 配置缺失无法启动 | ✅ 回退到默认配置 |
-| **前端UI提示** | ❌ 提示不明确 | ✅ 清晰区分本地/云端 |
-| **Chromium 启动** | ❌ ENOENT 错误 | ✅ 正常启动 |
-| **Headless 模式** | ❌ Missing X server | ✅ 强制启用 |
-| **视口大小** | ❌ 不确定（~800x600）| ✅ 1920x1080 |
-| **页面显示** | ❌ 右侧截断 | ✅ 完整显示 |
-| **Docker 构建** | ❌ 依赖冲突/超时 | ✅ 完整兼容 |

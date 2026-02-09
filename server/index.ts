@@ -792,8 +792,32 @@ async function startServer() {
 
     console.log('✅ API路由注册完成');
 
+    // 🔥 生产环境：提供前端静态文件（在 API 路由之后，404 之前）
+    const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/.dockerenv');
+    if (isProduction) {
+      const distPath = path.join(__dirname, '../dist');
+      if (fs.existsSync(distPath)) {
+        console.log('🔧 配置静态文件服务...');
+        app.use(express.static(distPath));
+        
+        // SPA fallback: 所有非 API 请求返回 index.html
+        app.get('*', (req, res, next) => {
+          // 跳过 API 请求
+          if (req.path.startsWith('/api/')) {
+            return next();
+          }
+          res.sendFile(path.join(distPath, 'index.html'));
+        });
+        console.log('✅ 静态文件服务已配置 (生产模式)');
+      } else {
+        console.warn('⚠️ dist 目录不存在，跳过静态文件服务');
+      }
+    } else {
+      console.log('ℹ️ 开发模式，静态文件由 Vite 提供');
+    }
+
     // 🔥 在所有API路由注册完成后，注册catch-all 404处理
-    app.use('*', (req, res) => {
+    app.use('/api/*', (req, res) => {
       res.status(404).json({
         success: false,
         error: '接口不存在'

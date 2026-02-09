@@ -82,6 +82,7 @@
     "recharts": "^2.9.3",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "semver": "^7.6.0",
     "sharp": "^0.34.3",
     "ssh2": "^1.15.0",
     "three": "^0.180.0",

@@ -1,5 +1,5 @@
 import { NavigateFunction } from 'react-router-dom';
-import { toast } from './toast';
+import { showToast as toast } from './toast';
 
 /**
  * API 错误响应接口
