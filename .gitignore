@@ -67,7 +67,7 @@ defaultProfile.windows
 !index.html
 
 # SQL files
-*.sql
+# *.sql
 
 # Debug and temporary screenshots
 screenshots/debug-*

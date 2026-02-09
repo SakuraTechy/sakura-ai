@@ -5,33 +5,31 @@
 ## 快速开始
 
 ```bash
-cd docker/Debian\ Linux
-chmod +x sakura.sh
-
 # 首次安装
-./sakura.sh install
-
-# 或者构建镜像（不推送）
-./sakura.sh build           # 构建 latest 版本
-./sakura.sh build v1.0.0    # 构建指定版本
-
-# 推送镜像到阿里云
-./sakura.sh push            # 推送 latest 版本
-./sakura.sh push v1.0.0     # 推送指定版本
+sh sakura.sh install
 
 # 服务管理
-./sakura.sh start           # 启动服务
-./sakura.sh stop            # 停止服务
-./sakura.sh status          # 查看状态
-./sakura.sh logs            # 查看日志
+sh sakura.sh start           # 启动服务
+sh sakura.sh stop            # 停止服务
+sh sakura.sh restart         # 重启服务
+sh sakura.sh status          # 查看状态
+sh sakura.sh logs            # 查看日志
 
 # 数据管理
-./sakura.sh backup          # 备份数据库
-./sakura.sh restore backup.sql  # 恢复数据库
-./sakura.sh clean           # 清理所有数据（危险）
+sh sakura.sh backup          # 备份数据库
+sh sakura.sh restore backup.sql  # 恢复数据库
+sh sakura.sh clean           # 清理所有数据（危险）
+
+# 构建镜像（不推送）
+sh sakura.sh build           # 构建 latest 版本
+sh sakura.sh build v1.0.0    # 构建指定版本
+
+# 推送镜像到阿里云
+sh sakura.sh push            # 推送 latest 版本
+sh sakura.sh push v1.0.0     # 推送指定版本
 
 # 查看所有命令
-./sakura.sh help
+sh sakura.sh help
 ```
 
 ---
@@ -612,7 +610,7 @@ docker compose up -d
 ./sakura.sh build v1.0.0
 
 # 本地测试（可选）
-docker run --rm -p 5173:5173 sakura-ai:v1.0.0
+docker run --rm -p 5173:5173 -p 3001:3001 sakura-ai:v1.0.0
 
 # 推送到阿里云
 ./sakura.sh push v1.0.0
@@ -690,7 +688,7 @@ docker exec -i sakura-ai-mysql mysql -u root -p sakura_ai < backup.sql
 
 # 发布阶段：构建、测试、推送
 ./sakura.sh build v1.0.0         # 构建到本地
-docker run --rm -p 5173:5173 sakura-ai:v1.0.0  # 本地测试（可选）
+docker run --rm -p 5173:5173 -p 3001:3001 sakura-ai:v1.0.0  # 本地测试（可选）
 ./sakura.sh push v1.0.0          # 推送到阿里云
 
 # 生产部署：拉取镜像运行（需先修改 docker-compose.yml 镜像配置）

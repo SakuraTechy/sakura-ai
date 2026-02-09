@@ -247,7 +247,7 @@ cmd_build() {
     echo "镜像大小: ${IMAGE_SIZE}"
     echo ""
     echo "下一步:"
-    echo "  本地测试: docker run --rm -p 5173:5173 ${LOCAL_IMAGE}"
+    echo "  本地测试: docker run --rm -p 5173:5173 -p 3001:3001 ${LOCAL_IMAGE}"
     echo "  推送镜像: ./sakura.sh push ${VERSION}"
     echo "  部署服务: ./sakura.sh start"
 }

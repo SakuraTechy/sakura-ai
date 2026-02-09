@@ -160,8 +160,8 @@ cmd_build() {
     local VERSION="${1:-latest}"
     local FULL_IMAGE=$(get_remote_image "$VERSION")
     
-    # 返回项目根目录
-    cd "$SCRIPT_DIR/../.." || exit 1
+    # 确保在项目根目录
+    cd "$SCRIPT_DIR" || exit 1
     
     print_header "🚀 构建 Sakura AI Docker 镜像（使用缓存）"
     echo "本地镜像: ${LOCAL_IMAGE}"
@@ -173,7 +173,7 @@ cmd_build() {
     print_header "📋 [1/4] 环境检查"
     
     print_step "检查必需文件"
-    local files=("package.json" "package-lock.json" "prisma/schema.prisma" ".env.example" "docker/Debian Linux/Dockerfile.debian")
+    local files=("package.json" "package-lock.json" "prisma/schema.prisma" ".env.example" "Dockerfile.debian")
     for file in "${files[@]}"; do
         if [ ! -f "$file" ]; then
             print_error "缺少文件: $file"
@@ -227,7 +227,7 @@ cmd_build() {
     echo ""
     
     if docker build \
-        -f "docker/Debian Linux/Dockerfile.debian" \
+        -f "Dockerfile.debian" \
         -t "${LOCAL_IMAGE}" \
         -t "${FULL_IMAGE}" \
         . 2>&1 | tee /tmp/docker-build.log; then
@@ -247,7 +247,7 @@ cmd_build() {
     echo "镜像大小: ${IMAGE_SIZE}"
     echo ""
     echo "下一步:"
-    echo "  本地测试: docker run --rm -p 5173:5173 ${LOCAL_IMAGE}"
+    echo "  本地测试: docker run --rm -p 5173:5173 -p 3001:3001 ${LOCAL_IMAGE}"
     echo "  推送镜像: ./sakura.sh push ${VERSION}"
     echo "  部署服务: ./sakura.sh start"
 }
@@ -306,7 +306,8 @@ cmd_push() {
 # 命令: rebuild - 无缓存重建
 # ============================================
 cmd_rebuild() {
-    cd "$SCRIPT_DIR/../.." || exit 1
+    # 确保在项目根目录
+    cd "$SCRIPT_DIR" || exit 1
     
     print_header "🔄 无缓存重建 Sakura AI"
     
@@ -324,7 +325,7 @@ cmd_rebuild() {
     print_step "开始无缓存构建（这可能需要 10-20 分钟）..."
     docker build \
         --no-cache \
-        -f "docker/Debian Linux/Dockerfile.debian" \
+        -f "Dockerfile.debian" \
         -t "${LOCAL_IMAGE}" \
         -t "$(get_remote_image 'latest')" \
         .
@@ -349,10 +350,9 @@ cmd_upgrade() {
     
     cmd_backup
     
-    if [ -d "$SCRIPT_DIR/../../.git" ]; then
+    if [ -d "$SCRIPT_DIR/.git" ]; then
         log_info "📥 拉取最新代码..."
-        cd "$SCRIPT_DIR/../.." && git pull origin main
-        cd "$SCRIPT_DIR"
+        cd "$SCRIPT_DIR" && git pull origin main
     fi
     
     log_info "🔨 重新构建镜像..."
