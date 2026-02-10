@@ -360,12 +360,20 @@ async function setup() {
   try {
     // 🔥 跨平台检测：验证 Playwright 缓存中的可执行文件是否存在
     const isWindows = process.platform === 'win32';
-    const playwrightCachePath = isWindows 
-      ? path.join(os.homedir(), 'AppData', 'Local', 'ms-playwright')
-      : path.join(os.homedir(), '.cache', 'ms-playwright');
+    const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
+    
+    // Docker 环境使用固定路径，本地环境使用用户目录
+    const playwrightCachePath = isDocker
+      ? '/root/.cache/ms-playwright'
+      : (isWindows 
+          ? path.join(os.homedir(), 'AppData', 'Local', 'ms-playwright')
+          : path.join(os.homedir(), '.cache', 'ms-playwright'));
+    
+    console.log(`   🔍 检查 Playwright 缓存路径: ${playwrightCachePath}`);
     
     if (fs.existsSync(playwrightCachePath)) {
       const cacheContents = fs.readdirSync(playwrightCachePath);
+      console.log(`   📂 缓存目录内容: ${cacheContents.join(', ')}`);
       
       // 查找任意版本的 chromium 目录并验证可执行文件
       const chromiumDir = cacheContents.find(dir => dir.startsWith('chromium-') && !dir.includes('headless'));
@@ -383,8 +391,12 @@ async function setup() {
         const chromePath = path.join(playwrightCachePath, chromiumDir, chromeSubPath, chromeExe);
         chromiumOk = fs.existsSync(chromePath);
         if (chromiumOk) {
-          console.log(`   📦 chromium: ${chromiumDir} ✓`);
+          console.log(`   📦 chromium: ${chromiumDir} ✓ (${chromePath})`);
+        } else {
+          console.log(`   ❌ chromium 可执行文件不存在: ${chromePath}`);
         }
+      } else {
+        console.log(`   ❌ 未找到 chromium 目录`);
       }
       
       // 验证 headless shell 可执行文件（跨平台）
@@ -394,8 +406,52 @@ async function setup() {
         const headlessPath = path.join(playwrightCachePath, headlessDir, headlessSubPath, headlessExe);
         headlessOk = fs.existsSync(headlessPath);
         if (headlessOk) {
-          console.log(`   📦 headless_shell: ${headlessDir} ✓`);
+          console.log(`   📦 headless_shell: ${headlessDir} ✓ (${headlessPath})`);
+          
+          // 验证文件权限（仅 Linux/Docker）
+          if (!isWindows) {
+            try {
+              const stats = fs.statSync(headlessPath);
+              const isExecutable = (stats.mode & 0o111) !== 0;
+              if (!isExecutable) {
+                console.log(`   ⚠️ headless_shell 没有执行权限，正在修复...`);
+                fs.chmodSync(headlessPath, 0o755);
+                console.log(`   ✅ 已设置执行权限`);
+              }
+            } catch (err) {
+              console.log(`   ⚠️ 无法检查/设置权限: ${err.message}`);
+            }
+          }
+        } else {
+          console.log(`   ❌ headless_shell 可执行文件不存在: ${headlessPath}`);
+          
+          // 尝试列出目录内容以诊断问题
+          try {
+            const headlessDirPath = path.join(playwrightCachePath, headlessDir);
+            if (fs.existsSync(headlessDirPath)) {
+              console.log(`   🔍 ${headlessDir} 目录内容:`);
+              const listDir = (dir, prefix = '     ') => {
+                const items = fs.readdirSync(dir, { withFileTypes: true });
+                items.forEach(item => {
+                  const fullPath = path.join(dir, item.name);
+                  if (item.isDirectory()) {
+                    console.log(`${prefix}📁 ${item.name}/`);
+                    listDir(fullPath, prefix + '  ');
+                  } else {
+                    const stats = fs.statSync(fullPath);
+                    const size = (stats.size / 1024 / 1024).toFixed(2);
+                    console.log(`${prefix}📄 ${item.name} (${size} MB)`);
+                  }
+                });
+              };
+              listDir(headlessDirPath);
+            }
+          } catch (err) {
+            console.log(`   ⚠️ 无法列出目录: ${err.message}`);
+          }
         }
+      } else {
+        console.log(`   ❌ 未找到 headless_shell 目录`);
       }
       
       // 验证 ffmpeg 可执行文件（跨平台）
@@ -412,10 +468,12 @@ async function setup() {
         
         ffmpegOk = fs.existsSync(ffmpegPath);
         if (ffmpegOk) {
-          console.log(`   📦 ffmpeg: ${ffmpegDir} ✓`);
+          console.log(`   📦 ffmpeg: ${ffmpegDir} ✓ (${ffmpegPath})`);
         } else {
           console.log(`   ⚠️ ffmpeg 路径不存在: ${ffmpegPath}`);
         }
+      } else {
+        console.log(`   ⚠️ 未找到 ffmpeg 目录`);
       }
       
       if (chromiumOk && headlessOk && ffmpegOk) {
@@ -426,7 +484,17 @@ async function setup() {
         if (!ffmpegOk) {
           console.log(`   💡 ffmpeg 用于视频录制功能，将自动安装`);
         }
+        
+        // Docker 环境下如果缺少浏览器，说明构建有问题
+        if (isDocker) {
+          console.error(`   ❌ Docker 环境中 Playwright 浏览器缺失，这不应该发生！`);
+          console.error(`   💡 请检查 Dockerfile 中的 COPY 指令是否正确`);
+          console.error(`   💡 或者重新构建镜像: docker compose build --no-cache`);
+          process.exit(1);
+        }
       }
+    } else {
+      console.log(`   ⚠️ Playwright 缓存目录不存在: ${playwrightCachePath}`);
     }
     
     // 下载 Playwright 浏览器（使用当前安装的 Playwright 版本）
@@ -440,14 +508,23 @@ async function setup() {
     const playwrightCliPath = path.resolve(playwrightPath, 'cli.js');
     // 安装 chromium 和 ffmpeg（视频录制必需）
     const installCmd = isWindows 
-      ? `node "${playwrightCliPath}" install chromium ffmpeg`
-      : `node "${playwrightCliPath}" install --with-deps chromium ffmpeg`;
+      ? `node "${playwrightCliPath}" install chromium chromium-headless-shell ffmpeg`
+      : `node "${playwrightCliPath}" install --with-deps chromium chromium-headless-shell ffmpeg`;
     
+    console.log(`   🔧 执行命令: ${installCmd}`);
     await execPromise(installCmd);
     console.log(`   ✅ Playwright 浏览器和 ffmpeg 下载完成`);
+    
+    // 再次验证安装结果
+    console.log(`   🔍 验证安装结果...`);
+    const verifyContents = fs.readdirSync(playwrightCachePath);
+    console.log(`   📂 安装后缓存内容: ${verifyContents.join(', ')}`);
   } catch (error) {
     console.error('   ❌ Playwright 浏览器安装失败:', error.message);
-    console.error('   💡 可以手动运行: npx playwright install chromium ffmpeg');
+    console.error('   💡 可以手动运行: npx playwright install chromium chromium-headless-shell ffmpeg');
+    if (error.stack) {
+      console.error('   📋 错误堆栈:', error.stack);
+    }
     process.exit(1);
   }
 }

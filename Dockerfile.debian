@@ -75,15 +75,11 @@ RUN if [ -f .env.example ] && [ ! -f .env ]; then \
 RUN npm run build 2>&1 | tee /tmp/build.log || \
     (cat /tmp/build.log && exit 1)
 
-# 使用缓存加速 Playwright 浏览器下载，然后复制到镜像中（在同一层完成安装、复制、清理）
-RUN --mount=type=cache,id=playwright,target=/tmp/pw-cache \
-    set -e && \
-    export PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-cache && \
+# 直接安装 Playwright 浏览器到最终路径（不使用缓存挂载，确保文件被保留）
+RUN set -e && \
+    export PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright && \
+    echo "=== 开始安装 Playwright 浏览器 ===" && \
     npx playwright install chromium chromium-headless-shell ffmpeg && \
-    mkdir -p /root/.cache/ms-playwright && \
-    if [ -n "$(ls -A /tmp/pw-cache 2>/dev/null)" ]; then \
-        cp -r /tmp/pw-cache/* /root/.cache/ms-playwright/ || true; \
-    fi && \
     echo "=== Playwright 安装完成，验证浏览器 ===" && \
     ls -la /root/.cache/ms-playwright/ && \
     echo "=== 验证 chromium ===" && \
@@ -94,18 +90,22 @@ RUN --mount=type=cache,id=playwright,target=/tmp/pw-cache \
     (ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux 2>/dev/null || \
      ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg 2>/dev/null || \
      echo "❌ ffmpeg 未找到") && \
+    echo "=== 清理文档文件 ===" && \
     find /root/.cache/ms-playwright -name "*.d.ts" -type f -delete 2>/dev/null || true && \
     find /root/.cache/ms-playwright -name "*.md" -type f -delete 2>/dev/null || true && \
     find /root/.cache/ms-playwright -name "LICENSE*" -type f -delete 2>/dev/null || true && \
     find /root/.cache/ms-playwright -name "NOTICE*" -type f -delete 2>/dev/null || true && \
+    echo "=== 设置可执行权限 ===" && \
     find /root/.cache/ms-playwright -type f -name "chrome" -exec chmod +x {} \; 2>/dev/null || true && \
     find /root/.cache/ms-playwright -type f -name "headless_shell" -exec chmod +x {} \; 2>/dev/null || true && \
     find /root/.cache/ms-playwright -type f -name "ffmpeg*" -exec chmod +x {} \; 2>/dev/null || true && \
-    echo "=== 清理后验证 ===" && \
-    ls -la /root/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null || true && \
-    ls -la /root/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell 2>/dev/null || true && \
+    echo "=== 最终验证 ===" && \
+    ls -la /root/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null || echo "❌ chromium 验证失败" && \
+    ls -la /root/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell 2>/dev/null || echo "❌ headless_shell 验证失败" && \
     (ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux 2>/dev/null || \
-     ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg 2>/dev/null || true)
+     ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg 2>/dev/null || \
+     echo "❌ ffmpeg 验证失败") && \
+    echo "=== Playwright 浏览器安装完成 ==="
 
 # 清理不必要的文件（在独立层中完成，不影响 Playwright）
 RUN npm cache clean --force && \
@@ -158,8 +158,9 @@ RUN sed -i "s/deb.debian.org/${DEBIAN_MIRROR}/g" /etc/apt/sources.list.d/debian.
     libatspi2.0-0 libexpat1 libxcb1 libxshmfence1 libdbus-1-3 \
     # Playwright 额外依赖
     xvfb \
-    # 字体支持（只安装必需的字体，减小体积）
+    # 字体支持（包含中文字体以正确显示截图中的文字）
     fonts-liberation fonts-noto-color-emoji \
+    fonts-noto-cjk-extra \
     # 网络诊断工具
     iputils-ping \
     # 工具
@@ -184,10 +185,38 @@ COPY --from=builder /app/index.html ./
 COPY --from=builder /app/.env ./
 
 # 从构建阶段复制 Playwright 浏览器（包含 ffmpeg）
-COPY --from=builder /root/.cache/ms-playwright /root/.cache/ms-playwright
+# 使用 --chown 确保权限正确，--link 优化层缓存
+COPY --from=builder --chown=root:root /root/.cache/ms-playwright /root/.cache/ms-playwright
 
 # 设置 Playwright 环境变量
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
+# 验证 Playwright 浏览器是否正确复制并设置权限
+RUN echo "=== 验证运行阶段 Playwright 浏览器 ===" && \
+    ls -la /root/.cache/ms-playwright/ && \
+    echo "=== 验证 chromium ===" && \
+    ls -la /root/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null || echo "❌ chromium 未找到" && \
+    echo "=== 验证 headless_shell ===" && \
+    ls -la /root/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell 2>/dev/null || echo "❌ headless_shell 未找到" && \
+    echo "=== 验证 ffmpeg ===" && \
+    (ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux 2>/dev/null || \
+     ls -la /root/.cache/ms-playwright/ffmpeg-*/ffmpeg 2>/dev/null || \
+     echo "❌ ffmpeg 未找到") && \
+    # 确保所有可执行文件有执行权限
+    find /root/.cache/ms-playwright -type f -name "chrome" -exec chmod +x {} \; 2>/dev/null || true && \
+    find /root/.cache/ms-playwright -type f -name "headless_shell" -exec chmod +x {} \; 2>/dev/null || true && \
+    find /root/.cache/ms-playwright -type f -name "ffmpeg*" -exec chmod +x {} \; 2>/dev/null || true && \
+    echo "=== 权限设置完成 ===" && \
+    # 🔥 创建 ffmpeg 符号链接到系统 PATH，让 Playwright 能找到
+    echo "=== 创建 ffmpeg 符号链接 ===" && \
+    FFMPEG_PATH=$(find /root/.cache/ms-playwright -name "ffmpeg-linux" -o -name "ffmpeg" | head -n 1) && \
+    if [ -n "$FFMPEG_PATH" ]; then \
+        ln -sf "$FFMPEG_PATH" /usr/local/bin/ffmpeg && \
+        echo "✅ ffmpeg 符号链接已创建: /usr/local/bin/ffmpeg -> $FFMPEG_PATH" && \
+        ffmpeg -version | head -n 1; \
+    else \
+        echo "❌ 未找到 ffmpeg 可执行文件"; \
+    fi
 
 # 创建必要目录
 RUN mkdir -p logs artifacts uploads screenshots

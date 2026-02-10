@@ -1,5 +1,14 @@
 # Git 提交摘要
 
+## 2026-02-10
+- fix: 修复视频截图中文显示为方块乱码的问题（添加 fonts-noto-cjk-extra 中文字体支持，镜像增加约 50-100MB）
+- fix: 修复视频文件已是最终名称但未保存到数据库的问题（优先检查最终名称文件，兼容两种命名方式，修复 Windows Docker 环境视频不显示）
+- fix: 增强 Playwright artifacts 处理的日志输出以诊断视频保存问题（添加详细日志，显示处理流程和文件列表，帮助定位 Windows 环境问题）
+- fix: 修复视频文件未保存到数据库导致前端无法显示的问题（增强日志输出，明确显示视频处理流程，确保正确保存到数据库）
+- fix: 修复 Windows Docker 环境视频录制失败的问题（创建 ffmpeg 符号链接到系统 PATH，让 Playwright 能找到 ffmpeg）
+- fix: 修复 Playwright 浏览器缓存挂载导致文件丢失的问题（移除 --mount=type=cache，直接安装到最终路径，确保文件被保留到镜像中）
+- fix: 修复 Docker 运行时 Playwright headless_shell 找不到的问题（运行阶段增强验证和权限设置，启动脚本增强浏览器检测，添加诊断日志和权限修复）
+
 ## 2026-02-06
 - perf: 深度优化镜像体积，从 4.83GB 减小到约 3.5GB（深度清理 node_modules 节省 ~500MB，移除中日韩字体包节省 ~300MB，总计减少 27-33%）
 - fix: 修复 Playwright 浏览器在清理步骤中被误删的问题（安装和清理合并到同一层，只删除文档保留可执行文件，修复 headless_shell 不存在错误）

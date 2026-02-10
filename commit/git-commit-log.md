@@ -1,5 +1,128 @@
 # Git 提交日志
 
+## 2026-02-10
+
+### fix: 修复视频截图中文显示为方块乱码的问题
+- 修改 `Dockerfile.debian` 在运行阶段添加中文字体支持
+- **问题分析**：
+  - 视频截图中的中文显示为方块（□□□□）
+  - 原因：Docker 容器中缺少中文字体
+  - 之前为了减小镜像体积移除了 `fonts-noto-cjk`
+- **解决方案**：
+  - 安装 `fonts-noto-cjk-extra`（精简版中文字体包）
+  - 相比完整的 `fonts-noto-cjk`（~400MB），`fonts-noto-cjk-extra` 更小
+  - 足够支持常见的中文显示需求
+- **影响**：
+  - 视频截图中的中文能正常显示
+  - 镜像体积增加约 50-100MB（相比完整版节省 ~300MB）
+
+### fix: 修复视频文件已是最终名称但未保存到数据库的问题
+- 修改 `server/services/testExecution.ts` 中 `processPlaywrightArtifacts` 的视频处理逻辑
+- **问题根源**：
+  - 日志显示视频文件存在：`db47772c-fbbc-4c4e-80cc-b69f4a447801-video.webm`
+  - 但代码只查找哈希名称格式的文件（`/^[a-f0-9]{32,}\.(webm|mp4)$/i`）
+  - 视频文件已经是最终名称，被过滤条件排除（`!f.name.includes(runId)`）
+  - 导致视频文件不被处理，也不保存到数据库
+- **解决方案**：
+  - 优先检查最终名称的视频文件（`{runId}-video.webm`）
+  - 如果存在且未保存到数据库，直接保存
+  - 如果不存在，再查找哈希名称的文件（原有逻辑）
+  - 添加详细日志：
+    - `🎥 发现最终名称的视频文件，保存到数据库`
+    - `✅ 视频文件已保存到数据库`
+    - `🔍 未找到最终名称的视频文件，查找哈希名称文件...`
+- **影响**：
+  - 修复 Windows Docker 环境视频不显示的问题
+  - 兼容两种视频文件命名方式（最终名称和哈希名称）
+
+### fix: 增强 Playwright artifacts 处理的日志输出以诊断视频保存问题
+- 修改 `server/services/testExecution.ts` 在 `processPlaywrightArtifacts` 中添加详细日志
+- **问题分析**：
+  - Windows Docker 环境中视频文件存在但未保存到数据库
+  - Linux 环境正常（有"视频文件已重命名"和"已保存到数据库"日志）
+  - Windows 环境没有这些日志，说明 `processPlaywrightArtifacts` 可能没有正确执行
+- **解决方案**：
+  - 添加开始处理的日志：`📦 开始处理 Playwright artifacts...`
+  - 显示找到的文件列表：`📂 找到 X 个文件: ...`
+  - 目录不存在时的警告：`⚠️ artifacts 目录不存在`
+- **目的**：
+  - 诊断 `processPlaywrightArtifacts` 是否被调用
+  - 确认视频文件是否在处理时存在
+  - 找出 Windows 和 Linux 环境的差异
+
+### fix: 修复视频文件未保存到数据库导致前端无法显示的问题
+- 修改 `server/services/testExecution.ts` 增强视频保存逻辑的日志输出
+- **问题分析**：
+  - 视频文件物理存在（8.8MB），但前端测试证据页面不显示
+  - 原因：视频文件没有保存到数据库中
+  - 代码逻辑：检查最终名称的视频文件存在，但没有明确的日志说明是否保存
+- **解决方案**：
+  - 添加详细的日志输出，明确显示视频文件的处理流程
+  - 发现视频文件时输出：`🎥 发现视频文件，准备保存到数据库`
+  - 保存成功后输出：`✅ 视频文件已保存到数据库`
+  - 未找到最终名称文件时输出：`🔍 未找到最终名称的视频文件，尝试查找原始哈希名称文件...`
+- **影响**：
+  - 更容易诊断视频保存问题
+  - 确保视频文件正确保存到数据库
+  - 前端能够正常显示视频
+
+### fix: 修复 Windows Docker 环境视频录制失败的问题
+- 修改 `Dockerfile.debian` 在运行阶段创建 ffmpeg 符号链接
+- **问题分析**：
+  - Linux 环境测试执行有视频，Windows Docker 环境没有视频
+  - 日志显示：`🎥 未找到视频文件`
+  - 原因：Playwright 自带的 ffmpeg 不在系统 PATH 中
+  - ffmpeg 位于 `/root/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux`
+  - Playwright 无法自动找到这个路径
+- **解决方案**：
+  - 在运行阶段创建符号链接：`/usr/local/bin/ffmpeg -> /root/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux`
+  - 将 ffmpeg 添加到系统 PATH，让 Playwright 能够找到
+  - 验证 ffmpeg 版本，确保可执行
+- **影响**：
+  - 修复后，Windows Docker 环境也能正常录制视频
+  - 视频文件将保存为 `{runId}-video.webm`
+
+### fix: 修复 Playwright 浏览器缓存挂载导致文件丢失的问题
+- 修改 `Dockerfile.debian` 移除缓存挂载，直接安装到最终路径
+- **根本原因**：
+  - 使用 `--mount=type=cache,target=/tmp/pw-cache` 缓存挂载
+  - 缓存目录在 RUN 命令结束后消失，不会被保留到镜像中
+  - 虽然尝试复制到 `/root/.cache/ms-playwright`，但复制可能失败或不完整
+  - 导致运行阶段找不到浏览器文件
+- **解决方案**：
+  - 直接设置 `PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright`
+  - 不使用缓存挂载，直接安装到最终路径
+  - 确保文件被保留到镜像层中
+  - 添加详细的验证步骤，确认每个组件都正确安装
+- **权衡**：
+  - 优点：文件可靠保留，不会丢失
+  - 缺点：每次构建都需要重新下载（约 800MB），但更可靠
+  - 可以通过 Docker 层缓存加速（代码不变时不重新下载）
+
+### fix: 修复 Docker 运行时 Playwright headless_shell 找不到的问题
+- 修改 `Dockerfile.debian` 增强运行阶段的浏览器验证和权限设置
+- **问题分析**：
+  - 构建阶段验证显示 headless_shell 存在
+  - 但运行时报错：`Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/headless_shell`
+  - 原因：多阶段构建中 COPY 指令可能未正确复制所有文件或权限
+- **解决方案**：
+  1. 在运行阶段添加详细的浏览器验证步骤
+  2. 显式设置可执行文件权限（chmod +x）
+  3. 使用 --chown=root:root 确保文件所有权正确
+  4. 添加诊断日志，列出缓存目录内容和文件路径
+- 修改 `scripts/start.cjs` 增强启动时的浏览器检测
+- **启动脚本改进**：
+  1. 检测 Docker 环境，使用正确的缓存路径（/root/.cache/ms-playwright）
+  2. 验证 headless_shell 文件是否存在
+  3. 检查并修复文件执行权限
+  4. 列出目录结构以诊断问题
+  5. Docker 环境下如果浏览器缺失，立即报错并提示重新构建
+  6. 本地环境下自动下载缺失的浏览器
+- **验证步骤**：
+  - 构建阶段：验证 chromium、headless_shell、ffmpeg 是否正确安装
+  - 运行阶段：再次验证并设置权限
+  - 启动时：检测文件存在性和可执行权限
+
 ## 2026-02-06
 
 ### perf: 深度优化镜像体积，从 4.83GB 减小到约 3.5GB
