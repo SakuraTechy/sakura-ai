@@ -86,9 +86,9 @@ services:
       # dockerfile: docker/Debian Linux/Dockerfile.debian
       dockerfile: Dockerfile.debian
     # 2. 本地构建镜像（开发环境）- 需要先运行 ./build.sh
-    image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
+    # image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
     # 3. 阿里云镜像（生产环境）
-    # image: crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com/sakura-ai/sakura-ai:latest
+    image: crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com/sakura-ai/sakura-ai:latest
     container_name: sakura-ai-app
     restart: unless-stopped
     # 容器直接使用宿主机的 3001 和 5173 端口

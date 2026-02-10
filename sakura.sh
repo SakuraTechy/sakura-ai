@@ -266,9 +266,12 @@ cmd_push() {
     
     # 检查本地镜像是否存在
     print_step "检查本地镜像..."
-    if ! docker images "${LOCAL_IMAGE}" --format "{{.Repository}}" | grep -q "${LOCAL_IMAGE}"; then
+    if ! docker images "${LOCAL_IMAGE}" --format "{{.Repository}}:{{.Tag}}" | grep -q "^${LOCAL_IMAGE}$"; then
         print_error "本地镜像不存在: ${LOCAL_IMAGE}"
         echo "请先构建镜像: ./sakura.sh build ${VERSION}"
+        echo ""
+        echo "当前可用镜像:"
+        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -10
         exit 1
     fi
     print_success "本地镜像已存在"
