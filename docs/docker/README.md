@@ -396,8 +396,8 @@ Sakura AI 使用两个独立的配置文件：
 - 使用：应用启动时自动加载
 - 创建：复制 `.env.example` 为 `.env` 并修改
 
-**2. `docker/Debian Linux/config.sh` - Docker 构建配置**
-- 位置：`docker/Debian Linux/config.sh`
+**2. `config.sh` - Docker 构建配置**
+- 位置：`config.sh`
 - 用途：镜像仓库地址、镜像名称等构建时配置
 - 使用：构建和推送镜像时使用（`./sakura.sh build`）
 - 修改：直接编辑 `config.sh` 文件
@@ -826,13 +826,11 @@ docker push crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com/sakura-ai
 
 **方式 1：使用修复脚本（推荐）**
 ```bash
-cd docker/Debian\ Linux
 bash fix-line-endings.sh
 ```
 
 **方式 2：手动转换**
 ```bash
-cd docker/Debian\ Linux
 sed -i 's/\r$//' sakura.sh
 ```
 
@@ -842,7 +840,7 @@ sed -i 's/\r$//' sakura.sh
 git config --global core.autocrlf input
 
 # 重新检出文件
-git checkout -- "docker/Debian Linux/sakura.sh"
+git checkout -- "sakura.sh"
 ```
 
 ### 构建错误

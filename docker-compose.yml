@@ -1,40 +1,12 @@
 # Sakura AI - Docker Compose（容器化部署配置）
 # 
 # 📦 镜像来源说明：
-#   - 默认使用本地构建的镜像（sakura-ai:latest）
-#   - 如需使用阿里云镜像，请修改 sakura-ai 服务的 image 配置
+#   - 默认使用阿里云镜像（sakura-ai:latest）
 # 
 # 🚀 使用方法：
-#   【方式一：使用本地构建镜像（推荐开发环境）】
-#   1. 构建镜像
-#      docker compose -f docker-compose.yml build
-#   2. 启动服务
-#      docker compose -f docker-compose.yml up -d
-#   
-#   【方式二：使用阿里云镜像（推荐生产环境）】
-#   1. 修改 docker-compose.yml 中的 image 配置
-#   
-#   2. 登录阿里云镜像仓库（首次使用）
-#      docker login --username=你的用户名 crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com
-#   
-#   3. 拉取并启动服务
-#      docker compose -f docker-compose.yml pull
-#      docker compose -f docker-compose.yml up -d
-
-#   4. 构建并推送镜像
-#      docker compose -f docker-compose.yml build
-#      docker compose -f docker-compose.yml push
-
-#   【常用命令】
-#   - 构建镜像: docker compose -f docker-compose.yml build
-#   - 启动服务: docker compose -f docker-compose.yml up -d
-#   - 构建并启动镜像: docker compose -f docker-compose.yml up -d --build
-#   - 查看状态: docker compose -f docker-compose.yml ps
-#   - 停止服务: docker compose -f docker-compose.yml down
-#   - 查看日志: docker compose logs -f sakura-ai
-#   - 重启服务: docker compose restart sakura-ai
-#   - 拉取镜像: docker compose -f docker-compose.yml pull
-#   - 推送镜像: docker compose -f docker-compose.yml push
+#   - cp .env.example .env
+#   - docker compose -f docker-compose.yml pull
+#   - docker compose -f docker-compose.yml up -d
 
 networks:
   sakura-network:
@@ -77,17 +49,12 @@ services:
 
   # Sakura AI 应用服务
   sakura-ai:
-    # 1. 本地构建并启动（不使用预构建镜像，docker compose up -d --build）
-    build:
-      # 构建上下文：指向项目根目录
-      # context: ../..
-      context: .
-      # Dockerfile 路径：相对于构建上下文
-      # dockerfile: docker/Debian Linux/Dockerfile.debian
-      dockerfile: Dockerfile.debian
-    # 2. 本地构建镜像（开发环境）- 需要先运行 ./build.sh
+    # 本地构建镜像（开发环境）
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.debian
     # image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
-    # 3. 阿里云镜像（生产环境）
+    # 阿里云镜像（生产环境）
     image: crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com/sakura-ai/sakura-ai:latest
     container_name: sakura-ai-app
     restart: unless-stopped
