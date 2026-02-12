@@ -8,20 +8,25 @@ const os = require('os');
 
 const execPromise = promisify(exec);
 
-// 🔥 加载环境变量
+// 🔥 加载环境变量（Docker 环境中通过 docker-compose 传递，无需 .env 文件）
 try {
   const dotenv = require('dotenv');
   const envPath = path.join(__dirname, '..', '.env');
-  dotenv.config({ path: envPath });
+  
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    console.log('✓ 已加载 .env 文件');
+  } else {
+    console.log('ℹ️ 未找到 .env 文件，使用环境变量或默认配置');
+  }
 } catch (error) {
-  // dotenv 可能未安装，继续执行
-  console.warn('⚠️ 无法加载 .env 文件，将使用默认配置');
+  console.log('ℹ️ 使用环境变量或默认配置');
 }
 
 // 🔥 从环境变量读取配置，提供默认值
 const BACKEND_PORT = parseInt(process.env.PORT || '3001', 10);
 const FRONTEND_PORT = parseInt(process.env.VITE_PORT || '5173', 10);
-const SERVER_HOST = process.env.SERVER_HOST || '127.0.0.1';
+const SERVER_HOST = process.env.SERVER_HOST || '0.0.0.0';
 
 // Windows 兼容性：检测 npm 和 npx 命令
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -78,6 +83,76 @@ function checkDependencies() {
   return Promise.resolve();
 }
 
+// 等待数据库就绪
+async function waitForDatabase() {
+  // 检查是否需要等待数据库（Docker 环境或配置了远程数据库）
+  const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
+  const dbUrl = process.env.DATABASE_URL || '';
+  
+  // 如果不是 Docker 环境且数据库是本地 localhost，跳过等待
+  // if (!isDocker && dbUrl.includes('localhost')) {
+  //   return;
+  // }
+
+  const maxRetries = 30;
+  const retryInterval = 10000; // 10秒
+  let retryCount = 0;
+  
+  // 从环境变量解析数据库连接信息
+  const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+  
+  if (!match) {
+    console.log('   ⚠️  无法解析 DATABASE_URL，跳过数据库连接检查');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    return;
+  }
+  
+  const [, user, password, host, port, database] = match;
+  
+  console.log(`   🔗 连接目标: ${user}:${password}@${host}:${port}/${database}`);
+  
+  while (retryCount < maxRetries) {
+    try {
+      // 使用 Node.js mysql2 包测试连接（跨平台，不依赖系统工具）
+      const mysql = require('mysql2/promise');
+      const connection = await mysql.createConnection({
+        host: host,
+        port: parseInt(port),
+        user: user,
+        password: password,
+        connectTimeout: 5000
+      });
+      
+      // 测试连接
+      await connection.ping();
+      await connection.end();
+      
+      console.log(`   ✅ 数据库已就绪 (尝试 ${retryCount + 1}/${maxRetries})`);
+      return;
+    } catch (error) {
+      retryCount++;
+      if (retryCount < maxRetries) {
+        process.stdout.write(`\r   ⏳ 等待数据库启动... (${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, retryInterval));
+      } else {
+        console.log(`\n   ❌ 数据库连接失败，无法启动应用`);
+        console.log(`   💡 连接信息: ${user}@${host}:${port}`);
+        console.log(`   💡 请检查：`);
+        console.log(`      1. 数据库服务是否正常运行`);
+        console.log(`      2. 网络连接是否正常`);
+        console.log(`      3. DATABASE_URL 配置是否正确`);
+        console.log(`      4. 用户名和密码是否正确`);
+        if (isDocker) {
+          console.log(`      5. Docker 容器状态: docker compose ps`);
+          console.log(`      6. 数据库日志: docker compose logs mysql`);
+        }
+        console.log(`   💡 错误详情: ${error.message}`);
+        process.exit(1);
+      }
+    }
+  }
+}
+
 // 运行数据库迁移
 async function runDatabaseMigrations() {
   try {
@@ -103,29 +178,51 @@ async function runDatabaseMigrations() {
       if (hasStandardMigrations) {
         // 有标准迁移，使用 migrate deploy（幂等，安全）
         console.log('   📦 发现标准迁移文件，执行 migrate deploy...');
-        const migrateDeploy = spawn(npxCmd, ['prisma', 'migrate', 'deploy'], { 
-          cwd: path.join(__dirname, '..'),
-          stdio: 'inherit',
-          shell: process.platform === 'win32'
-        });
         
-        migrateDeploy.on('close', (code) => {
-          if (code === 0) {
-            console.log('   ✅ 数据库迁移完成');
-            // 迁移成功后，检查数据库是否与 schema 一致
-            checkDatabaseSync(resolve);
-          } else {
-            console.log(`   ⚠️  迁移失败（退出码: ${code}），尝试使用 db push 修复...`);
-            // 只在迁移失败时才使用 db push 作为修复手段
-            executeDbPushForRepair(resolve);
-          }
-        });
+        // Docker 环境下支持重试
+        const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
+        const maxRetries = isDocker ? 3 : 1;
+        let retryCount = 0;
         
-        migrateDeploy.on('error', (error) => {
-          console.warn('   ⚠️  迁移执行出错:', error.message);
-          console.log('   🔄 尝试使用 db push 修复数据库结构...');
-          executeDbPushForRepair(resolve);
-        });
+        const attemptMigration = () => {
+          const migrateDeploy = spawn(npxCmd, ['prisma', 'migrate', 'deploy'], { 
+            cwd: path.join(__dirname, '..'),
+            stdio: 'inherit',
+            shell: process.platform === 'win32'
+          });
+          
+          migrateDeploy.on('close', (code) => {
+            if (code === 0) {
+              console.log('   ✅ 数据库迁移完成');
+              // 迁移成功后，检查数据库是否与 schema 一致
+              checkDatabaseSync(resolve);
+            } else {
+              retryCount++;
+              if (retryCount < maxRetries) {
+                console.log(`   ⚠️  迁移失败（退出码: ${code}），等待 3 秒后重试... (${retryCount}/${maxRetries})`);
+                setTimeout(attemptMigration, 3000);
+              } else {
+                console.log(`   ⚠️  迁移失败（退出码: ${code}），尝试使用 db push 修复...`);
+                executeDbPushForRepair(resolve);
+              }
+            }
+          });
+          
+          migrateDeploy.on('error', (error) => {
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.warn('   ⚠️  迁移执行出错:', error.message);
+              console.log(`   🔄 等待 3 秒后重试... (${retryCount}/${maxRetries})`);
+              setTimeout(attemptMigration, 3000);
+            } else {
+              console.warn('   ⚠️  迁移执行出错:', error.message);
+              console.log('   🔄 尝试使用 db push 修复数据库结构...');
+              executeDbPushForRepair(resolve);
+            }
+          });
+        };
+        
+        attemptMigration();
       } else {
         // 没有标准迁移，跳过（避免使用 db push）
         console.log('   ℹ️  未发现标准迁移文件，跳过数据库迁移');
@@ -261,11 +358,22 @@ async function generatePrismaClient() {
 // 安装 Playwright 浏览器
 async function setup() {
   try {
-    // 🔥 严格检测：验证 Playwright 缓存中的可执行文件是否存在
-    const playwrightCachePath = path.join(os.homedir(), '.cache', 'ms-playwright');
+    // 🔥 跨平台检测：验证 Playwright 缓存中的可执行文件是否存在
+    const isWindows = process.platform === 'win32';
+    const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
+    
+    // Docker 环境使用固定路径，本地环境使用用户目录
+    const playwrightCachePath = isDocker
+      ? '/root/.cache/ms-playwright'
+      : (isWindows 
+          ? path.join(os.homedir(), 'AppData', 'Local', 'ms-playwright')
+          : path.join(os.homedir(), '.cache', 'ms-playwright'));
+    
+    console.log(`   🔍 检查 Playwright 缓存路径: ${playwrightCachePath}`);
     
     if (fs.existsSync(playwrightCachePath)) {
       const cacheContents = fs.readdirSync(playwrightCachePath);
+      console.log(`   📂 缓存目录内容: ${cacheContents.join(', ')}`);
       
       // 查找任意版本的 chromium 目录并验证可执行文件
       const chromiumDir = cacheContents.find(dir => dir.startsWith('chromium-') && !dir.includes('headless'));
@@ -276,55 +384,147 @@ async function setup() {
       let headlessOk = false;
       let ffmpegOk = false;
       
-      // 验证 chromium 可执行文件
+      // 验证 chromium 可执行文件（跨平台）
       if (chromiumDir) {
-        const chromePath = path.join(playwrightCachePath, chromiumDir, 'chrome-linux', 'chrome');
+        const chromeExe = isWindows ? 'chrome.exe' : 'chrome';
+        const chromeSubPath = isWindows ? 'chrome-win' : 'chrome-linux';
+        const chromePath = path.join(playwrightCachePath, chromiumDir, chromeSubPath, chromeExe);
         chromiumOk = fs.existsSync(chromePath);
         if (chromiumOk) {
-          console.log(`   📦 chromium: ${chromiumDir} ✓`);
+          console.log(`   📦 chromium: ${chromiumDir} ✓ (${chromePath})`);
+        } else {
+          console.log(`   ❌ chromium 可执行文件不存在: ${chromePath}`);
         }
+      } else {
+        console.log(`   ❌ 未找到 chromium 目录`);
       }
       
-      // 验证 headless shell 可执行文件
+      // 验证 headless shell 可执行文件（跨平台）
       if (headlessDir) {
-        const headlessPath = path.join(playwrightCachePath, headlessDir, 'chrome-linux', 'headless_shell');
+        const headlessExe = isWindows ? 'headless_shell.exe' : 'headless_shell';
+        const headlessSubPath = isWindows ? 'chrome-win' : 'chrome-linux';
+        const headlessPath = path.join(playwrightCachePath, headlessDir, headlessSubPath, headlessExe);
         headlessOk = fs.existsSync(headlessPath);
         if (headlessOk) {
-          console.log(`   📦 headless_shell: ${headlessDir} ✓`);
+          console.log(`   📦 headless_shell: ${headlessDir} ✓ (${headlessPath})`);
+          
+          // 验证文件权限（仅 Linux/Docker）
+          if (!isWindows) {
+            try {
+              const stats = fs.statSync(headlessPath);
+              const isExecutable = (stats.mode & 0o111) !== 0;
+              if (!isExecutable) {
+                console.log(`   ⚠️ headless_shell 没有执行权限，正在修复...`);
+                fs.chmodSync(headlessPath, 0o755);
+                console.log(`   ✅ 已设置执行权限`);
+              }
+            } catch (err) {
+              console.log(`   ⚠️ 无法检查/设置权限: ${err.message}`);
+            }
+          }
+        } else {
+          console.log(`   ❌ headless_shell 可执行文件不存在: ${headlessPath}`);
+          
+          // 尝试列出目录内容以诊断问题
+          try {
+            const headlessDirPath = path.join(playwrightCachePath, headlessDir);
+            if (fs.existsSync(headlessDirPath)) {
+              console.log(`   🔍 ${headlessDir} 目录内容:`);
+              const listDir = (dir, prefix = '     ') => {
+                const items = fs.readdirSync(dir, { withFileTypes: true });
+                items.forEach(item => {
+                  const fullPath = path.join(dir, item.name);
+                  if (item.isDirectory()) {
+                    console.log(`${prefix}📁 ${item.name}/`);
+                    listDir(fullPath, prefix + '  ');
+                  } else {
+                    const stats = fs.statSync(fullPath);
+                    const size = (stats.size / 1024 / 1024).toFixed(2);
+                    console.log(`${prefix}📄 ${item.name} (${size} MB)`);
+                  }
+                });
+              };
+              listDir(headlessDirPath);
+            }
+          } catch (err) {
+            console.log(`   ⚠️ 无法列出目录: ${err.message}`);
+          }
         }
+      } else {
+        console.log(`   ❌ 未找到 headless_shell 目录`);
       }
       
-      // 验证 ffmpeg 可执行文件
+      // 验证 ffmpeg 可执行文件（跨平台）
       if (ffmpegDir) {
-        const ffmpegPath = path.join(playwrightCachePath, ffmpegDir, 'ffmpeg-linux');
+        // Windows 和 Linux 的 ffmpeg 路径结构不同
+        let ffmpegPath;
+        if (isWindows) {
+          // Windows: ffmpeg-1011/ffmpeg-win64.exe (直接在根目录)
+          ffmpegPath = path.join(playwrightCachePath, ffmpegDir, 'ffmpeg-win64.exe');
+        } else {
+          // Linux: ffmpeg-1009/ffmpeg-linux
+          ffmpegPath = path.join(playwrightCachePath, ffmpegDir, 'ffmpeg-linux');
+        }
+        
         ffmpegOk = fs.existsSync(ffmpegPath);
         if (ffmpegOk) {
-          console.log(`   📦 ffmpeg: ${ffmpegDir} ✓`);
+          console.log(`   📦 ffmpeg: ${ffmpegDir} ✓ (${ffmpegPath})`);
+        } else {
+          console.log(`   ⚠️ ffmpeg 路径不存在: ${ffmpegPath}`);
         }
+      } else {
+        console.log(`   ⚠️ 未找到 ffmpeg 目录`);
       }
       
       if (chromiumOk && headlessOk && ffmpegOk) {
-        console.log(`   ✅ Playwright 浏览器缓存完整，跳过下载`);
+        console.log(`   ✅ Playwright 浏览器已完整安装，跳过下载`);
         return;
       } else {
         console.log(`   ⚠️ Playwright 缓存不完整: chromium=${chromiumOk}, headless=${headlessOk}, ffmpeg=${ffmpegOk}`);
+        if (!ffmpegOk) {
+          console.log(`   💡 ffmpeg 用于视频录制功能，将自动安装`);
+        }
+        
+        // Docker 环境下如果缺少浏览器，说明构建有问题
+        if (isDocker) {
+          console.error(`   ❌ Docker 环境中 Playwright 浏览器缺失，这不应该发生！`);
+          console.error(`   💡 请检查 Dockerfile 中的 COPY 指令是否正确`);
+          console.error(`   💡 或者重新构建镜像: docker compose build --no-cache`);
+          process.exit(1);
+        }
       }
+    } else {
+      console.log(`   ⚠️ Playwright 缓存目录不存在: ${playwrightCachePath}`);
     }
     
     // 下载 Playwright 浏览器（使用当前安装的 Playwright 版本）
     console.log(`   ⚙️ 正在下载 Playwright 浏览器...`);
     const playwrightPath = path.resolve(__dirname, '../node_modules/playwright');
     if (!fs.existsSync(playwrightPath)) {
-        console.log('Playwright 未安装，请先运行 npm install playwright');
+        console.log('   ❌ Playwright 未安装，请先运行 npm install');
         process.exit(1);
     }
     
     const playwrightCliPath = path.resolve(playwrightPath, 'cli.js');
-    // 使用 --force 确保下载与当前 Playwright 版本匹配的浏览器
-    await execPromise(`node "${playwrightCliPath}" install --force chromium chromium-headless-shell ffmpeg`);
-    console.log(`   ✅ Playwright 浏览器下载完成`);
+    // 安装 chromium 和 ffmpeg（视频录制必需）
+    const installCmd = isWindows 
+      ? `node "${playwrightCliPath}" install chromium chromium-headless-shell ffmpeg`
+      : `node "${playwrightCliPath}" install --with-deps chromium chromium-headless-shell ffmpeg`;
+    
+    console.log(`   🔧 执行命令: ${installCmd}`);
+    await execPromise(installCmd);
+    console.log(`   ✅ Playwright 浏览器和 ffmpeg 下载完成`);
+    
+    // 再次验证安装结果
+    console.log(`   🔍 验证安装结果...`);
+    const verifyContents = fs.readdirSync(playwrightCachePath);
+    console.log(`   📂 安装后缓存内容: ${verifyContents.join(', ')}`);
   } catch (error) {
-    console.error('❌ Playwright 浏览器安装失败:', error);
+    console.error('   ❌ Playwright 浏览器安装失败:', error.message);
+    console.error('   💡 可以手动运行: npx playwright install chromium chromium-headless-shell ffmpeg');
+    if (error.stack) {
+      console.error('   📋 错误堆栈:', error.stack);
+    }
     process.exit(1);
   }
 }
@@ -606,19 +806,22 @@ async function startServices() {
 async function main() {
   try {
     console.log('📋 启动检查清单:');
-    console.log('   [1/5] 检查依赖...');
+    console.log('   [1/6] 检查依赖...');
     await checkDependencies();
     
-    console.log('   [2/5] 生成 Prisma 客户端...');
+    console.log('   [2/6] 生成 Prisma 客户端...');
     await generatePrismaClient();
     
-    console.log('   [3/5] 运行数据库迁移...');
+    console.log('   [3/6] 等待数据库就绪...');
+    await waitForDatabase();
+    
+    console.log('   [4/6] 运行数据库迁移...');
     await runDatabaseMigrations();
     
-    console.log('   [4/5] 创建必要目录...');
+    console.log('   [5/6] 创建必要目录...');
     createDirectories();
     
-    console.log('   [5/5] 安装 Playwright 浏览器...');
+    console.log('   [6/6] 安装 Playwright 浏览器...');
     await setup();
     
     console.log('✅ 所有启动检查完成\n');

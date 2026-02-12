@@ -1,0 +1,120 @@
+# Sakura AI - Host 网络模式配置
+# 
+# 📦 适用场景：
+#   - 需要访问内网系统（如内网数据库、API）
+#   - 需要最佳网络性能
+#   - 宿主机端口充足，无冲突风险
+# 
+# ⚠️ 注意事项：
+#   - 所有服务直接使用宿主机网络和端口
+#   - 容器之间通过 localhost 通信
+#   - 无法使用服务名（如 mysql、qdrant）
+#   - 端口冲突时需要修改服务配置
+# 
+# 🚀 使用方法：
+#   docker compose -f docker-compose.host.yml up -d
+#   docker compose -f docker-compose.host.yml down
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: sakura-ai-mysql
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: sakura_ai
+      MYSQL_USER: sakura_ai
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
+  # Sakura AI 应用服务
+  sakura-ai:
+    build:
+      context: ../..
+      dockerfile: docker/Debian Linux/Dockerfile.debian
+    image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
+    container_name: sakura-ai-app
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # 数据库配置（host 模式使用 localhost）
+      DATABASE_URL: mysql://sakura_ai:${DB_PASSWORD}@localhost:3306/sakura_ai
+      
+      # 应用配置
+      PORT: 3001
+      SERVER_HOST: 0.0.0.0
+      
+      # Vite 前端配置
+      VITE_HOST: 0.0.0.0
+      VITE_PORT: 5173
+      
+      # JWT 配置
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # Playwright 配置
+      PLAYWRIGHT_HEADLESS: "true"
+      PLAYWRIGHT_BROWSER: chromium
+      
+      # AI 配置
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-openai/gpt-4o}
+      
+      # RAG 配置（host 模式使用 localhost）
+      QDRANT_URL: ${QDRANT_URL:-http://localhost:6333}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-aliyun}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./artifacts:/app/artifacts
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Qdrant 向量数据库（可选 - RAG 功能）
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: sakura-ai-qdrant
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - qdrant-data:/qdrant/storage
+    profiles:
+      - rag
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: sakura-ai-nginx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config/nginx-alpine.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./dist:/usr/share/nginx/html:ro
+      - nginx-logs:/var/log/nginx
+    profiles:
+      - nginx
+
+volumes:
+  mysql-data:
+    driver: local
+  qdrant-data:
+    driver: local
+  nginx-logs:
+    driver: local

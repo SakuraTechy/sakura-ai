@@ -122,9 +122,12 @@ export class PlaywrightTestRunner {
     await fs.mkdir(runDir, { recursive: true });
 
     // 配置 context 选项
-    // 🔥 Linux headless 模式下必须明确设置视口大小，否则页面显示不完整
+    // 🔥 统一视口和视频尺寸，避免录制时出现灰色区域
+    const viewportSize = { width: 1920, height: 1080 };
+    
     const contextOptions: any = {
-      viewport: finalHeadless ? { width: 1920, height: 1080 } : null, // headless 使用固定视口，有头模式使用全屏
+      // 🔥 修复：始终设置固定视口，确保视频录制区域与页面大小一致
+      viewport: viewportSize,
       ignoreHTTPSErrors: true,
       // 🔥 修复：启用文件下载功能
       acceptDownloads: true,
@@ -133,11 +136,11 @@ export class PlaywrightTestRunner {
       // 🔥 确保页面完全加载
       hasTouch: false,
       isMobile: false,
-      // 🔥 设备缩放比例，确保高清截图（仅在有 viewport 时设置）
-      ...(finalHeadless && { deviceScaleFactor: 1 }),
+      // 🔥 设备缩放比例，确保高清截图
+      deviceScaleFactor: 1,
     };
 
-    console.log(`📐 [${runId}] 视口配置: ${finalHeadless ? '1920x1080 (headless)' : '全屏 (有头模式)'}`);
+    console.log(`📐 [${runId}] 视口配置: ${viewportSize.width}x${viewportSize.height}`);
 
     // 启用 trace 录制
     if (enableTrace) {
@@ -150,9 +153,10 @@ export class PlaywrightTestRunner {
 
     // 启用 video 录制
     if (enableVideo) {
+      // 🔥 修复：视频尺寸与视口尺寸完全一致，避免灰色区域
       contextOptions.recordVideo = {
         dir: runDir,
-        size: { width: 1920, height: 1080 }
+        size: viewportSize
       };
     }
 

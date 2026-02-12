@@ -41,9 +41,16 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_API_PORT': JSON.stringify(backendPort),
     },
     optimizeDeps: {
-      exclude: ['lucide-react'],
+      // 🔥 排除 server 和 Prisma 生成的文件，避免 Vite 扫描后端代码
+      entries: [
+        'src/**/*.{ts,tsx}',
+        '!src/generated/**',
+        'index.html',
+      ],
+      // 🔥 强制排除 Prisma 生成的文件和 lucide-react
+      exclude: ['lucide-react', '@prisma/client'],
     },
-    // 🔥 构建配置：排除 server 目录，避免 Vite 解析后端代码
+    // 🔥 构建配置：排除 server 目录和 Prisma，避免 Vite 解析后端代码
     build: {
       rollupOptions: {
         external: [
@@ -51,6 +58,9 @@ export default defineConfig(({ mode }) => {
           /^\.\.\/\.\.\/server\//,
           /^\.\.\/server\//,
           /^server\//,
+          // 排除 Prisma 生成的文件
+          /^@prisma\/client/,
+          /src\/generated\/prisma/,
         ],
       },
     },

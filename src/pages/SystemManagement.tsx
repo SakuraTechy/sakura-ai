@@ -3058,6 +3058,12 @@ export default function SystemManagement() {
                           <div className="py-8 text-center text-gray-400">
                             <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
                             <p className="text-sm">暂无数据库配置</p>
+                            <button
+                              onClick={() => openCreateDatabaseModal(project.id)}
+                              className="text-indigo-600 hover:text-indigo-700 text-sm mt-2"
+                            >
+                              添加第一个数据库配置
+                            </button>
                           </div>
                         )}
                       </div>
@@ -4541,7 +4547,7 @@ export default function SystemManagement() {
                         <Input
                           value={projectFormData.initial_version_name}
                           onChange={(e) => setProjectFormData(prev => ({ ...prev, initial_version_name: e.target.value }))}
-                          placeholder="如：主线版本"
+                          placeholder="如：v1.0"
                           size="large"
                           style={{ fontSize: '14px', height: '40px' }}
                         />

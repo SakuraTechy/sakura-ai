@@ -1,8 +1,52 @@
-# Sakura AI - Docker Compose 配置（适用于 CentOS 7 宿主机的容器化部署方案）
+# Sakura AI - Docker Compose（容器化部署配置）
 # 
-# 使用方法：
-#   docker compose -f docker-compose.yml up -d
-#   docker compose -f docker-compose.yml down -v
+# 📦 镜像来源说明：
+#   - 默认使用本地构建的镜像（sakura-ai:latest）
+#   - 如需使用阿里云镜像，请修改 sakura-ai 服务的 image 配置
+# 
+# 🚀 使用方法：
+#   【方式一：使用本地构建镜像（推荐开发环境）】
+#   1. 构建镜像
+#      docker compose -f docker-compose.yml build
+#   2. 启动服务
+#      docker compose -f docker-compose.yml up -d
+#   
+#   【方式二：使用阿里云镜像（推荐生产环境）】
+#   1. 修改 docker-compose.yml 中的 image 配置
+#   
+#   2. 登录阿里云镜像仓库（首次使用）
+#      docker login --username=你的用户名 crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com
+#   
+#   3. 拉取并启动服务
+#      docker compose -f docker-compose.yml pull
+#      docker compose -f docker-compose.yml up -d
+
+#   4. 构建并推送镜像
+#      docker compose -f docker-compose.yml build
+#      docker compose -f docker-compose.yml push
+
+#   【常用命令】
+#   - 构建镜像: docker compose -f docker-compose.yml build
+#   - 启动服务: docker compose -f docker-compose.yml up -d
+#   - 构建并启动镜像: docker compose -f docker-compose.yml up -d --build
+#   - 查看状态: docker compose -f docker-compose.yml ps
+#   - 停止服务: docker compose -f docker-compose.yml down
+#   - 查看日志: docker compose logs -f sakura-ai
+#   - 重启服务: docker compose restart sakura-ai
+#   - 拉取镜像: docker compose -f docker-compose.yml pull
+#   - 推送镜像: docker compose -f docker-compose.yml push
+
+networks:
+  sakura-network:
+    # 使用默认的 bridge 网络
+    # external: true
+    # name: bridge
+    # 使用自定义的 bridge 网络
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.169.0.0/24    # 子网范围
+          gateway: 192.169.0.1      # 网关地址
 
 services:
   # MySQL 数据库
@@ -26,29 +70,53 @@ services:
       - sakura-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 60s
 
   # Sakura AI 应用服务
   sakura-ai:
+    # 1. 本地构建并启动（不使用预构建镜像，docker compose up -d --build）
     build:
-      context: .
-      dockerfile: Dockerfile.debian
-    image: sakura-ai:latest  # 🔥 显式指定镜像名称
+      # 构建上下文：指向项目根目录
+      context: ../..
+      # Dockerfile 路径：相对于构建上下文
+      dockerfile: docker/Debian Linux/Dockerfile.debian
+    # 2. 本地构建镜像（开发环境）- 需要先运行 ./build.sh
+    image: ${LOCAL_IMAGE_NAME:-sakura-ai}:${LOCAL_IMAGE_TAG:-latest}
+    # 3. 阿里云镜像（生产环境）
+    # image: crpi-f4c88g7tayj7jwle.cn-hangzhou.personal.cr.aliyuncs.com/sakura-ai/sakura-ai:latest
     container_name: sakura-ai-app
     restart: unless-stopped
+    # 容器直接使用宿主机的 3001 和 5173 端口
+    networks:
+      - sakura-network
     ports:
       - "3001:3001"
       - "5173:5173"
+    # 🔥 添加 extra_hosts 让容器通过宿主机访问内网 IP
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 使用宿主机的 DNS 服务器
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    # 添加网络配置，允许访问所有网段
+    cap_add:
+      - NET_ADMIN
     environment:
-      # 数据库配置
+      # 数据库配置（bridge 模式下使用服务名）
       DATABASE_URL: mysql://sakura_ai:${DB_PASSWORD}@mysql:3306/sakura_ai
       
       # 应用配置
       # NODE_ENV: production
       PORT: 3001
       SERVER_HOST: 0.0.0.0
+      
+      # Vite 前端配置（确保监听所有网络接口）
+      VITE_HOST: 0.0.0.0
+      VITE_PORT: 5173
       
       # JWT 配置
       JWT_SECRET: ${JWT_SECRET}
@@ -58,7 +126,7 @@ services:
       PLAYWRIGHT_BROWSER: chromium
       # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       # Debian 系统 Chromium 路径是 /usr/bin/chromium
-      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+      # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
       
       # AI 配置
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
@@ -77,14 +145,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    networks:
-      - sakura-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 120s
 
   # Qdrant 向量数据库（可选 - RAG 功能）
   qdrant:
@@ -126,15 +192,3 @@ volumes:
     driver: local
   nginx-logs:
     driver: local
-
-networks:
-  sakura-network:
-    # 使用默认的 bridge 网络
-    # external: true
-    # name: bridge
-    # 使用自定义的 bridge 网络
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 192.169.0.0/24    # 子网范围
-          gateway: 192.169.0.1      # 网关地址

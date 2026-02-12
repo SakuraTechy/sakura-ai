@@ -130,8 +130,8 @@ export class TestExecutionService {
     this.streamService = streamService || new StreamService({
       fps: 2,
       jpegQuality: 85,  // 🔥 提高质量：从60提升到85，提供更清晰的画面
-      width: 1920,       // 🔥 提高分辨率：从1024提升到1920，支持高清显示
-      height: 1080,      // 🔥 提高分辨率：从768提升到1080，支持高清显示
+      width: 1920,       // 🔥 统一分辨率：与视频录制保持一致
+      height: 1080,      // 🔥 统一分辨率：与视频录制保持一致
       maskSelectors: []
     });
 
@@ -5916,6 +5916,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           
           if (!alreadySaved) {
             // 保存到数据库
+            console.log(`🎥 [${runId}] 发现视频文件，准备保存到数据库: ${videoFilename} (${stats.size} bytes)`);
             const videoBuffer = await fsPromises.readFile(renamedVideoPath);
             await this.evidenceService.saveBufferArtifact(
               runId,
@@ -5923,9 +5924,9 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
               videoBuffer,
               videoFilename
             );
-            console.log(`🎥 [${runId}] 视频文件已保存到数据库: ${videoFilename} (${stats.size} bytes)`);
+            console.log(`✅ [${runId}] 视频文件已保存到数据库: ${videoFilename} (${stats.size} bytes)`);
           } else {
-            console.log(`🎥 [${runId}] 视频文件已存在，跳过重复保存: ${videoFilename}`);
+            console.log(`🎥 [${runId}] 视频文件已存在于数据库，跳过重复保存: ${videoFilename}`);
           }
           return;
         } else {
@@ -5933,6 +5934,7 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         }
       } catch {
         // 重命名后的文件不存在，继续查找原始文件
+        console.log(`🔍 [${runId}] 未找到最终名称的视频文件，尝试查找原始哈希名称文件...`);
       }
 
       // 如果未找到，尝试在其他目录中搜索（兼容旧逻辑）
@@ -8579,14 +8581,17 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
    */
   private async processPlaywrightArtifacts(runId: string): Promise<void> {
     try {
+      console.log(`📦 [${runId}] 开始处理 Playwright artifacts...`);
       const artifactsDir = this.evidenceService.getArtifactsDir();
       const runArtifactsDir = path.join(artifactsDir, runId);
       
       if (!(await this.fileExists(runArtifactsDir))) {
+        console.log(`⚠️ [${runId}] artifacts 目录不存在: ${runArtifactsDir}`);
         return;
       }
 
       const files = await fsPromises.readdir(runArtifactsDir, { withFileTypes: true });
+      console.log(`📂 [${runId}] 找到 ${files.length} 个文件: ${files.map(f => f.name).join(', ')}`);
       
       // 1. 处理 trace.zip 文件
       const traceFile = files.find(f => f.isFile() && f.name === 'trace.zip');
@@ -8616,33 +8621,67 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
         }
       }
 
-      // 2. 处理视频文件（哈希名称的 .webm 或 .mp4 文件）
-      const videoFiles = files.filter(f => 
-        f.isFile() && 
-        (f.name.endsWith('.webm') || f.name.endsWith('.mp4')) &&
-        !f.name.includes(runId) && // 排除已经重命名的文件
-        f.name.match(/^[a-f0-9]{32,}\.(webm|mp4)$/i) // 匹配哈希名称格式
-      );
+      // 2. 处理视频文件
+      // 首先检查是否已经存在最终名称的视频文件
+      const finalVideoFilename = `${runId}-video.webm`;
+      const finalVideoPath = path.join(runArtifactsDir, finalVideoFilename);
       
-      if (videoFiles.length > 0) {
-        // 按修改时间排序，获取最新的视频文件
-        const videoFilesWithStats = await Promise.all(
-          videoFiles.map(async (file) => {
-            const filePath = path.join(runArtifactsDir, file.name);
-            const stats = await fsPromises.stat(filePath);
-            return { file, path: filePath, stats };
-          })
+      try {
+        await fsPromises.access(finalVideoPath);
+        const stats = await fsPromises.stat(finalVideoPath);
+        
+        if (stats.size > 0) {
+          // 文件已经是最终名称，检查是否已保存到数据库
+          const existingArtifacts = await this.evidenceService.getRunArtifacts(runId);
+          const alreadySaved = existingArtifacts.some(a => 
+            a.type === 'video' && a.filename === finalVideoFilename
+          );
+          
+          if (!alreadySaved) {
+            console.log(`🎥 [${runId}] 发现最终名称的视频文件，保存到数据库: ${finalVideoFilename} (${stats.size} bytes)`);
+            const videoBuffer = await fsPromises.readFile(finalVideoPath);
+            await this.evidenceService.saveBufferArtifact(
+              runId,
+              'video',
+              videoBuffer,
+              finalVideoFilename
+            );
+            console.log(`✅ [${runId}] 视频文件已保存到数据库: ${finalVideoFilename} (${stats.size} bytes)`);
+          } else {
+            console.log(`🎥 [${runId}] 视频文件已存在于数据库: ${finalVideoFilename}`);
+          }
+        }
+      } catch {
+        // 最终名称的文件不存在，查找哈希名称的文件
+        console.log(`🔍 [${runId}] 未找到最终名称的视频文件，查找哈希名称文件...`);
+        
+        const videoFiles = files.filter(f => 
+          f.isFile() && 
+          (f.name.endsWith('.webm') || f.name.endsWith('.mp4')) &&
+          !f.name.includes(runId) && // 排除已经重命名的文件
+          f.name.match(/^[a-f0-9]{32,}\.(webm|mp4)$/i) // 匹配哈希名称格式
         );
         
-        videoFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
-        
-        // 只处理第一个（最新的）视频文件
-        const { file: videoFile, path: videoPath, stats: videoStats } = videoFilesWithStats[0];
-        
-        // 检查文件大小，确保不是空文件
-        if (videoStats.size > 0) {
-          const ext = videoFile.name.split('.').pop() || 'webm';
-          const newVideoPath = path.join(runArtifactsDir, `${runId}-video.${ext}`);
+        if (videoFiles.length > 0) {
+          console.log(`🎥 [${runId}] 找到 ${videoFiles.length} 个哈希名称的视频文件`);
+          // 按修改时间排序，获取最新的视频文件
+          const videoFilesWithStats = await Promise.all(
+            videoFiles.map(async (file) => {
+              const filePath = path.join(runArtifactsDir, file.name);
+              const stats = await fsPromises.stat(filePath);
+              return { file, path: filePath, stats };
+            })
+          );
+          
+          videoFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+          
+          // 只处理第一个（最新的）视频文件
+          const { file: videoFile, path: videoPath, stats: videoStats } = videoFilesWithStats[0];
+          
+          // 检查文件大小，确保不是空文件
+          if (videoStats.size > 0) {
+            const ext = videoFile.name.split('.').pop() || 'webm';
+            const newVideoPath = path.join(runArtifactsDir, `${runId}-video.${ext}`);
           
           // 检查是否已存在重命名后的文件
           try {
@@ -8677,6 +8716,9 @@ ${elements.map((el, index) => `${index + 1}. ${el.ref}: ${el.role} "${el.text}"`
           console.log(`✅ [${runId}] 视频文件已保存到数据库: ${runId}-video.${ext} (${finalStats.size} bytes)`);
         } else {
           console.warn(`⚠️ [${runId}] 视频文件大小为 0，跳过: ${videoFile.name}`);
+        }
+        } else {
+          console.log(`🔍 [${runId}] 未找到哈希名称的视频文件`);
         }
       }
     } catch (error: any) {
