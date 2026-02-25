@@ -25,157 +25,157 @@ export class ModelRegistry {
 
   private constructor() {
     this.models = [
-      // // ============ DeepSeek 系列 ============
-      // {
-      //   id: 'deepseek-series',
-      //   name: 'DeepSeek 系列',
-      //   provider: 'DeepSeek',
-      //   openRouterModel: 'deepseek-r1',
-      //   customBaseUrl: 'https://api.deepseek.com/v1',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 4096
-      //   },
-      //   capabilities: ['text-generation', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
-      //   description: 'DeepSeek系列模型，可自动获取所有可用模型版本，包括deepseek-chat、deepseek-coder等',
-      //   costLevel: 'medium'
-      // },
-      // // ============ 阿里云通义千问系列 ============
-      // {
-      //   id: 'qwen-series',
-      //   name: '通义千问 系列',
-      //   provider: '阿里云',
-      //   openRouterModel: 'qwen3-max',
-      //   customBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 2000
-      //   },
-      //   capabilities: ['text-generation', 'chinese-friendly', 'free-tier', 'fast-response', 'model-list'],
-      //   description: '阿里云通义千问系列模型，可自动获取所有可用模型版本，包括qwen-turbo、qwen-plus、qwen-max等',
-      //   costLevel: 'medium'
-      // },
-      // // ============ 月之暗面 Kimi 系列 ============
-      // {
-      //   id: 'kimi-series',
-      //   name: 'Kimi 系列',
-      //   provider: '月之暗面',
-      //   openRouterModel: 'kimi-k2-turbo-preview',
-      //   customBaseUrl: 'https://api.moonshot.cn/v1',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 4000
-      //   },
-      //   capabilities: ['text-generation', 'long-context', 'chinese-friendly', 'free-tier', 'model-list'],
-      //   description: 'Kimi系列模型，可自动获取所有可用模型版本，包括moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k、Kimi K2大模型，最新一代混合专家模型，支持128K超长上下文，具备强大的代理智能和自主问题解决能力',
-      //   costLevel: 'medium'
-      // },
-      // // ============ 智谱AI GLM 系列 ============
-      // {
-      //   id: 'glm-series',
-      //   name: '智谱GLM 系列',
-      //   provider: '智谱AI',
-      //   openRouterModel: 'glm-4',
-      //   customBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 2000
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
-      //   description: '智谱AI GLM系列模型，可自动获取所有可用模型版本，包括glm-4、glm-4-flash、glm-4v、glm-4.6v等',
-      //   costLevel: 'medium'
-      // },
-      // {
-      //   id: 'ernie-bot-turbo',
-      //   name: '文心一言',
-      //   provider: '百度',
-      //   openRouterModel: 'ernie-bot-turbo',
-      //   customBaseUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/eb-instant',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 2000
-      //   },
-      //   capabilities: ['text-generation', 'fast-response', 'chinese-friendly', 'free-tier'],
-      //   description: '百度文心一言Turbo模型，快速响应，免费额度充足',
-      //   costLevel: 'low'
-      // },
-      // {
-      //   id: 'gpt-4o',
-      //   name: 'GPT-4o',
-      //   provider: 'OpenAI',
-      //   openRouterModel: 'openai/gpt-4o',
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 1500
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis'],
-      //   description: 'OpenAI GPT-4o模型，支持文本和图像理解',
-      //   costLevel: 'high'
-      // },
-      // {
-      //   id: 'gemini-3-pro',
-      //   name: 'Gemini 3 Pro',
-      //   provider: 'Google',
-      //   openRouterModel: 'google/gemini-3-pro',
-      //   customBaseUrl: 'https://openrouter.ai/api/v1',
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 4096
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding', 'long-context'],
-      //   description: 'Google Gemini 3 Pro模型，支持多模态和超长上下文',
-      //   costLevel: 'high'
-      // },
-      // {
-      //   id: 'claude-sonnet-4.5',
-      //   name: 'Claude Sonnet 4.5',
-      //   provider: 'OpenRouter',
-      //   openRouterModel: 'anthropic/claude-sonnet-4.5',
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 2000
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'long-context'],
-      //   description: 'Anthropic Claude Sonnet 4.5模型，平衡性能与成本，支持长上下文',
-      //   costLevel: 'medium'
-      // },
-      // // ============ OpenRouter 系列 (包含OpenAI、Anthropic等) ============
-      // {
-      //   id: 'openrouter-series',
-      //   name: 'OpenRouter 全部模型',
-      //   provider: 'OpenRouter',
-      //   openRouterModel: 'openai/gpt-4o',
-      //   customBaseUrl: 'https://openrouter.ai/api/v1',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 2000
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
-      //   description: 'OpenRouter平台，可自动获取所有可用模型，包括OpenAI、Anthropic、Google、Meta等多家厂商模型',
-      //   costLevel: 'high'
-      // },
-      // // ============ Zenmux 系列 (Google Gemini 等) ============
-      // {
-      //   id: 'zenmux-series',
-      //   name: 'Zenmux 全部模型',
-      //   provider: 'Zenmux',
-      //   openRouterModel: 'google/gemini-3-pro-preview',
-      //   customBaseUrl: 'https://zenmux.ai/api/v1',
-      //   requiresCustomAuth: true,
-      //   defaultConfig: {
-      //     temperature: 0.3,
-      //     maxTokens: 4096
-      //   },
-      //   capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
-      //   description: 'Zenmux平台，可自动获取所有可用模型，包括Google Gemini系列、Claude等多家厂商模型',
-      //   costLevel: 'medium'
-      // },
+      // ============ DeepSeek 系列 ============
+      {
+        id: 'deepseek-series',
+        name: 'DeepSeek 系列',
+        provider: 'DeepSeek',
+        openRouterModel: 'deepseek-r1',
+        customBaseUrl: 'https://api.deepseek.com/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: 'DeepSeek系列模型，可自动获取所有可用模型版本，包括deepseek-chat、deepseek-coder等',
+        costLevel: 'medium'
+      },
+      // ============ 阿里云通义千问系列 ============
+      {
+        id: 'qwen-series',
+        name: '通义千问 系列',
+        provider: '阿里云',
+        openRouterModel: 'qwen3-max',
+        customBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'chinese-friendly', 'free-tier', 'fast-response', 'model-list'],
+        description: '阿里云通义千问系列模型，可自动获取所有可用模型版本，包括qwen-turbo、qwen-plus、qwen-max等',
+        costLevel: 'medium'
+      },
+      // ============ 月之暗面 Kimi 系列 ============
+      {
+        id: 'kimi-series',
+        name: 'Kimi 系列',
+        provider: '月之暗面',
+        openRouterModel: 'kimi-k2-turbo-preview',
+        customBaseUrl: 'https://api.moonshot.cn/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4000
+        },
+        capabilities: ['text-generation', 'long-context', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: 'Kimi系列模型，可自动获取所有可用模型版本，包括moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k、Kimi K2大模型，最新一代混合专家模型，支持128K超长上下文，具备强大的代理智能和自主问题解决能力',
+        costLevel: 'medium'
+      },
+      // ============ 智谱AI GLM 系列 ============
+      {
+        id: 'glm-series',
+        name: '智谱GLM 系列',
+        provider: '智谱AI',
+        openRouterModel: 'glm-4',
+        customBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: '智谱AI GLM系列模型，可自动获取所有可用模型版本，包括glm-4、glm-4-flash、glm-4v、glm-4.6v等',
+        costLevel: 'medium'
+      },
+      {
+        id: 'ernie-bot-turbo',
+        name: '文心一言',
+        provider: '百度',
+        openRouterModel: 'ernie-bot-turbo',
+        customBaseUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/eb-instant',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'fast-response', 'chinese-friendly', 'free-tier'],
+        description: '百度文心一言Turbo模型，快速响应，免费额度充足',
+        costLevel: 'low'
+      },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        provider: 'OpenAI',
+        openRouterModel: 'openai/gpt-4o',
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 1500
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis'],
+        description: 'OpenAI GPT-4o模型，支持文本和图像理解',
+        costLevel: 'high'
+      },
+      {
+        id: 'gemini-3-pro',
+        name: 'Gemini 3 Pro',
+        provider: 'Google',
+        openRouterModel: 'google/gemini-3-pro',
+        customBaseUrl: 'https://openrouter.ai/api/v1',
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'image-understanding', 'audio-understanding', 'long-context'],
+        description: 'Google Gemini 3 Pro模型，支持多模态和超长上下文',
+        costLevel: 'high'
+      },
+      {
+        id: 'claude-sonnet-4.5',
+        name: 'Claude Sonnet 4.5',
+        provider: 'OpenRouter',
+        openRouterModel: 'anthropic/claude-sonnet-4.5',
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'long-context'],
+        description: 'Anthropic Claude Sonnet 4.5模型，平衡性能与成本，支持长上下文',
+        costLevel: 'medium'
+      },
+      // ============ OpenRouter 系列 (包含OpenAI、Anthropic等) ============
+      {
+        id: 'openrouter-series',
+        name: 'OpenRouter 全部模型',
+        provider: 'OpenRouter',
+        openRouterModel: 'openai/gpt-4o',
+        customBaseUrl: 'https://openrouter.ai/api/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
+        description: 'OpenRouter平台，可自动获取所有可用模型，包括OpenAI、Anthropic、Google、Meta等多家厂商模型',
+        costLevel: 'high'
+      },
+      // ============ Zenmux 系列 (Google Gemini 等) ============
+      {
+        id: 'zenmux-series',
+        name: 'Zenmux 全部模型',
+        provider: 'Zenmux',
+        openRouterModel: 'google/gemini-3-pro-preview',
+        customBaseUrl: 'https://zenmux.ai/api/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'model-list'],
+        description: 'Zenmux平台，可自动获取所有可用模型，包括Google Gemini系列、Claude等多家厂商模型',
+        costLevel: 'medium'
+      },
       // ============ NewApi 系列 ============
       {
         id: 'newapi-series',

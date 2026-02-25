@@ -4,37 +4,37 @@
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "gpt-4o-mini": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "gpt-4-turbo": {
       "input": 0.00000001,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "gpt-4": {
       "input": 0.00000003,
       "output": 0.00000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "gpt-3.5-turbo": {
       "input": 0.0000000005,
       "output": 0.0000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "claude-3.5-sonnet": {
       "input": 0.000000006,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "claude-3-opus": {
       "input": 0.015,
@@ -51,7 +51,7 @@
       "input": 0.00000000025,
       "output": 0.00000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "gemini-1.5-pro": {
       "input": 0.00125,
@@ -97,7 +97,7 @@
       "input": 0.0000000008,
       "output": 0.0000000032,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen-vl-max-latest": {
       "input": 0.0002,
@@ -115,7 +115,7 @@
       "input": 0.00000000021,
       "output": 0.00000000063,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "glm-4v": {
       "input": 0.0005,
@@ -133,7 +133,7 @@
       "input": 0.0000000003,
       "output": 0.0000000009,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "default": {
       "input": 0.001,
@@ -145,43 +145,43 @@
       "input": 0.0000000006,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "liquid/lfm-2.5-1.2b-thinking:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "liquid/lfm-2.5-1.2b-instruct:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-audio": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-audio-mini": {
       "input": 0.0000000006,
       "output": 0.0000000024,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "z-ai/glm-4.7-flash": {
       "input": 0.00000000006,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-5.2-codex": {
       "input": 0.00000000175,
       "output": 0.000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "allenai/molmo-2-8b:free": {
       "input": 0,
@@ -193,49 +193,49 @@
       "input": 0.0000000002,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "bytedance-seed/seed-1.6-flash": {
       "input": 0.000000000075,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "bytedance-seed/seed-1.6": {
       "input": 0.00000000025,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "minimax/minimax-m2.1": {
       "input": 0.00000000027,
       "output": 0.00000000095,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "z-ai/glm-4.7": {
-      "input": 0.0000000004,
-      "output": 0.0000000015,
+      "input": 0.0000000003,
+      "output": 0.0000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "google/gemini-3-flash-preview": {
       "input": 0.0000000005,
       "output": 0.000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "mistralai/mistral-small-creative": {
       "input": 0.0000000001,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "allenai/olmo-3.1-32b-think": {
       "input": 0.00000000015,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "xiaomi/mimo-v2-flash:free": {
       "input": 0,
@@ -247,37 +247,37 @@
       "input": 0.00000000009,
       "output": 0.00000000029,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "nvidia/nemotron-3-nano-30b-a3b:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "nvidia/nemotron-3-nano-30b-a3b": {
       "input": 0.00000000005,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-5.2-chat": {
       "input": 0.00000000175,
       "output": 0.000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-5.2-pro": {
       "input": 0.000000021,
       "output": 0.000000168,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openai/gpt-5.2": {
       "input": 0.00000000175,
       "output": 0.000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "mistralai/devstral-2512:free": {
       "input": 0,
@@ -286,268 +286,268 @@
       "lastUpdated": "2026-01-27T03:20:57.772Z"
     },
     "mistralai/devstral-2512": {
-      "input": 0.00000000005,
-      "output": 0.00000000022,
+      "input": 0.0000000004,
+      "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "relace/relace-search": {
       "input": 0.000000001,
       "output": 0.000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "z-ai/glm-4.6v": {
       "input": 0.0000000003,
       "output": 0.0000000009,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "nex-agi/deepseek-v3.1-nex-n1": {
       "input": 0.00000000027,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "essentialai/rnj-1-instruct": {
       "input": 0.00000000015,
       "output": 0.00000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openrouter/bodybuilder": {
       "input": -0.001,
       "output": -0.001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-5.1-codex-max": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "amazon/nova-2-lite-v1": {
       "input": 0.0000000003,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "mistralai/ministral-14b-2512": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "mistralai/ministral-8b-2512": {
       "input": 0.00000000015,
       "output": 0.00000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "mistralai/ministral-3b-2512": {
       "input": 0.0000000001,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "mistralai/mistral-large-2512": {
       "input": 0.0000000005,
       "output": 0.0000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "arcee-ai/trinity-mini:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "arcee-ai/trinity-mini": {
       "input": 0.000000000045,
       "output": 0.00000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "deepseek/deepseek-v3.2-speciale": {
-      "input": 0.00000000027,
-      "output": 0.00000000041,
+      "input": 0.0000000004,
+      "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "deepseek/deepseek-v3.2": {
       "input": 0.00000000025,
-      "output": 0.00000000038,
+      "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "prime-intellect/intellect-3": {
       "input": 0.0000000002,
       "output": 0.0000000011,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "tngtech/tng-r1t-chimera:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-12T10:21:19.935Z"
     },
     "tngtech/tng-r1t-chimera": {
       "input": 0.00000000025,
       "output": 0.00000000085,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-17T10:21:20.982Z"
     },
     "anthropic/claude-opus-4.5": {
       "input": 0.000000005,
       "output": 0.000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "allenai/olmo-3-32b-think": {
       "input": 0.00000000015,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "allenai/olmo-3-7b-instruct": {
       "input": 0.0000000001,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "allenai/olmo-3-7b-think": {
       "input": 0.00000000012,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "google/gemini-3-pro-image-preview": {
       "input": 0.000000002,
       "output": 0.000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "x-ai/grok-4.1-fast": {
       "input": 0.0000000002,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "google/gemini-3-pro-preview": {
       "input": 0.000000002,
       "output": 0.000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "deepcogito/cogito-v2.1-671b": {
       "input": 0.00000000125,
       "output": 0.00000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-5.1": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-5.1-chat": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-5.1-codex": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-5.1-codex-mini": {
       "input": 0.00000000025,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "kwaipilot/kat-coder-pro": {
       "input": 0.000000000207,
       "output": 0.000000000828,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "moonshotai/kimi-k2-thinking": {
-      "input": 0.0000000004,
-      "output": 0.00000000175,
+      "input": 0.00000000047,
+      "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "amazon/nova-premier-v1": {
       "input": 0.0000000025,
       "output": 0.0000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "perplexity/sonar-pro-search": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "mistralai/voxtral-small-24b-2507": {
       "input": 0.0000000001,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "openai/gpt-oss-safeguard-20b": {
       "input": 0.000000000075,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "nvidia/nemotron-nano-12b-v2-vl:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.986Z"
     },
     "nvidia/nemotron-nano-12b-v2-vl": {
-      "input": 0.0000000002,
-      "output": 0.0000000006,
+      "input": 0.00000000007,
+      "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "minimax/minimax-m2": {
       "input": 0.000000000255,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-32b-instruct": {
-      "input": 0.0000000005,
-      "output": 0.0000000015,
+      "input": 0.000000000104,
+      "output": 0.000000000416,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "liquid/lfm2-8b-a1b": {
       "input": 0.00000000001,
       "output": 0.00000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "liquid/lfm-2.2-6b": {
       "input": 0.00000000001,
       "output": 0.00000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "ibm-granite/granite-4.0-h-micro": {
       "input": 0.000000000017,
       "output": 0.00000000011,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "deepcogito/cogito-v2-preview-llama-405b": {
       "input": 0.0000000035,
@@ -559,253 +559,253 @@
       "input": 0.0000000025,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "anthropic/claude-haiku-4.5": {
       "input": 0.000000001,
       "output": 0.000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-8b-thinking": {
-      "input": 0.00000000018,
-      "output": 0.0000000021,
+      "input": 0.000000000117,
+      "output": 0.000000001365,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-8b-instruct": {
       "input": 0.00000000008,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "openai/gpt-5-image": {
       "input": 0.00000001,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "openai/o3-deep-research": {
       "input": 0.00000001,
       "output": 0.00000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "openai/o4-mini-deep-research": {
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
       "input": 0.0000000001,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "baidu/ernie-4.5-21b-a3b-thinking": {
       "input": 0.00000000007,
       "output": 0.00000000028,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "google/gemini-2.5-flash-image": {
       "input": 0.0000000003,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-30b-a3b-thinking": {
-      "input": 0.0000000002,
-      "output": 0.000000001,
+      "input": 0,
+      "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-30b-a3b-instruct": {
-      "input": 0.00000000015,
-      "output": 0.0000000006,
+      "input": 0.00000000013,
+      "output": 0.00000000052,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.406Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "openai/gpt-5-pro": {
       "input": 0.000000015,
       "output": 0.00000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "z-ai/glm-4.6": {
       "input": 0.00000000035,
-      "output": 0.0000000015,
+      "output": 0.00000000171,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "z-ai/glm-4.6:exacto": {
       "input": 0.00000000044,
       "output": 0.00000000176,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "anthropic/claude-sonnet-4.5": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "deepseek/deepseek-v3.2-exp": {
       "input": 0.00000000027,
       "output": 0.00000000041,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "thedrummer/cydonia-24b-v4.1": {
       "input": 0.0000000003,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "relace/relace-apply-3": {
       "input": 0.00000000085,
       "output": 0.00000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "google/gemini-2.5-flash-preview-09-2025": {
       "input": 0.0000000003,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-17T10:21:20.983Z"
     },
     "google/gemini-2.5-flash-lite-preview-09-2025": {
       "input": 0.0000000001,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-235b-a22b-thinking": {
-      "input": 0.00000000045,
-      "output": 0.0000000035,
+      "input": 0,
+      "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-vl-235b-a22b-instruct": {
       "input": 0.0000000002,
       "output": 0.00000000088,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-max": {
       "input": 0.0000000012,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-coder-plus": {
       "input": 0.000000001,
       "output": 0.000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "openai/gpt-5-codex": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "deepseek/deepseek-v3.1-terminus:exacto": {
       "input": 0.00000000021,
       "output": 0.00000000079,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "deepseek/deepseek-v3.1-terminus": {
       "input": 0.00000000021,
       "output": 0.00000000079,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "x-ai/grok-4-fast": {
       "input": 0.0000000002,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "alibaba/tongyi-deepresearch-30b-a3b": {
       "input": 0.00000000009,
       "output": 0.00000000045,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-coder-flash": {
       "input": 0.0000000003,
       "output": 0.0000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "opengvlab/internvl3-78b": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-next-80b-a3b-thinking": {
       "input": 0.00000000015,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-next-80b-a3b-instruct:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.987Z"
     },
     "qwen/qwen3-next-80b-a3b-instruct": {
       "input": 0.00000000009,
       "output": 0.0000000011,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "meituan/longcat-flash-chat": {
       "input": 0.0000000002,
       "output": 0.0000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen-plus-2025-07-28": {
       "input": 0.0000000004,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen-plus-2025-07-28:thinking": {
       "input": 0.0000000004,
-      "output": 0.000000004,
+      "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "nvidia/nemotron-nano-9b-v2:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "nvidia/nemotron-nano-9b-v2": {
       "input": 0.00000000004,
       "output": 0.00000000016,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "moonshotai/kimi-k2-0905": {
-      "input": 0.00000000039,
-      "output": 0.0000000019,
+      "input": 0.0000000004,
+      "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "moonshotai/kimi-k2-0905:exacto": {
       "input": 0.0000000006,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "deepcogito/cogito-v2-preview-llama-70b": {
       "input": 0.00000000088,
@@ -829,61 +829,61 @@
       "input": 0.000000000051,
       "output": 0.00000000034,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "x-ai/grok-code-fast-1": {
       "input": 0.0000000002,
       "output": 0.0000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "nousresearch/hermes-4-70b": {
-      "input": 0.00000000011,
-      "output": 0.00000000038,
+      "input": 0.00000000013,
+      "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "nousresearch/hermes-4-405b": {
       "input": 0.000000001,
       "output": 0.000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "deepseek/deepseek-chat-v3.1": {
       "input": 0.00000000015,
       "output": 0.00000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-4o-audio-preview": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "mistralai/mistral-medium-3.1": {
       "input": 0.0000000004,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "baidu/ernie-4.5-21b-a3b": {
       "input": 0.00000000007,
       "output": 0.00000000028,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "baidu/ernie-4.5-vl-28b-a3b": {
       "input": 0.00000000014,
       "output": 0.00000000056,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "z-ai/glm-4.5v": {
       "input": 0.0000000006,
       "output": 0.0000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "ai21/jamba-mini-1.7": {
       "input": 0.0000000002,
@@ -895,157 +895,157 @@
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-5-chat": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-5": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-5-mini": {
       "input": 0.00000000025,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-5-nano": {
       "input": 0.00000000005,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-oss-120b:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-oss-120b": {
       "input": 0.000000000039,
       "output": 0.00000000019,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-oss-120b:exacto": {
       "input": 0.000000000039,
       "output": 0.00000000019,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-oss-20b:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "openai/gpt-oss-20b": {
       "input": 0.00000000003,
       "output": 0.00000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "anthropic/claude-opus-4.1": {
       "input": 0.000000015,
       "output": 0.000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "mistralai/codestral-2508": {
       "input": 0.0000000003,
       "output": 0.0000000009,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-coder-30b-a3b-instruct": {
       "input": 0.00000000007,
       "output": 0.00000000027,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-30b-a3b-instruct-2507": {
-      "input": 0.00000000008,
-      "output": 0.00000000033,
+      "input": 0.00000000009,
+      "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "z-ai/glm-4.5": {
-      "input": 0.00000000035,
-      "output": 0.00000000155,
+      "input": 0.00000000055,
+      "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "z-ai/glm-4.5-air:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "z-ai/glm-4.5-air": {
       "input": 0.00000000013,
       "output": 0.00000000085,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-235b-a22b-thinking-2507": {
-      "input": 0.00000000011,
-      "output": 0.0000000006,
+      "input": 0,
+      "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "z-ai/glm-4-32b": {
       "input": 0.0000000001,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-coder:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-coder": {
       "input": 0.00000000022,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-coder:exacto": {
       "input": 0.00000000022,
       "output": 0.0000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "bytedance/ui-tars-1.5-7b": {
       "input": 0.0000000001,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "google/gemini-2.5-flash-lite": {
       "input": 0.0000000001,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "qwen/qwen3-235b-a22b-2507": {
       "input": 0.000000000071,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.988Z"
     },
     "switchpoint/router": {
       "input": 0.00000000085,
       "output": 0.0000000034,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "moonshotai/kimi-k2:free": {
       "input": 0,
@@ -1057,109 +1057,109 @@
       "input": 0.0000000005,
       "output": 0.0000000024,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "mistralai/devstral-medium": {
       "input": 0.0000000004,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "mistralai/devstral-small": {
       "input": 0.0000000001,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "x-ai/grok-4": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemma-3n-e2b-it:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "tencent/hunyuan-a13b-instruct": {
       "input": 0.00000000014,
       "output": 0.00000000057,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "tngtech/deepseek-r1t2-chimera:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-12T10:21:19.937Z"
     },
     "tngtech/deepseek-r1t2-chimera": {
       "input": 0.00000000025,
       "output": 0.00000000085,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "morph/morph-v3-large": {
       "input": 0.0000000009,
       "output": 0.0000000019,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "morph/morph-v3-fast": {
       "input": 0.0000000008,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "baidu/ernie-4.5-vl-424b-a47b": {
       "input": 0.00000000042,
       "output": 0.00000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "baidu/ernie-4.5-300b-a47b": {
       "input": 0.00000000028,
       "output": 0.0000000011,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "inception/mercury": {
       "input": 0.00000000025,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "mistralai/mistral-small-3.2-24b-instruct": {
       "input": 0.00000000006,
       "output": 0.00000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "minimax/minimax-m1": {
       "input": 0.0000000004,
       "output": 0.0000000022,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemini-2.5-flash": {
       "input": 0.0000000003,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemini-2.5-pro": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "moonshotai/kimi-dev-72b": {
       "input": 0.00000000029,
@@ -1171,541 +1171,541 @@
       "input": 0.00000002,
       "output": 0.00000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "x-ai/grok-3-mini": {
       "input": 0.0000000003,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "x-ai/grok-3": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemini-2.5-pro-preview": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "deepseek/deepseek-r1-0528:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-23T10:21:22.392Z"
     },
     "deepseek/deepseek-r1-0528": {
       "input": 0.0000000004,
       "output": 0.00000000175,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "anthropic/claude-opus-4": {
       "input": 0.000000015,
       "output": 0.000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "anthropic/claude-sonnet-4": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemma-3n-e4b-it:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemma-3n-e4b-it": {
       "input": 0.00000000002,
       "output": 0.00000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "nousresearch/deephermes-3-mistral-24b-preview": {
       "input": 0.00000000002,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-17T10:21:20.983Z"
     },
     "mistralai/mistral-medium-3": {
       "input": 0.0000000004,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.407Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "google/gemini-2.5-pro-preview-05-06": {
       "input": 0.00000000125,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "arcee-ai/spotlight": {
       "input": 0.00000000018,
       "output": 0.00000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "arcee-ai/maestro-reasoning": {
       "input": 0.0000000009,
       "output": 0.0000000033,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "arcee-ai/virtuoso-large": {
       "input": 0.00000000075,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "arcee-ai/coder-large": {
       "input": 0.0000000005,
       "output": 0.0000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "inception/mercury-coder": {
       "input": 0.00000000025,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-4b:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "meta-llama/llama-guard-4-12b": {
       "input": 0.00000000018,
       "output": 0.00000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-30b-a3b": {
-      "input": 0.00000000006,
-      "output": 0.00000000022,
+      "input": 0.00000000008,
+      "output": 0.00000000028,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-8b": {
       "input": 0.00000000005,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-14b": {
-      "input": 0.00000000005,
-      "output": 0.00000000022,
+      "input": 0.00000000006,
+      "output": 0.00000000024,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-32b": {
       "input": 0.00000000008,
       "output": 0.00000000024,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen3-235b-a22b": {
-      "input": 0.0000000002,
-      "output": 0.0000000006,
+      "input": 0.000000000455,
+      "output": 0.00000000182,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "tngtech/deepseek-r1t-chimera:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-12T10:21:19.937Z"
     },
     "tngtech/deepseek-r1t-chimera": {
       "input": 0.0000000003,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-17T10:21:20.983Z"
     },
     "openai/o4-mini-high": {
       "input": 0.0000000011,
       "output": 0.0000000044,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "openai/o3": {
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "openai/o4-mini": {
       "input": 0.0000000011,
       "output": 0.0000000044,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "qwen/qwen2.5-coder-7b-instruct": {
       "input": 0.00000000003,
       "output": 0.00000000009,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "openai/gpt-4.1": {
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.989Z"
     },
     "openai/gpt-4.1-mini": {
       "input": 0.0000000004,
       "output": 0.0000000016,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/gpt-4.1-nano": {
       "input": 0.0000000001,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "eleutherai/llemma_7b": {
       "input": 0.0000000008,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "alfredpros/codellama-7b-instruct-solidity": {
       "input": 0.0000000008,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "x-ai/grok-3-mini-beta": {
       "input": 0.0000000003,
       "output": 0.0000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "x-ai/grok-3-beta": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "nvidia/llama-3.1-nemotron-ultra-253b-v1": {
       "input": 0.0000000006,
       "output": 0.0000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "meta-llama/llama-4-maverick": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "meta-llama/llama-4-scout": {
       "input": 0.00000000008,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen2.5-vl-32b-instruct": {
-      "input": 0.00000000005,
-      "output": 0.00000000022,
+      "input": 0.0000000002,
+      "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "deepseek/deepseek-chat-v3-0324": {
       "input": 0.00000000019,
       "output": 0.00000000087,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/o1-pro": {
       "input": 0.00000015,
       "output": 0.0000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "mistralai/mistral-small-3.1-24b-instruct:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "mistralai/mistral-small-3.1-24b-instruct": {
-      "input": 0.00000000003,
-      "output": 0.00000000011,
+      "input": 0.00000000035,
+      "output": 0.00000000056,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "allenai/olmo-2-0325-32b-instruct": {
       "input": 0.00000000005,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-4b-it:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-4b-it": {
-      "input": 0.00000000001703012,
-      "output": 0.0000000000681536,
+      "input": 0.00000000004,
+      "output": 0.00000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-12b-it:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-12b-it": {
-      "input": 0.00000000003,
-      "output": 0.0000000001,
+      "input": 0.00000000004,
+      "output": 0.00000000013,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "cohere/command-a": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/gpt-4o-mini-search-preview": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/gpt-4o-search-preview": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-27b-it:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemma-3-27b-it": {
       "input": 0.00000000004,
       "output": 0.00000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "thedrummer/skyfall-36b-v2": {
       "input": 0.00000000055,
       "output": 0.0000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "perplexity/sonar-reasoning-pro": {
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "perplexity/sonar-pro": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "perplexity/sonar-deep-research": {
       "input": 0.000000002,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwq-32b": {
       "input": 0.00000000015,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemini-2.0-flash-lite-001": {
       "input": 0.000000000075,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "anthropic/claude-3.7-sonnet:thinking": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "anthropic/claude-3.7-sonnet": {
       "input": 0.000000003,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "mistralai/mistral-saba": {
       "input": 0.0000000002,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "meta-llama/llama-guard-3-8b": {
       "input": 0.00000000002,
       "output": 0.00000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/o3-mini-high": {
       "input": 0.0000000011,
       "output": 0.0000000044,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "google/gemini-2.0-flash-001": {
       "input": 0.0000000001,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen-vl-plus": {
       "input": 0.00000000021,
       "output": 0.00000000063,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "aion-labs/aion-1.0": {
       "input": 0.000000004,
       "output": 0.000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "aion-labs/aion-1.0-mini": {
       "input": 0.0000000007,
       "output": 0.0000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "aion-labs/aion-rp-llama-3.1-8b": {
       "input": 0.0000000008,
       "output": 0.0000000016,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen-vl-max": {
       "input": 0.0000000008,
       "output": 0.0000000032,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen-turbo": {
       "input": 0.00000000005,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen2.5-vl-72b-instruct": {
-      "input": 0.00000000015,
-      "output": 0.0000000006,
+      "input": 0.0000000008,
+      "output": 0.0000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen-plus": {
       "input": 0.0000000004,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "qwen/qwen-max": {
       "input": 0.0000000016,
       "output": 0.0000000064,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "openai/o3-mini": {
       "input": 0.0000000011,
       "output": 0.0000000044,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "mistralai/mistral-small-24b-instruct-2501": {
       "input": 0.00000000005,
       "output": 0.00000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "deepseek/deepseek-r1-distill-qwen-32b": {
       "input": 0.00000000029,
       "output": 0.00000000029,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "perplexity/sonar": {
       "input": 0.000000001,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "deepseek/deepseek-r1-distill-llama-70b": {
-      "input": 0.00000000003,
-      "output": 0.00000000011,
+      "input": 0.0000000007,
+      "output": 0.0000000008,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "deepseek/deepseek-r1": {
       "input": 0.0000000007,
       "output": 0.0000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.990Z"
     },
     "minimax/minimax-01": {
       "input": 0.0000000002,
       "output": 0.0000000011,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "microsoft/phi-4": {
       "input": 0.00000000006,
       "output": 0.00000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "sao10k/l3.1-70b-hanami-x1": {
       "input": 0.000000003,
       "output": 0.000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "deepseek/deepseek-chat": {
-      "input": 0.0000000003,
-      "output": 0.0000000012,
+      "input": 0.00000000032,
+      "output": 0.00000000089,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "sao10k/l3.3-euryale-70b": {
       "input": 0.00000000065,
       "output": 0.00000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/o1": {
       "input": 0.000000015,
       "output": 0.00000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "cohere/command-r7b-12-2024": {
       "input": 0.0000000000375,
       "output": 0.00000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "google/gemini-2.0-flash-exp:free": {
       "input": 0,
@@ -1717,193 +1717,193 @@
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.3-70b-instruct": {
       "input": 0.0000000001,
       "output": 0.00000000032,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "amazon/nova-lite-v1": {
       "input": 0.00000000006,
       "output": 0.00000000024,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "amazon/nova-micro-v1": {
       "input": 0.000000000035,
       "output": 0.00000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "amazon/nova-pro-v1": {
       "input": 0.0000000008,
       "output": 0.0000000032,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o-2024-11-20": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/mistral-large-2411": {
       "input": 0.000000002,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/mistral-large-2407": {
       "input": 0.000000002,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/pixtral-large-2411": {
       "input": 0.000000002,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "qwen/qwen-2.5-coder-32b-instruct": {
-      "input": 0.00000000003,
-      "output": 0.00000000011,
+      "input": 0.0000000002,
+      "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "raifle/sorcererlm-8x22b": {
       "input": 0.0000000045,
       "output": 0.0000000045,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "thedrummer/unslopnemo-12b": {
       "input": 0.0000000004,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "anthropic/claude-3.5-haiku": {
       "input": 0.0000000008,
       "output": 0.000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "anthracite-org/magnum-v4-72b": {
       "input": 0.000000003,
       "output": 0.000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "anthropic/claude-3.5-sonnet": {
       "input": 0.000000006,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/ministral-8b": {
       "input": 0.0000000001,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-11T10:21:19.278Z"
     },
     "mistralai/ministral-3b": {
       "input": 0.00000000004,
       "output": 0.00000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-11T10:21:19.278Z"
     },
     "qwen/qwen-2.5-7b-instruct": {
       "input": 0.00000000004,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "nvidia/llama-3.1-nemotron-70b-instruct": {
       "input": 0.0000000012,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "inflection/inflection-3-pi": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "inflection/inflection-3-productivity": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "thedrummer/rocinante-12b": {
       "input": 0.00000000017,
       "output": 0.00000000043,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.2-3b-instruct:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.2-3b-instruct": {
       "input": 0.00000000002,
       "output": 0.00000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.2-1b-instruct": {
       "input": 0.000000000027,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.2-11b-vision-instruct": {
       "input": 0.000000000049,
       "output": 0.000000000049,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "qwen/qwen-2.5-72b-instruct": {
       "input": 0.00000000012,
       "output": 0.00000000039,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "neversleep/llama-3.1-lumimaid-8b": {
       "input": 0.00000000009,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/pixtral-12b": {
       "input": 0.0000000001,
       "output": 0.0000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-12T10:21:19.938Z"
     },
     "cohere/command-r-08-2024": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "cohere/command-r-plus-08-2024": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "sao10k/l3.1-euryale-70b": {
       "input": 0.00000000065,
       "output": 0.00000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "qwen/qwen-2.5-vl-7b-instruct:free": {
       "input": 0,
@@ -1915,55 +1915,55 @@
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "nousresearch/hermes-3-llama-3.1-70b": {
       "input": 0.0000000003,
       "output": 0.0000000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "nousresearch/hermes-3-llama-3.1-405b:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "nousresearch/hermes-3-llama-3.1-405b": {
       "input": 0.000000001,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/chatgpt-4o-latest": {
       "input": 0.000000005,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.408Z"
+      "lastUpdated": "2026-02-17T10:21:20.984Z"
     },
     "sao10k/l3-lunaris-8b": {
       "input": 0.00000000004,
       "output": 0.00000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o-2024-08-06": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.1-405b": {
       "input": 0.000000004,
       "output": 0.000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.1-8b-instruct": {
       "input": 0.00000000002,
       "output": 0.00000000005,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.1-405b-instruct:free": {
       "input": 0,
@@ -1975,304 +1975,376 @@
       "input": 0.000000004,
       "output": 0.000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-3.1-70b-instruct": {
       "input": 0.0000000004,
       "output": 0.0000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/mistral-nemo": {
       "input": 0.00000000002,
       "output": 0.00000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o-mini-2024-07-18": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o-mini": {
       "input": 0.00000000015,
       "output": 0.0000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "google/gemma-2-27b-it": {
       "input": 0.00000000065,
       "output": 0.00000000065,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "google/gemma-2-9b-it": {
       "input": 0.00000000003,
       "output": 0.00000000009,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "sao10k/l3-euryale-70b": {
       "input": 0.00000000148,
       "output": 0.00000000148,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "nousresearch/hermes-2-pro-llama-3-8b": {
       "input": 0.00000000014,
       "output": 0.00000000014,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/mistral-7b-instruct": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "mistralai/mistral-7b-instruct-v0.3": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "meta-llama/llama-guard-2-8b": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o-2024-05-13": {
       "input": 0.000000005,
       "output": 0.000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.991Z"
     },
     "openai/gpt-4o": {
       "input": 0.0000000025,
       "output": 0.00000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4o:extended": {
       "input": 0.000000006,
       "output": 0.000000018,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "meta-llama/llama-3-70b-instruct": {
       "input": 0.00000000051,
       "output": 0.00000000074,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "meta-llama/llama-3-8b-instruct": {
       "input": 0.00000000003,
       "output": 0.00000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mistralai/mixtral-8x22b-instruct": {
       "input": 0.000000002,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "microsoft/wizardlm-2-8x22b": {
-      "input": 0.00000000048,
-      "output": 0.00000000048,
+      "input": 0.00000000062,
+      "output": 0.00000000062,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4-turbo": {
       "input": 0.00000001,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "anthropic/claude-3-haiku": {
       "input": 0.00000000025,
       "output": 0.00000000125,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mistralai/mistral-large": {
       "input": 0.000000002,
       "output": 0.000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-3.5-turbo-0613": {
       "input": 0.000000001,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4-turbo-preview": {
       "input": 0.00000001,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mistralai/mistral-tiny": {
       "input": 0.00000000025,
       "output": 0.00000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-11T10:21:19.279Z"
     },
     "mistralai/mistral-7b-instruct-v0.2": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mistralai/mixtral-8x7b-instruct": {
       "input": 0.00000000054,
       "output": 0.00000000054,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "neversleep/noromaid-20b": {
       "input": 0.000000001,
       "output": 0.00000000175,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "alpindale/goliath-120b": {
       "input": 0.00000000375,
       "output": 0.0000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openrouter/auto": {
       "input": -0.001,
       "output": -0.001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4-1106-preview": {
       "input": 0.00000001,
       "output": 0.00000003,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-3.5-turbo-instruct": {
       "input": 0.0000000015,
       "output": 0.000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mistralai/mistral-7b-instruct-v0.1": {
       "input": 0.00000000011,
       "output": 0.00000000019,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-3.5-turbo-16k": {
       "input": 0.000000003,
       "output": 0.000000004,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "mancer/weaver": {
       "input": 0.00000000075,
       "output": 0.000000001,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "undi95/remm-slerp-l2-13b": {
       "input": 0.00000000045,
       "output": 0.00000000065,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "gryphe/mythomax-l2-13b": {
       "input": 0.00000000006,
       "output": 0.00000000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4-0314": {
       "input": 0.00000003,
       "output": 0.00000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-4": {
       "input": 0.00000003,
       "output": 0.00000006,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "openai/gpt-3.5-turbo": {
       "input": 0.0000000005,
       "output": 0.0000000015,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.409Z"
+      "lastUpdated": "2026-02-25T03:52:39.992Z"
     },
     "minimax/minimax-m2-her": {
       "input": 0.0000000003,
       "output": 0.0000000012,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "upstage/solar-pro-3:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "arcee-ai/trinity-large-preview:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "moonshotai/kimi-k2.5": {
       "input": 0.00000000045,
-      "output": 0.00000000225,
+      "output": 0.0000000022,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "openrouter/free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "stepfun/step-3.5-flash:free": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "anthropic/claude-opus-4.6": {
       "input": 0.000000005,
       "output": 0.000000025,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "qwen/qwen3-coder-next": {
-      "input": 0.00000000007,
-      "output": 0.0000000003,
+      "input": 0.00000000012,
+      "output": 0.00000000075,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     },
     "allenai/molmo-2-8b": {
       "input": 0.0000000002,
       "output": 0.0000000002,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-25T03:52:39.985Z"
     },
     "openrouter/pony-alpha": {
       "input": 0,
       "output": 0,
       "source": "api",
-      "lastUpdated": "2026-02-09T08:17:53.405Z"
+      "lastUpdated": "2026-02-11T10:21:19.275Z"
+    },
+    "qwen/qwen3-max-thinking": {
+      "input": 0.0000000012,
+      "output": 0.000000006,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "openrouter/aurora-alpha": {
+      "input": 0,
+      "output": 0,
+      "source": "api",
+      "lastUpdated": "2026-02-19T10:21:21.001Z"
+    },
+    "stepfun/step-3.5-flash": {
+      "input": 0.0000000001,
+      "output": 0.0000000003,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "z-ai/glm-5": {
+      "input": 0.00000000095,
+      "output": 0.00000000255,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "minimax/minimax-m2.5": {
+      "input": 0.0000000003,
+      "output": 0.0000000011,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "qwen/qwen3-4b": {
+      "input": 0.0000000000715,
+      "output": 0.000000000273,
+      "source": "api",
+      "lastUpdated": "2026-02-17T10:21:20.983Z"
+    },
+    "qwen/qwen3.5-plus-02-15": {
+      "input": 0.0000000004,
+      "output": 0.0000000024,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "qwen/qwen3.5-397b-a17b": {
+      "input": 0.00000000055,
+      "output": 0.0000000035,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "anthropic/claude-sonnet-4.6": {
+      "input": 0.000000003,
+      "output": 0.000000015,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "google/gemini-3.1-pro-preview": {
+      "input": 0.000000002,
+      "output": 0.000000012,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "openai/gpt-5.3-codex": {
+      "input": 0.00000000175,
+      "output": 0.000000014,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
+    },
+    "aion-labs/aion-2.0": {
+      "input": 0.0000000008,
+      "output": 0.0000000016,
+      "source": "api",
+      "lastUpdated": "2026-02-25T03:52:39.984Z"
     }
   },
-  "lastUpdated": "2026-02-09T08:17:53.410Z",
+  "lastUpdated": "2026-02-25T03:52:39.993Z",
   "version": "1.0.0",
   "settings": {
     "autoSync": true,
