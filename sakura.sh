@@ -383,7 +383,7 @@ cmd_upgrade() {
     
     if [ -d "$SCRIPT_DIR/.git" ]; then
         log_info "📥 拉取最新代码..."
-        cd "$SCRIPT_DIR" && git pull origin main
+        cd "$SCRIPT_DIR" && git pull origin ankki
     fi
     
     log_info "🔨 重新构建镜像..."
