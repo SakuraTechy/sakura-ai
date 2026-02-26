@@ -505,7 +505,10 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
     throw new Error('测试计划不存在');
   }
 
-  // 单独查询执行记录，避免与主查询合并导致 sort buffer 溢出
+  // 🔥 两步查询执行记录，彻底避免 MySQL sort buffer 溢出
+  // 先临时增大当前连接的 sort_buffer_size（session 级别，不影响全局）
+  await prisma.$executeRawUnsafe('SET SESSION sort_buffer_size = 8388608'); // 8MB
+
   const planExecutions = await prisma.test_plan_executions.findMany({
     where: { plan_id: planId },
     orderBy: { started_at: 'desc' },

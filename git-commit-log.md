@@ -2,8 +2,10 @@
 
 ## 2026-02-26
 
-### fix: 修复 getTestPlanDetail 查询导致 MySQL sort buffer 溢出的问题
+### fix: 修复 getTestPlanDetail 查询导致 MySQL sort buffer 溢出的问题（三次优化）
 - **文件**: `server/services/testPlanService.ts`
-- **问题**: `findUnique` 中 include `plan_executions` 并按 `started_at` 排序时，因 `execution_results` 大 JSON 字段导致 MySQL 报错 `Out of sort memory, consider increasing server sort buffer size`（错误码 1038）
-- **修复**: 将 `plan_executions` 从 `findUnique` 的 `include` 中拆分为独立的 `findMany` 查询，避免 MySQL 在单个大查询中对包含大 JSON 字段的记录排序
-- **影响**: 所有引用 `plan.plan_executions` 的地方改为使用独立变量 `planExecutions`
+- **问题**: `test_plan_executions` 表的 `execution_results` JSON 字段过大，MySQL 默认 `sort_buffer_size` 不足以排序包含大 JSON 的行
+- **修复**: 
+  1. 将 `plan_executions` 从 `findUnique` 的 `include` 拆分为独立查询
+  2. 在查询前通过 `SET SESSION sort_buffer_size = 8388608`（8MB）临时增大当前连接的排序缓冲区
+  3. session 级别设置不影响全局 MySQL 配置
