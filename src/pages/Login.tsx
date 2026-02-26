@@ -287,12 +287,12 @@ export const Login: React.FC = () => {
             </span>
             {/* <p className="text-purple-300/50 text-sm"> */}
               {/* © 2025 Sakura AI. Powered by AI & Automation */}
-              <span className="text-purple-300/50 text-sm">
-                Sakura AI. Powered by AI & Automation
-              </span>
+              {/* <span className="text-purple-300/50 text-sm">
+                Ankki AI. Powered by AI & Automation
+              </span> */}
               {/* <br /> */}
               <span className="text-purple-300/50 text-sm">
-                Copyright © 2019-2025 SakuraTech. All rights reserved.
+                Copyright © 2019-2025
               </span>
             {/* </p> */}
           </motion.div>
