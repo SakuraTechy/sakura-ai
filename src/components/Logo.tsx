@@ -57,13 +57,15 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
           />
         </div>
       </motion.div> */}
-      <img
+      <div className="p-4">
+         <img
                   // src="/logo.png"
-                  src="/logo1.svg"
+                  src="/logo.png"
                   alt="Sakura Logo"
                   className=" object-contain"
-                  style={{ width: '75px', height: '75px' }}
-                />
+                  style={{ width: '40px', height: '40px' }}
+         />
+      </div>
       {/* 系统名称 - 现代化排版 */}
       {showText && (
         <div className="flex flex-col">
@@ -79,7 +81,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            Sakura AI
+            Ankki AI
           </motion.span>
           {size !== 'sm' && (
             <motion.span 
@@ -88,7 +90,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
             >
-              企业级 · 智能自动化平台
+              一站式 · 智能自动化平台
             </motion.span>
           )}
         </div>

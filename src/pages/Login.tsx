@@ -154,16 +154,16 @@ export const Login: React.FC = () => {
 
             <div className="w-[110px] h-[110px] mb-0 flex items-center justify-center">
               <img
-                src="/logo1.svg"
+                src="/logo2.png"
                 alt="Sakura Logo"
                 className="w-full h-full object-contain"
               />
             </div>
             <h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-purple-200 to-purple-100 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
-              Sakura AI
+              Ankki AI
             </h1>
             <p className="text-sm font-light tracking-[0.15em] bg-clip-text text-transparent bg-gradient-to-r from-purple-300/90 via-purple-200/80 to-purple-100/90 drop-shadow-[0_0_4px_rgba(168,85,247,0.4)]">
-              企业级 · 智能自动化平台
+              智能化 · 一站式自动化平台
             </p>
           </motion.div>
 
