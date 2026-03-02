@@ -878,9 +878,21 @@ export function Settings() {
                     } else if (selectedModel?.provider === '智谱AI') {
                       return (
                         <>
-                          从 <a href="https://bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">智谱AI平台</a> 获取API密钥（免费额度充足）
+                          从 <a href="https://www.bigmodel.cn/invite?icode=GPn%2FAVpUcRZGmZ8p1ApgeVwpqjqOwPB5EXW6OL4DgqY%3D" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">智谱AI平台</a> 获取API密钥（免费额度充足）
                         </>
                       );
+                    } else if (selectedModel?.provider === '火山引擎') {
+                      return (
+                        <>
+                          从 <a href="https://activity.volcengine.com/2026/newyear-referral?ac=MMADFCCYM3WJ&rc=49TGX47J" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">火山引擎</a> 获取API密钥（免费额度充足）
+                        </>
+                      );
+                    } else if (selectedModel?.provider === '七牛云') {
+                      return (
+                        <>
+                          从 <a href="https://s.qiniu.com/miu2mq" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">七牛云</a> 获取API密钥（免费额度充足）
+                        </>
+                      );    
                     } else if (selectedModel?.provider === 'OpenRouter') {
                       return (
                         <>

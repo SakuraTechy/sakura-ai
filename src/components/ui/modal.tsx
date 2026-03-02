@@ -34,7 +34,7 @@ const sizeClasses: Record<NonNullable<ModalProps["size"]>, string> = {
   "2xl": "sm:max-w-2xl",
   "3xl": "sm:max-w-3xl",
   // wide：更大尺寸，优化测试用例编辑体验
-  wide: "w-[98vw] sm:w-[95vw] lg:w-[90vw] max-w-[1600px] min-w-[1000px]",
+  wide: "w-[98vw] sm:w-[95vw] lg:w-[90vw] max-w-[1600px] min-w-[1100px]",
   // full：桌面也铺满宽度（谨慎使用）
   full: "w-[95vw] h-[90vh] max-w-none max-h-none",
   custom: "w-[1200px] min-w-[1500px] max-w-[1600px] ",
