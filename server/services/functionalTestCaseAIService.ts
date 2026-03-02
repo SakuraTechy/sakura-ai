@@ -303,6 +303,38 @@ export class FunctionalTestCaseAIService {
    * 调用AI模型
    */
   private async callAI(systemPrompt: string, userPrompt: string, maxTokens?: number): Promise<string> {
+    return this.callAIWithRetry(systemPrompt, userPrompt, maxTokens, 3);
+  }
+
+  /**
+   * 带速率限制重试的AI调用
+   */
+  private async callAIWithRetry(systemPrompt: string, userPrompt: string, maxTokens: number | undefined, maxRetries: number): Promise<string> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.callAIInternal(systemPrompt, userPrompt, maxTokens);
+      } catch (error: any) {
+        const isRateLimit = error.message?.includes('429') || 
+                           error.message?.includes('速率限制') || 
+                           error.message?.includes('rate limit') ||
+                           error.message?.includes('限流') ||
+                           error.message?.includes('1302');
+        if (isRateLimit && attempt < maxRetries) {
+          const waitTime = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s
+          console.warn(`⚠️ [速率限制] 第 ${attempt + 1} 次重试，等待 ${waitTime / 1000} 秒...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('AI调用失败：超过最大重试次数');
+  }
+
+  /**
+   * 实际AI调用逻辑
+   */
+  private async callAIInternal(systemPrompt: string, userPrompt: string, maxTokens?: number): Promise<string> {
     const config = await this.getCurrentConfig();
     const startTime = Date.now();
 
@@ -2680,23 +2712,27 @@ ${projectConfigPrompt}
 - 一个测试点可能对应多个测试用例（不同测试数据、不同场景、不同前置条件等）
 - 每个测试用例包含：用例名称、测试步骤、预期结果、前置条件、测试数据等
 
-**何时生成多个测试用例？（默认情况下都应该生成多个）**
-- ✅ **强烈推荐**：测试点涉及输入验证 → **必须生成2-3个用例**（正常、为空、异常）
-- ✅ **强烈推荐**：测试点涉及多种测试数据 → **必须生成2-3个用例**（正常值、边界值、异常值）
-- ✅ **强烈推荐**：测试点涉及多种场景 → **生成2-3个用例**（不同角色、不同权限）
-- ✅ **推荐**：测试点需要不同的前置条件 → **生成2个用例**
-- ⚠️ **谨慎**：极简单测试点（仅查看、只读）→ 可考虑1个用例
-- ✅ **必须**：复杂测试点（多种组合）→ **生成3-5个用例**
+**何时生成多个测试用例？**
+- ✅ **推荐**：测试点涉及多种测试数据 → **生成1-2个用例**（针对当前测试点的不同数据组合）
+- ✅ **推荐**：测试点涉及多种场景 → **生成1-2个用例**（不同角色、不同权限）
+- ✅ **推荐**：测试点需要不同的前置条件 → **生成1-2个用例**
+- ⚠️ **默认**：大多数测试点 → **生成1个用例**（专注于当前测试点描述的场景）
+- ✅ **必须**：复杂测试点（多种组合）→ **生成2-3个用例**
 
-**总原则：一个测试点通常应该生成 2-3 个用例，而不是 1 个！**
+**🔥 重要原则：避免重复生成！**
+- **每个测试点只生成与该测试点直接相关的用例**
+- **不要为每个测试点都生成"正常流程"用例**
+- 如果测试点是"用户名为空"，只生成"用户名为空"相关的用例，不要生成"正常登录"用例
+- 如果测试点是"密码错误"，只生成"密码错误"相关的用例，不要生成"正常登录"用例
+- 正常流程用例应该只在"正常流程"测试点中生成
 
 **预估测试用例数量的原则：**
 - 分析测试点的复杂度：步骤数量、涉及的数据类型、场景数量
-- **默认策略：每个测试点生成 2-3 个用例**（覆盖正常、边界、异常场景）
-- 极简单测试点（纯查看、单一只读操作）：可考虑1个用例
-- 中等测试点（输入、查询、操作类）：**强烈建议 2-3 个用例**
-- 复杂测试点（多步骤、多分支、关键功能）：**建议 3-5 个用例**
-- 🔥 **原则：宁多勿少，确保覆盖全面**
+- **默认策略：每个测试点生成 1 个用例**（专注于当前测试点）
+- 简单测试点（单一场景、单一数据）：**生成1个用例**
+- 中等测试点（多种数据组合）：**生成1-2个用例**
+- 复杂测试点（多步骤、多分支、关键功能）：**生成2-3个用例**
+- 🔥 **原则：避免重复，每个用例必须与当前测试点直接相关**
 
 ## 输出格式
 
@@ -2858,60 +2894,79 @@ ${requirementDoc.substring(0, 2000)}
 3. assertions字段要汇总所有【预期】内容，数量与步骤数一致
 
 ### 3. 用例数量要求（关键！）
-🔥 **请为该测试点生成 2-3 个测试用例，覆盖不同场景**：
-   - 至少1个正常场景用例（SMOKE）
-   - 1-2个边界/异常场景用例（BOUNDARY/ABNORMAL）
-   - 例如：登录测试点应生成：
-     * "正常登录" (SMOKE)
-     * "用户名为空" (BOUNDARY)
-     * "密码错误" (ABNORMAL)
-   - **只有极其简单的测试点才生成1个用例**
+🔥 **请为该测试点生成 1 个测试用例，专注于当前测试点描述的场景**：
+   - **只生成与当前测试点直接相关的用例**
+   - **不要生成与测试点无关的正常流程用例**
+   - 例如：
+     * 测试点是"用户名为空，密码正确" → 只生成"用户名为空，密码正确"用例，不要生成"正常登录"
+     * 测试点是"密码错误" → 只生成"密码错误"用例，不要生成"正常登录"
+     * 测试点是"用户名和密码均正确" → 生成"正常登录"用例
+   - **特殊情况**：如果测试点本身包含多种数据组合（如"用户名超长字符输入"可能需要测试不同长度），可以生成1-2个用例
 
-### 4. 🔥 主流程用例识别与排序（极其重要！）
+### 4. 🔥 用例与测试点的对应关系（极其重要！）
 
-⚠️ **第一条测试用例必须是主流程用例（正常流程、正向场景、SMOKE类型）！**
-
-**主流程用例特征：**
-- 正常操作路径、成功场景、理想条件
-- 使用正确的数据、正确的操作顺序
-- 不是错误场景、不是边界条件、不是异常情况
-- 必须是 SMOKE 类型，优先级为 high
-
-**排序规则：**
-1. **第一位：主流程用例**（SMOKE类型，正常流程）
-   - 例如："用户名和密码均正确，正常登录"（而不是"密码错误"）
-   - 例如："正常提交订单"（而不是"库存不足时提交"）
-2. **第二位及之后：边界和异常用例**
-   - BOUNDARY、ABNORMAL 等类型
-
-**识别主流程的关键词：**
-- ✅ 正常、正确、有效、成功、合法、标准、不为空
-- ❌ 错误、无效、失败、异常、为空、超长、边界
+⚠️ **每个测试用例必须与当前测试点直接对应，不要生成无关用例！**
 
 **正确示例：**
-\`\`\`json
-{
-  "testCases": [
-    {"name": "用户名和密码均正确，正常登录", "caseType": "SMOKE", "priority": "high"},  // 1. 主流程
-    {"name": "密码错误", "caseType": "ABNORMAL", "priority": "medium"},                    // 2. 异常
-    {"name": "用户名为空", "caseType": "BOUNDARY", "priority": "medium"}                  // 3. 边界
-  ]
-}
-\`\`\`
+- 测试点："用户名为空，密码正确" → 用例："用户名为空，密码正确" ✅
+- 测试点："密码错误" → 用例："密码错误" ✅
+- 测试点："用户名和密码均正确" → 用例："用户名和密码均正确，正常登录" ✅
 
-⚠️ **输出前检查清单：**
-- [ ] 第一个用例是正常流程（不是错误、不是为空、不是异常）？
-- [ ] 第一个用例的 caseType 是 SMOKE？
-- [ ] 第一个用例的 priority 是 high？
-- [ ] 用例按照：正常流程 → 异常流程 → 边界条件 排序？
+**错误示例（绝对禁止）：**
+- 测试点："用户名为空，密码正确" → 用例："用户名和密码均正确，正常登录" ❌❌❌
+- 测试点："密码错误" → 用例："正常登录" ❌❌❌
+- 测试点："用户名超长字符输入" → 用例："正常登录" ❌❌❌
 
-### 5. 冒烟用例要求
-⚠️ **强制要求：生成的测试用例中，必须至少包含 1 条 caseType="SMOKE" 的冒烟用例**
-   - 冒烟用例用于验证核心功能的基本正向流程
-   - 优先将最重要、最基础的测试用例设置为 SMOKE 类型
-   - 主流程用例通常就是 SMOKE 用例
+**核心原则：**
+- 用例名称必须包含测试点的核心关键词
+- 用例的测试数据必须符合测试点的描述
+- 用例的操作步骤必须验证测试点的场景
+- 不要为每个测试点都生成"正常流程"用例
 
-### 6. 测试数据要求
+### 5. 主流程用例识别（仅在测试点本身是正常流程时使用）
+
+### 5. 主流程用例识别（仅在测试点本身是正常流程时使用）
+
+⚠️ **只有当测试点本身描述的是正常流程时，才生成 SMOKE 类型的主流程用例！**
+
+**主流程测试点特征：**
+- 测试点名称包含：正常、正确、有效、成功、合法、标准、均正确、均有效
+- 测试点描述的是理想条件下的操作路径
+- 例如："用户名和密码均正确，凭据正确"、"正常提交订单"
+
+**非主流程测试点特征：**
+- 测试点名称包含：错误、无效、失败、异常、为空、超长、边界、不正确
+- 测试点描述的是边界条件或异常情况
+- 例如："用户名为空"、"密码错误"、"用户名超长字符输入"
+
+**用例类型判断规则：**
+- 如果测试点是主流程 → 生成 SMOKE 类型用例，priority 为 high
+- 如果测试点是边界条件 → 生成 BOUNDARY 类型用例，priority 为 medium
+- 如果测试点是异常情况 → 生成 ABNORMAL 类型用例，priority 为 medium
+
+**排序规则（已由系统自动处理，无需关注）：**
+**排序规则（已由系统自动处理，无需关注）：**
+1. 系统会自动将 SMOKE 类型用例排在前面
+2. 然后是 BOUNDARY、ABNORMAL 等类型
+
+**识别主流程的关键词（仅供参考）：**
+- ✅ 正常、正确、有效、成功、合法、标准、均正确、均有效
+- ❌ 错误、无效、失败、异常、为空、超长、边界、不正确
+
+⚠️ **生成前检查清单：**
+- [ ] 用例类型（caseType）是否与测试点的性质匹配？
+- [ ] 如果测试点是正常流程，caseType 是否为 SMOKE？
+- [ ] 如果测试点是边界/异常，caseType 是否为 BOUNDARY/ABNORMAL？
+- [ ] 用例名称是否与测试点名称直接对应？
+
+### 6. 冒烟用例要求
+⚠️ **只有当测试点本身是正常流程时，才生成 SMOKE 类型的冒烟用例**
+   - 如果测试点是"用户名和密码均正确" → 生成 SMOKE 用例
+   - 如果测试点是"用户名为空" → 生成 BOUNDARY 用例，不是 SMOKE
+   - 如果测试点是"密码错误" → 生成 ABNORMAL 用例，不是 SMOKE
+   - SMOKE 用例的优先级必须为 high
+
+### 7. 测试数据要求
 🔥 **testData 字段格式要求**：
 - **必须换行显示**：每个字段占一行，格式为"字段名：值\\n"
 - 示例："用户名：admin\\n密码：123456\\n邮箱：test@example.com"
@@ -2938,7 +2993,18 @@ ${requirementDoc.substring(0, 2000)}
 - ⛔ 如果 testData 写了 "密码：（空）"，则 steps 必须写 "密码保持为空"
 - ⛔ 不要把不同用例的数据和步骤搞混！每个用例独立检查！
 
-请基于测试点的步骤和预期结果，**生成 2-3 个测试用例**。**生成时请逐个用例检查数据一致性！** 直接输出JSON格式，不要其他说明文字。`;
+请基于测试点的步骤和预期结果，**生成 1 个与当前测试点直接对应的测试用例**。
+
+🔥 **关键要求：**
+1. **用例必须与测试点直接对应** - 不要生成无关的正常流程用例
+2. **用例名称必须反映测试点的核心场景** - 例如测试点是"用户名为空"，用例名也应该是"用户名为空"相关
+3. **根据测试点性质选择正确的用例类型**：
+   - 测试点是正常流程 → SMOKE
+   - 测试点是边界条件 → BOUNDARY
+   - 测试点是异常情况 → ABNORMAL
+4. **逐个用例检查数据一致性** - 用例名称、测试数据、操作步骤必须完全一致
+
+直接输出JSON格式，不要其他说明文字。`;
 
     try {
       console.log(`🤖 正在为测试点"${testPoint.testPoint}"生成测试用例...`);
@@ -2991,17 +3057,30 @@ ${requirementDoc.substring(0, 2000)}
         }
       });
 
-      // 🔥 强制要求：确保至少有一条 SMOKE 冒烟用例，且优先级为 high
+      // 🔥 智能判断：只有正常流程测试点才需要 SMOKE 用例
+      const isNormalFlowTestPoint = this.isMainFlowTestCase(testPoint.testPoint);
       const hasSmokeCase = testCases.some(tc => tc.caseType === 'SMOKE');
-      if (!hasSmokeCase && testCases.length > 0) {
-        console.warn('⚠️  警告：生成的测试用例中没有冒烟用例，自动将第一个高优先级用例转换为 SMOKE 类型');
+      
+      if (isNormalFlowTestPoint && !hasSmokeCase && testCases.length > 0) {
+        console.warn('⚠️  警告：正常流程测试点没有生成冒烟用例，自动将第一个用例转换为 SMOKE 类型');
         
-        // 查找第一个高优先级用例，如果没有则使用第一个用例
-        const targetCase = testCases.find(tc => tc.priority === 'high') || testCases[0];
+        const targetCase = testCases[0];
         targetCase.caseType = 'SMOKE';
         targetCase.priority = 'high'; // 🔥 冒烟用例优先级必须为 high
         
         console.log(`   ✅ 已将用例 "${targetCase.name}" 设置为 SMOKE（冒烟用例），优先级：high`);
+      } else if (!isNormalFlowTestPoint && hasSmokeCase) {
+        console.warn('⚠️  警告：非正常流程测试点生成了冒烟用例，自动调整用例类型');
+        
+        testCases.forEach(tc => {
+          if (tc.caseType === 'SMOKE') {
+            // 根据测试点名称判断应该是 BOUNDARY 还是 ABNORMAL
+            const isAbnormal = /错误|失败|异常|无效/.test(testPoint.testPoint);
+            tc.caseType = isAbnormal ? 'ABNORMAL' : 'BOUNDARY';
+            tc.priority = 'medium';
+            console.log(`   ✅ 已将用例 "${tc.name}" 从 SMOKE 调整为 ${tc.caseType}，优先级：medium`);
+          }
+        });
       }
       
       // 🔥 确保所有 SMOKE 用例的优先级都是 high

@@ -100,8 +100,14 @@ export async function createAccount(data: CreateAccountInput): Promise<AccountCo
     throw new Error('账号名称已存在');
   }
 
+  // 检查该项目下是否已有账号，如果没有则自动设为默认
+  const existingCount = await prisma.account_configs.count({
+    where: { project_id: data.project_id }
+  });
+  const shouldBeDefault = existingCount === 0 ? true : (data.is_default || false);
+
   // 如果设置默认，先取消同项目内其他默认账号
-  if (data.is_default) {
+  if (shouldBeDefault) {
     await prisma.account_configs.updateMany({
       where: {
         project_id: data.project_id,
@@ -119,7 +125,7 @@ export async function createAccount(data: CreateAccountInput): Promise<AccountCo
       account_password: data.account_password,
       account_description: data.account_description,
       status: data.status || 'active',
-      is_default: data.is_default || false
+      is_default: shouldBeDefault
     }
   });
 

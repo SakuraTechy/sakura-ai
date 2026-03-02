@@ -234,8 +234,8 @@ export function TestCaseDetailModal({
       console.log('🔄 [TestCaseDetailModal] 保存编辑后的测试用例:', {
         id: editedCase.id,
         name: editedCase.name,
-        steps: editedCase.steps?.substring(0, 100),
-        assertions: editedCase.assertions?.substring(0, 100)
+        steps: typeof editedCase.steps === 'string' ? editedCase.steps.substring(0, 100) : editedCase.steps,
+        assertions: typeof editedCase.assertions === 'string' ? editedCase.assertions.substring(0, 100) : editedCase.assertions
       });
       onSave(editedCase);
       setIsEditing(false);
@@ -372,6 +372,7 @@ export function TestCaseDetailModal({
   return (
     <>
     <Modal
+      size="wide"
       isOpen={shouldShowCaseModal}
       onClose={onClose}
       showCloseButton={true}
@@ -404,7 +405,6 @@ export function TestCaseDetailModal({
           )}
         </div>
       }
-      size="wide"
       closeOnClickOutside={false}
       footer={
         <div className="flex items-center justify-between w-full">
@@ -776,7 +776,7 @@ export function TestCaseDetailModal({
         setCurrentRequirementDoc(null);
       }}
       footer={null}
-      width={1200}
+      width={1300}
       centered
       maskClosable={true}
       keyboard={true}

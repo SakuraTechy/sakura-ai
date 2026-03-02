@@ -260,35 +260,61 @@ cmd_push() {
     local FULL_IMAGE=$(get_remote_image "$VERSION")
     
     print_header "📤 推送镜像到阿里云"
-    echo "镜像: ${FULL_IMAGE}"
-    echo "版本: ${VERSION}"
+    echo "本地镜像: ${LOCAL_IMAGE}"
+    echo "远程镜像: ${FULL_IMAGE}"
+    echo "版本标签: ${VERSION}"
     echo ""
     
     # 检查本地镜像是否存在
     print_step "检查本地镜像..."
-    if ! docker images "${LOCAL_IMAGE}" --format "{{.Repository}}:{{.Tag}}" | grep -q "^${LOCAL_IMAGE}$"; then
+    IMAGE_ID=$(docker images "${LOCAL_IMAGE}" --format "{{.ID}}" | head -1)
+    IMAGE_SIZE=$(docker images "${LOCAL_IMAGE}" --format "{{.Size}}" | head -1)
+    
+    if [ -z "$IMAGE_ID" ]; then
         print_error "本地镜像不存在: ${LOCAL_IMAGE}"
         echo "请先构建镜像: ./sakura.sh build ${VERSION}"
         echo ""
         echo "当前可用镜像:"
-        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -10
+        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}" | head -10
         exit 1
     fi
     print_success "本地镜像已存在"
+    echo "  镜像 ID: ${IMAGE_ID}"
+    echo "  镜像大小: ${IMAGE_SIZE}"
+    echo ""
+    
+    # 检查远程标签是否存在，不存在则创建
+    print_step "检查远程标签..."
+    if ! docker images "${FULL_IMAGE}" --format "{{.ID}}" | grep -q "${IMAGE_ID}"; then
+        print_warning "远程标签不存在，正在创建..."
+        if docker tag ${IMAGE_ID} ${FULL_IMAGE}; then
+            print_success "镜像标签已创建: ${FULL_IMAGE}"
+        else
+            print_error "镜像打标签失败"
+            exit 1
+        fi
+    else
+        print_success "远程标签已存在"
+    fi
+    echo ""
     
     # 检查登录状态
     print_step "检查 Docker 登录状态..."
     if ! docker info 2>/dev/null | grep -q "Username"; then
         print_warning "未登录 Docker，尝试登录..."
+        echo "登录地址: ${DOCKER_REGISTRY}"
         if ! docker login ${DOCKER_REGISTRY}; then
             print_error "Docker 登录失败"
             exit 1
         fi
     fi
     print_success "Docker 已登录"
+    echo ""
     
     # 推送镜像
     print_step "推送镜像到阿里云..."
+    echo "这可能需要几分钟，请耐心等待..."
+    echo ""
     if docker push ${FULL_IMAGE}; then
         print_success "镜像推送成功"
     else
@@ -298,6 +324,8 @@ cmd_push() {
     
     print_header "🎉 推送完成"
     echo "镜像地址: ${FULL_IMAGE}"
+    echo "镜像 ID: ${IMAGE_ID}"
+    echo "镜像大小: ${IMAGE_SIZE}"
     echo "版本标签: ${VERSION}"
     echo ""
     echo "部署命令:"
@@ -355,7 +383,7 @@ cmd_upgrade() {
     
     if [ -d "$SCRIPT_DIR/.git" ]; then
         log_info "📥 拉取最新代码..."
-        cd "$SCRIPT_DIR" && git pull origin main
+        cd "$SCRIPT_DIR" && git pull origin dev
     fi
     
     log_info "🔨 重新构建镜像..."
