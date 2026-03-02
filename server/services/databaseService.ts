@@ -169,8 +169,14 @@ export async function getDatabaseById(id: number): Promise<DatabaseConfig | null
  * 创建数据库配置
  */
 export async function createDatabase(data: CreateDatabaseInput): Promise<DatabaseConfig> {
+  // 检查该项目下是否已有数据库，如果没有则自动设为默认
+  const existingCount = await prisma.database_configs.count({
+    where: { project_id: data.project_id }
+  });
+  const shouldBeDefault = existingCount === 0 ? true : (data.is_default || false);
+
   // 如果设置默认，先取消同项目内其他默认数据库
-  if (data.is_default) {
+  if (shouldBeDefault) {
     await prisma.database_configs.updateMany({
       where: {
         project_id: data.project_id,
@@ -194,7 +200,7 @@ export async function createDatabase(data: CreateDatabaseInput): Promise<Databas
       connection_string: data.connection_string,
       description: data.description,
       status: data.status || 'active',
-      is_default: data.is_default || false,
+      is_default: shouldBeDefault,
       parameters: data.parameters ? data.parameters as any : null
     }
   });
