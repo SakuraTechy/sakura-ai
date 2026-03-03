@@ -108,8 +108,14 @@ export async function getServerById(id: number): Promise<ServerConfig | null> {
  * 创建服务器配置
  */
 export async function createServer(data: CreateServerInput): Promise<ServerConfig> {
+  // 检查该项目下是否已有服务器，如果没有则自动设为默认
+  const existingCount = await prisma.server_configs.count({
+    where: { project_id: data.project_id }
+  });
+  const shouldBeDefault = existingCount === 0 ? true : (data.is_default || false);
+
   // 如果设置默认，先取消同项目内其他默认服务器
-  if (data.is_default) {
+  if (shouldBeDefault) {
     await prisma.server_configs.updateMany({
       where: {
         project_id: data.project_id,
@@ -130,7 +136,7 @@ export async function createServer(data: CreateServerInput): Promise<ServerConfi
       password: data.password,
       description: data.description,
       status: data.status || 'active',
-      is_default: data.is_default || false,
+      is_default: shouldBeDefault,
       parameters: data.parameters ? (data.parameters as any) : null
     }
   });

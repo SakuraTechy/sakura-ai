@@ -25,6 +25,68 @@ export class ModelRegistry {
 
   private constructor() {
     this.models = [
+      // ============ 智谱AI GLM 系列 ============
+      {
+        id: 'glm-series',
+        name: '智谱GLM 系列',
+        provider: '智谱AI',
+        openRouterModel: 'glm-4',
+        customBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 2000
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
+        description: '智谱AI GLM系列模型，可自动获取所有可用模型版本，包括glm-4、glm-4-flash、glm-4v、glm-4.6v等',
+        costLevel: 'medium'
+      },
+      // ============ 七牛云AI 大模型推理 ============
+      // API文档: https://developer.qiniu.com/aitokenapi/12882/ai-inference-api
+      // 接入域名: https://api.qnaigc.com/v1
+      // 兼容OpenAI API格式 (/v1/chat/completions) 和 Anthropic API格式 (/v1/messages)
+      // 支持50+主流大模型 (GPT-4o/Claude/Gemini/DeepSeek/GLM/Qwen等)
+      // 支持接口: /v1/chat/completions (对话推理), /v1/models (模型列表), /v1/messages (Anthropic兼容)
+      // 支持多模态: 图片文字识别(JPG/PNG/BMP/PDF,≤8MB)、文件识别(pdf/docx/xlsx/pptx)、图像生成(gemini-2.5-flash-image)
+      // 使用前提: 需在七牛云获取 API KEY
+      {
+        id: 'qnaigc-series',
+        name: '七牛云AI 系列',
+        provider: '七牛云',
+        openRouterModel: 'glm-4',
+        customBaseUrl: 'https://api.qnaigc.com/v1',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'image-understanding', 'model-list'],
+        description: '七牛云AI大模型推理(MaaS)，兼容OpenAI API格式，支持50+主流大模型(GPT-4o/Claude/Gemini/DeepSeek/GLM/Qwen等)，支持图片文字识别、文件识别、图像生成，通过/v1/models自动获取所有可用模型',
+        costLevel: 'medium'
+      },
+      // ============ 豆包（火山方舟）系列 ============
+      // API文档: https://www.volcengine.com/docs/82379/1399008
+      // 接入域名: https://ark.cn-beijing.volces.com/api/v3
+      // 兼容OpenAI API格式 (/v1/chat/completions)
+      // 支持豆包全系列模型 (Doubao-Seed-2.0/1.8/1.6、Doubao-1.5等)
+      // 支持多模态: 图片理解、视觉识别、深度思考、代码生成
+      // 使用前提: 需在火山引擎方舟平台获取 API KEY，并创建接入点(Endpoint)
+      // 注意: model参数需填写接入点ID(ep-xxx)或模型名称
+      {
+        id: 'doubao-series',
+        name: '豆包 系列',
+        provider: '火山引擎',
+        openRouterModel: 'doubao-seed-2.0-pro',
+        customBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+        requiresCustomAuth: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'image-understanding', 'model-list'],
+        description: '字节跳动豆包系列模型（火山方舟平台），兼容OpenAI API格式，支持Doubao-Seed-2.0(Pro/Lite/Mini/Code)、Doubao-1.5(Pro/Lite/Vision/Thinking)等全系列模型，通过/v1/models自动获取所有可用模型',
+        costLevel: 'medium'
+      },
       // ============ DeepSeek 系列 ============
       {
         id: 'deepseek-series',
@@ -71,22 +133,6 @@ export class ModelRegistry {
         },
         capabilities: ['text-generation', 'long-context', 'chinese-friendly', 'free-tier', 'model-list'],
         description: 'Kimi系列模型，可自动获取所有可用模型版本，包括moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k、Kimi K2大模型，最新一代混合专家模型，支持128K超长上下文，具备强大的代理智能和自主问题解决能力',
-        costLevel: 'medium'
-      },
-      // ============ 智谱AI GLM 系列 ============
-      {
-        id: 'glm-series',
-        name: '智谱GLM 系列',
-        provider: '智谱AI',
-        openRouterModel: 'glm-4',
-        customBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-        requiresCustomAuth: true,
-        defaultConfig: {
-          temperature: 0.3,
-          maxTokens: 2000
-        },
-        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'free-tier', 'model-list'],
-        description: '智谱AI GLM系列模型，可自动获取所有可用模型版本，包括glm-4、glm-4-flash、glm-4v、glm-4.6v等',
         costLevel: 'medium'
       },
       {
@@ -179,7 +225,7 @@ export class ModelRegistry {
       // ============ NewApi 系列 ============
       {
         id: 'newapi-series',
-        name: '在线大模型',
+        name: 'NewApi 全部模型',
         provider: 'NewApi',
         openRouterModel: 'claude-sonnet-4-5-20250929',
         customBaseUrl: 'https://claude.ticketpro.cc/v1',

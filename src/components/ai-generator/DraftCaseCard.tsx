@@ -129,7 +129,7 @@ export function DraftCaseCard({
       {/* 用例内容 */}
       <div className="mt-6">
         <h4 className="text-sm font-semibold text-gray-900 mb-1.5 line-clamp-2
-                       min-h-[2.5rem]">
+                       min-h-[1rem]">
           {name}
         </h4>
 

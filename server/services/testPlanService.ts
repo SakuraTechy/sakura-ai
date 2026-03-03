@@ -482,6 +482,9 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
     }
   }
 
+  // 🔥 修复：将 plan_executions 拆分为单独查询，避免 MySQL sort buffer 溢出
+  // 原因：execution_results 是大 JSON 字段，在 include 中排序会导致
+  // "Out of sort memory, consider increasing server sort buffer size" 错误
   const plan = await prisma.test_plans.findUnique({
     where: { id: planId },
     include: {
@@ -495,16 +498,21 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
       plan_cases: {
         orderBy: { sort_order: 'asc' },
       },
-      plan_executions: {
-        orderBy: { started_at: 'desc' },
-        // 获取所有执行记录，以便找到每个用例的最新执行结果
-      },
     },
   });
 
   if (!plan) {
     throw new Error('测试计划不存在');
   }
+
+  // 🔥 两步查询执行记录，彻底避免 MySQL sort buffer 溢出
+  // 先临时增大当前连接的 sort_buffer_size（session 级别，不影响全局）
+  await prisma.$executeRawUnsafe('SET SESSION sort_buffer_size = 8388608'); // 8MB
+
+  const planExecutions = await prisma.test_plan_executions.findMany({
+    where: { plan_id: planId },
+    orderBy: { started_at: 'desc' },
+  });
 
   // 转换测试计划数据
   const planData: TestPlan = {
@@ -535,11 +543,11 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
   }>();
   
   console.log(`📋 [testPlanService] 开始构建用例执行状态映射，计划ID: ${planId}`);
-  console.log(`📋 [testPlanService] 执行记录总数: ${plan.plan_executions.length}`);
+  console.log(`📋 [testPlanService] 执行记录总数: ${planExecutions.length}`);
   
   // 🔥 步骤1：从测试计划执行记录的execution_results中获取（批量执行的数据源）
   let step1Count = 0;
-  for (const execution of plan.plan_executions) {
+  for (const execution of planExecutions) {
     const executionResults = (execution.execution_results as unknown as TestPlanCaseResult[]) || [];
     
     console.log(`📊 [testPlanService] 处理执行记录 ${execution.id}，包含 ${executionResults.length} 个用例结果`);
@@ -840,7 +848,7 @@ export async function getTestPlanDetail(planId: number): Promise<TestPlanDetailR
   );
 
   // 转换执行记录数据
-  const executions: TestPlanExecution[] = plan.plan_executions.map((e) => {
+  const executions: TestPlanExecution[] = planExecutions.map((e) => {
     // 🔥 修复：finished_at应该始终从execution_results中获取最后一条用例的finished_at
     // 而不是使用数据库中的finished_at字段，以确保时间戳的准确性
     let finishedAt: string | undefined = undefined;

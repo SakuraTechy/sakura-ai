@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 
 interface StepCardProps {
   stepNumber: number;
-  title: string;
+  title: string | React.ReactNode;
   description?: string;
   children: React.ReactNode;
   isActive?: boolean;
@@ -97,7 +97,7 @@ export function StepCard({
 
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-bold text-gray-900 mb-0.5">
-            {title}
+            {typeof title === 'string' ? title : <div className="flex items-center w-full">{title}</div>}
           </h2>
           {description && (
             <p className="text-xs text-gray-500">

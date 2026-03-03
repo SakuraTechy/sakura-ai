@@ -1,133 +1,161 @@
 # Git 提交摘要
 
-## 2026-02-10
-- fix: 修复视频截图中文显示为方块乱码的问题（添加 fonts-noto-cjk-extra 中文字体支持，镜像增加约 50-100MB）
-- fix: 修复视频文件已是最终名称但未保存到数据库的问题（优先检查最终名称文件，兼容两种命名方式，修复 Windows Docker 环境视频不显示）
-- fix: 增强 Playwright artifacts 处理的日志输出以诊断视频保存问题（添加详细日志，显示处理流程和文件列表，帮助定位 Windows 环境问题）
-- fix: 修复视频文件未保存到数据库导致前端无法显示的问题（增强日志输出，明确显示视频处理流程，确保正确保存到数据库）
-- fix: 修复 Windows Docker 环境视频录制失败的问题（创建 ffmpeg 符号链接到系统 PATH，让 Playwright 能找到 ffmpeg）
-- fix: 修复 Playwright 浏览器缓存挂载导致文件丢失的问题（移除 --mount=type=cache，直接安装到最终路径，确保文件被保留到镜像中）
-- fix: 修复 Docker 运行时 Playwright headless_shell 找不到的问题（运行阶段增强验证和权限设置，启动脚本增强浏览器检测，添加诊断日志和权限修复）
+## 2026-03-02
 
-## 2026-02-06
-- perf: 深度优化镜像体积，从 4.83GB 减小到约 3.5GB（深度清理 node_modules 节省 ~500MB，移除中日韩字体包节省 ~300MB，总计减少 27-33%）
-- fix: 修复 Playwright 浏览器在清理步骤中被误删的问题（安装和清理合并到同一层，只删除文档保留可执行文件，修复 headless_shell 不存在错误）
-- perf: 优化 Dockerfile 构建顺序，充分利用 Docker 层缓存加快构建速度（依赖→Prisma→代码→构建，代码修改只需 2-3 分钟 vs 首次 15-20 分钟）
-- refactor: 优化多阶段构建，在构建阶段安装所有系统依赖（构建工具 + 运行时依赖，利用层缓存）
-- refactor: 移除运行阶段重复的 Playwright 验证步骤（构建阶段已验证，避免重复操作）
-- perf: 使用 Docker 缓存挂载加速 Playwright 浏览器下载（首次下载后缓存，后续构建秒级完成，节省 ~400MB 带宽）
-- refactor: 简化 Dockerfile 中的 Playwright 验证逻辑（使用简单的 ls 命令，避免复杂的 find 逻辑）
-- fix: 修复 Dockerfile 中 ffmpeg 查找逻辑，添加详细调试信息（优化 find 命令，精确匹配文件名）
-- refactor: 进一步优化 Dockerfile，合并镜像源配置和依赖安装（减少 Docker 层数，移除重复配置）
-- refactor: 优化 Dockerfile 镜像源配置，使用环境变量统一管理（NPM_REGISTRY 和 DEBIAN_MIRROR，便于切换和维护）
-- refactor: 只使用 Playwright 自带的 ffmpeg，移除系统 ffmpeg 依赖（减少镜像体积，避免版本冲突，Playwright 自动管理）
-- fix: 修复 Dockerfile 中 ffmpeg 未生效的问题（优化安装验证流程，添加测试脚本）
-- fix: 数据库连接失败时终止启动流程，避免后续错误（调用 process.exit(1)，显示详细错误信息）
-- refactor: 优化数据库等待逻辑，支持所有环境（Docker/远程数据库/本地开发，智能判断是否需要等待）
-- refactor: 使用 Node.js mysql2 包替代 mysqladmin 进行数据库连接检查（避免 MariaDB 客户端兼容性问题，使用项目已有依赖）
-- fix: 修复 Dockerfile 中 MySQL 客户端兼容性问题，安装 MySQL 官方客户端（MariaDB 客户端与 MySQL 8.0 不兼容，需重新构建镜像）
-- fix: 移除 start.cjs 中的调试日志，避免输出敏感密码信息（容器内必须用服务名 mysql 而非 localhost）
-- fix: 优化 start.cjs 数据库等待逻辑，直接使用 DATABASE_URL 中的服务名（Docker 内部 DNS 自动解析服务名到容器 IP）
-- fix: 修复 start.cjs 中 mysqladmin 命令的密码参数格式（-p 和密码之间不能有空格，移除调试日志）
-- perf: 优化 Docker Compose 启动顺序，智能等待数据库就绪（MySQL healthcheck 5秒间隔/60次重试，sakura-ai 120秒宽限期，start.cjs 智能重试机制，迁移重试3次）
-- refactor: 移除 sakura.sh install 中的重复数据库迁移逻辑（应用启动时自动迁移）
-- docs: 在 README 中添加换行符语法错误的故障排除说明（三种解决方法和预防措施）
-- fix: 创建换行符修复脚本，解决 Windows CRLF 导致的 bash 语法错误
-- docs: 更新 Docker 部署文档，同步 build 和 push 命令分离说明（更新所有相关章节和示例）
-- refactor: 分离 Docker 镜像构建和推送命令，提高灵活性（build 只构建，push 只推送）
-- refactor: Docker 环境完全跳过数据库等待检查（只等待5秒，应用自动重试连接）
-- fix: 添加命令超时保护，防止容器中数据库等待卡住（5秒超时，Promise.race 机制）
-- fix: 修复 test-db-connection.sh 的 Bad substitution 错误（移除 bash 特有语法）
-- feat: 创建数据库连接测试脚本（诊断 MySQL 连接问题，检查用户和数据库状态）
-- fix: 注释外部数据库配置，使用 Docker 内置 MySQL（保持默认密码占位符）
-- fix: 修复 Docker .env 文件配置，设置正确的数据库密码（移除占位符，使用实际密码）
-- feat: 添加数据库连接命令和错误信息打印（方便调试连接问题）
-- refactor: 重构数据库等待逻辑，优先使用 Docker 内置 MySQL（默认连接 mysql:3306，支持外部数据库可选）
-- fix: 优化数据库等待逻辑，增加重试次数和智能日志输出（30秒等待，减少日志噪音）
-- fix: 优化启动脚本数据库等待逻辑，避免长时间卡住（15秒快速超时，添加详细故障排查提示）
-- fix: 修改 Docker 配置默认使用内置 MySQL，支持外部数据库可选（DATABASE_URL 环境变量优先级）
-- fix: 将 docker-compose.yml 改回 bridge 网络模式，解决 Windows host 模式限制（容器间无法通信）
-- fix: 修复 host 网络模式下服务无法访问的问题（SERVER_HOST 改为 0.0.0.0，数据库连接改为 localhost）
-- docs: 移除 host 网络模式下的无效 networks 配置，添加说明注释
-- feat: 创建混合网络模式配置文件（应用 host 模式，数据库 bridge 模式）
-- feat: 创建纯 host 网络模式配置文件
-- fix: 移除自定义子网配置，使用 Docker 默认网络以继承宿主机路由
-- fix: 清理 host 网络模式下的无效配置项，添加 Windows 使用说明
-- fix: 添加 extra_hosts 配置尝试解决容器访问特定内网 IP 的问题（受限于 Windows Docker 网络架构）
-- docs: 说明 Windows Docker Desktop 的 host 网络模式限制，推荐使用 bridge 模式
-- fix: 添加 Vite 前端服务器环境变量，确保监听所有网络接口（VITE_HOST=0.0.0.0）
-- fix: 修复 host 网络模式下应用无法访问的问题，MySQL 也切换到 host 模式
-- feat: 切换到 host 网络模式，支持容器访问宿主机内网 IP
-- fix: 在 Dockerfile 中添加 iputils-ping 包，提供网络诊断工具
-- refactor: 将 MySQL 诊断逻辑整合到 sakura.sh，删除独立的 troubleshoot-mysql.sh
-- fix: 优化 MySQL healthcheck 配置，给首次初始化足够的时间（3 分钟宽限期）
-- feat: 添加 MySQL 启动失败诊断工具
-- refactor: 将数据库等待逻辑整合到 start.cjs，删除独立的 docker-entrypoint.sh 脚本
-- fix: 添加数据库连接重试机制，解决 MySQL 初始化时间过长导致的启动失败问题
+### docs: 修复AI提示词文档格式问题 ✅
+- 修复完整文档代码块后说明文本格式（`→` 改为 `**说明**：`）
+- 修复完整文档日期错误（2025→2026）
+- 修复模板文档代码块嵌套问题，改为纯文本格式便于复制
+- 影响：`docs/prompts/AI-PROMPTS-COMPLETE.md`, `docs/prompts/AI-PROMPTS-TEMPLATES.md`
 
-## 2026-02-05
-- docs: 创建 Docker 镜像使用方式详细指南（三种方式对比和使用说明）
-- docs: 优化 docker-compose.yml 配置说明，明确镜像来源和使用方式
-- refactor: 优化构建脚本，移除对 docker-compose.yml 的依赖，直接使用 docker build 命令
-- feat: 创建宿主机网络连接测试脚本，诊断内网访问问题
-- fix: 修复 Windows 端口转发脚本中的 PowerShell 变量引用语法错误
-- refactor: 整合 Docker 管理脚本为统一的 sakura.sh
-- feat: 创建网络连接测试脚本，诊断容器访问内网问题
-- feat: 优化 Windows docker-compose 配置，添加网络权限和 DNS 设置
-- feat: 创建 Windows 端口转发配置脚本，解决容器访问内网问题
-- feat: 创建 Windows 专用 docker-compose 配置，解决 host 网络模式不兼容问题
-- fix: 修复 host 网络模式下数据库连接失败的问题（mysql:3306 → localhost:3306）
-- feat: 创建 start.sh 脚本，支持使用 host 网络模式启动容器
-- fix: 使用 host 网络模式解决容器无法访问内网系统的问题（替代 extra_hosts）
-- fix: 配置 Docker 容器访问宿主机网络，解决 UI 自动化无法连接内网系统的问题
-- fix: 添加 ffmpeg 和完整的 Playwright 运行时依赖，确保 UI 自动化正常执行
-- fix: 修复 Dockerfile 中 npm prune 误删运行时依赖的问题（保留 @playwright/test）
-- fix: 修复 Dockerfile 中 Playwright 安装失败问题（在构建阶段安装浏览器）
-- refactor: 整合 Dockerfile 为单一优化版本，删除多余文件（5.6GB → 3.8GB）
-- fix: 修复 ultra-v2 Dockerfile 中 Playwright 安装顺序问题（package.json 需要先复制）
-- fix: 修复 ultra-v2 Dockerfile 中 Playwright 安装失败的问题
-- fix: 修复 Docker 镜像优化无效问题，创建真正能减小体积的 ultra-v2 版本（5.6GB → 3.8GB）
-- fix: 修复 docker-compose 构建时未读取环境变量的问题
-- feat: 创建超级优化版 Dockerfile，通过激进优化策略减小镜像体积至 1.5-2GB
-- refactor: 创建统一的 Docker 镜像配置文件（config.sh），实现集中管理
-- fix: 修复 build.sh 和 docker-compose.build.yml 镜像名称不一致问题
-- fix: 修复 Docker 构建使用缓存代码的问题，创建无缓存重建脚本
-- fix: 在 Dockerfile 中添加 Vite 缓存清理步骤，避免使用旧缓存
-- fix: 修复 errorHandler.ts 中的 toast 导入错误（命名冲突）
-- fix: 修复 vite.config.ts 中的重复键警告（duplicate exclude）
-- fix: 修复 TypeScript 声明文件中的常量初始化错误（theme.d.ts）
-- feat: 创建优化版 Dockerfile，通过多阶段构建减小镜像体积（5.59GB → 2-3GB）
-- fix: 修复 Prisma 生成的类型定义文件导致的 Vite 构建错误
+### fix: 修复测试用例名称重复序号和重新生成重复问题
 
-## 2026-02-04
-- refactor: 整合构建脚本，只保留一个完整的 build.sh
-- fix: 修复一键构建脚本的镜像推送问题，采用智能镜像查找和标记逻辑
-- fix: 修复 Input.tsx 中遗漏的转义引号问题
-- feat: 创建一键式 Docker 构建脚本，集成检查、修复、构建、推送全流程
-- fix: 修复 Docker 构建时的 Prisma 类型错误和 Input.tsx 语法错误
-- chore: 添加 Docker 构建辅助脚本和故障排除文档
-- fix: 在 npm prune 后重新安装 sharp，防止可选依赖被错误清理
-- fix: 修复超级优化版 Dockerfile 中 sharp 模块运行时加载失败问题
-- fix: 修复超级优化版 Dockerfile 因 package-lock.json 不同步导致的构建失败
-- refactor: 合并并优化 .dockerignore 文件，统一构建排除规则
-- fix: 简化超级优化版 Dockerfile 为两阶段构建，解决缓存问题
-- feat: 创建超级优化版 Dockerfile，镜像体积降至 1.5-2GB
-- docs: 更新 Docker 镜像优化说明文档，添加详细对比和使用指南
-- fix: 修复优化版 Dockerfile 缺少 src 目录导致的模块找不到错误
-- fix: 修复构建脚本镜像名称不匹配问题
-- docs: 新增生产环境部署指南和配置模板
-- fix: 修复优化版 Dockerfile 的 .env 文件安全处理
-- fix: 修复优化版 Dockerfile 的 .env 文件创建逻辑
-- refactor: 简化 Docker Compose 配置，删除重复文件
-- docs: 新增 Docker 环境变量配置详细说明
-- fix: 完善 .dockerignore 环境变量文件排除规则
-- fix: 修复 Docker 容器 .env 文件创建方式，从 .env.example 复制
-- fix: 修复 Docker 容器中 .env 文件缺失问题
-- feat: 新增 Docker 镜像优化方案，减小镜像体积（5.59GB → 2-3GB）
-- refactor: 简化 Docker 镜像命名，统一使用 sakura-ai:latest
-- fix: 修复构建脚本镜像名称匹配问题
-- fix: 修复 Dockerfile 基础镜像配置，改回使用 Docker Hub 官方镜像
-- docs: 新增 Docker 构建故障排查文档
-- docs: 完善 Docker 部署文档，说明镜像访问权限配置
-- feat: 创建两套 Docker 部署方案（本地构建 + 在线镜像）
+- 清理用例名称中的重复序号（如 1.1-）
+- 修复重新生成时草稿箱用例重复新增的问题
 
+### fix: 新增跨场景智能去重功能
+- 问题：不同场景下的测试点生成了相似或相同的用例（如多个场景都有"登录"测试点）
+- 方案：实现智能相似度计算算法（名称40%+步骤30%+数据20%+类型10%）
+- 阈值：相似度≥80%认为是重复，自动过滤
+- 优化：详细的去重日志和用户提示，新增 duplicateCount 统计字段
+- 效果：大幅减少跨场景重复用例，保持草稿箱用例唯一性
+- 影响文件：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### fix: 修复AI生成测试用例时同场景重复生成问题
+- 问题：同一场景下不同测试点生成了相同的"正常流程"用例，导致大量重复
+- 原因：AI prompt 要求每个测试点都生成 2-3 个用例（正常、边界、异常）
+- 修复：调整为每个测试点默认生成 1 个与其直接对应的用例
+- 修复：只有正常流程测试点才生成 SMOKE 用例，边界/异常测试点生成对应类型
+- 修复：新增用例与测试点对应关系要求，禁止为非正常流程测试点生成"正常流程"用例
+- 修复：优化冒烟用例生成策略，根据测试点名称智能判断用例类型
+- 预期：大幅减少同场景重复用例，每个测试点只生成与其直接相关的用例
+- 影响文件：`server/services/functionalTestCaseAIService.ts`
+
+---
+
+## 2026-02-28
+
+### fix: 修复卡片视图重复声明变量编译错误 ✅
+- 移除 `scenarioIndex` 和 `testPointIndex` 重复声明
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### fix: 修复草稿箱序号显示逻辑 ✅
+- 用例名称保留层级序号（1.1.1-用例名），序号列显示简单递增（1,2,3）
+- 分页后序号正确递增
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`, `DraftCaseTableView.tsx`, `DraftCaseListView.tsx`
+
+---
+
+### fix: 修复草稿箱排序逻辑 ✅
+- 按场景→测试点→用例索引逐级排序，支持多位数序号
+- 生成时保存原始索引，排序时直接使用，序号不受添加顺序影响
+- 使用测试点数组索引而非名称序号，不依赖名称格式
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`, `DraftCaseTableView.tsx`
+
+---
+
+### fix: 修复草稿箱去重功能 ✅
+- 新生成用例之间去重 + 与草稿箱去重
+- 支持同场景和跨场景去重，移除序号前缀后比较名称
+- 支持被过滤用例的去重，分别统计有效重复和被过滤重复
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### fix: 修复草稿箱数据同步问题 ✅
+- 使用同步变量 `currentDraftCases` 避免状态异步问题
+- 数据源改为 `draftCases`，重新生成后草稿箱立即更新
+- 为每个用例添加预计算索引，所有视图正确显示层级序号
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### feat: 草稿箱筛选排序功能 ✅
+- 类型筛选：多选（冒烟/全量/异常/边界）
+- 优先级筛选：多选（紧急/高/中/低）
+- 排序功能：升序/降序切换
+- 筛选提示栏：显示当前条件和筛选后数量
+- 影响：`DraftCaseTableView.tsx`, `DraftCaseListView.tsx`
+
+---
+
+### fix: 修复筛选交互问题 ✅
+- 点击文本标签即可切换选中状态
+- 复选框仅作为视觉指示器
+- 影响：`DraftCaseTableView.tsx`, `DraftCaseListView.tsx`
+
+---
+
+### fix: 修复函数定义顺序错误 ✅
+- 将辅助函数移到 useMemo 之前，避免暂时性死区错误
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### style: 优化需求文档选择界面 ✅
+- 刷新按钮移至标题右侧
+- StepCard 支持 ReactNode 类型 title
+- 影响：`FunctionalTestCaseGenerator.tsx`, `StepCard.tsx`
+
+---
+
+### fix: 修复AI生成用例重复问题 ✅
+- 每个测试点默认生成1个对应用例（而非2-3个）
+- 只有正常流程测试点才生成SMOKE用例
+- 禁止为非正常流程测试点生成"正常流程"用例
+- 影响：`server/services/functionalTestCaseAIService.ts`
+
+---
+
+## 2026-02-27
+
+### fix: 修复编辑生成用例时的运行时错误
+- 修复 TestCaseDetailModal 和 FunctionalTestCaseGenerator 中 `assertions?.substring is not a function` 错误
+- 添加类型检查，确保只对字符串类型调用 substring 方法
+- 修正变量名拼写错误 `newsortedDraftCases` → `newDraftCases`
+
+---
+
+## 2025-01-XX
+
+### feat: 草稿箱分页功能 ✅
+- 新增 DraftPagination 组件，支持页码跳转和每页条数选择（10/20/50/100）
+- 为所有视图（表格/列表/卡片/网格）添加分页支持
+- 影响：`src/components/ai-generator/DraftPagination.tsx`
+
+---
+
+### fix: 修复草稿箱全选功能 ✅
+- 使用 `useRef` 存储实时计数器，解决串行生成时ID重复
+- 使用 `useMemo` 确保选中数量基于最新状态计算
+- 全选框状态基于所有可选用例，而非当前页
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### fix: 修复草稿箱序号计算逻辑 ✅
+- 序号计算包含分页偏移量（startIndex + index + 1）
+- 测试点按风险等级排序，只包含有用例的测试点
+- 序号与测试场景完全一致
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`, `DraftCaseTableView.tsx`, `DraftCaseListView.tsx`
+
+---
+
+### fix: 修复草稿箱用例显示和选择问题 ✅
+- 用例名称添加层级序号（1.3.1-用例名）
+- 全选功能正确统计，排除已保存和被过滤用例
+- 支持被过滤用例展示和选择
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
+
+### fix: 修复用例名称重复序号问题 ✅
+- 清理用例名称中的重复序号（如 1.1-）
+- 修复重新生成时草稿箱用例重复新增
+- 影响：`src/pages/FunctionalTestCaseGenerator.tsx`
+
+---
