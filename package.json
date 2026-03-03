@@ -1,7 +1,7 @@
 {
   "name": "sakura-ai",
   "private": true,
-  "version": "v1.9.0",
+  "version": "v2.0.0",
   "type": "module",
   "scripts": {
     "start": "node scripts/start.cjs",
