@@ -28,6 +28,10 @@ import ExecutionEngineGuide from '../../components/ExecutionEngineGuide';
 
 // LocalStorage key for view preference
 const VIEW_PREFERENCE_KEY = 'functional-test-cases-view-mode';
+// LocalStorage key for filters
+const FILTERS_STORAGE_KEY = 'functional-test-cases-filters';
+// LocalStorage key for pagination
+const PAGINATION_STORAGE_KEY = 'functional-test-cases-pagination';
 
 export function FunctionalTestCases() {
     const navigate = useNavigate();
@@ -48,29 +52,60 @@ export function FunctionalTestCases() {
     // State
     const [testCases, setTestCases] = useState<any[]>([]); // Raw flat data
     const [loading, setLoading] = useState(false);
-    const [pagination, setPagination] = useState({
-        page: 1,
-        pageSize: 10,
-        total: 0,
-        totalPages: 0
+    
+    // 🔥 从 localStorage 恢复分页状态
+    const [pagination, setPagination] = useState(() => {
+        try {
+            const saved = localStorage.getItem(PAGINATION_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return {
+                    page: parsed.page || 1,
+                    pageSize: parsed.pageSize || 10,
+                    total: 0,
+                    totalPages: 0
+                };
+            }
+        } catch (error) {
+            console.error('恢复分页状态失败:', error);
+        }
+        // 默认值
+        return {
+            page: 1,
+            pageSize: 10,
+            total: 0,
+            totalPages: 0
+        };
     });
 
-    const [filters, setFilters] = useState<FilterState>({
-        search: '',
-        system: '',
-        module: '',
-        source: '',
-        priority: '',
-        status: '',
-        tag: '',
-        sectionName: '',
-        createdBy: '',
-        startDate: '',
-        endDate: '',
-        riskLevel: '',
-        projectVersion: '',  // 🆕 项目版本筛选
-        caseType: '',  // 🆕 用例类型筛选
-        executionStatus: ''  // 🆕 执行结果筛选
+    // 🔥 从 localStorage 恢复筛选条件
+    const [filters, setFilters] = useState<FilterState>(() => {
+        try {
+            const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (error) {
+            console.error('恢复筛选条件失败:', error);
+        }
+        // 默认值
+        return {
+            search: '',
+            system: '',
+            module: '',
+            source: '',
+            priority: '',
+            status: '',
+            tag: '',
+            sectionName: '',
+            createdBy: '',
+            startDate: '',
+            endDate: '',
+            riskLevel: '',
+            projectVersion: '',
+            caseType: '',
+            executionStatus: ''
+        };
     });
 
     const [systemOptions, setSystemOptions] = useState<SystemOption[]>([]);
@@ -233,7 +268,11 @@ export function FunctionalTestCases() {
             const refreshFilterOptions = async () => {
                 try {
                     const options = await functionalTestCaseService.getFilterOptions();
-                    setFilterOptions(options);
+                    // 🔥 保留当前的 projectVersions，避免被覆盖
+                    setFilterOptions(prev => ({
+                        ...options,
+                        projectVersions: prev.projectVersions || options.projectVersions
+                    }));
                 } catch (error) {
                     console.error('刷新筛选选项失败:', error);
                 }
@@ -247,6 +286,27 @@ export function FunctionalTestCases() {
         loadData();
     }, [pagination.page, pagination.pageSize, filters]);
 
+    // 🔥 保存筛选条件到 localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+        } catch (error) {
+            console.error('保存筛选条件失败:', error);
+        }
+    }, [filters]);
+
+    // 🔥 保存分页状态到 localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem(PAGINATION_STORAGE_KEY, JSON.stringify({
+                page: pagination.page,
+                pageSize: pagination.pageSize
+            }));
+        } catch (error) {
+            console.error('保存分页状态失败:', error);
+        }
+    }, [pagination.page, pagination.pageSize]);
+
     // 🆕 筛选条件变化时清空选中（翻页不清空，保留跨页选择）
     useEffect(() => {
         setSelectedPoints(new Set());
@@ -259,12 +319,25 @@ export function FunctionalTestCases() {
                 try {
                     console.log('📋 加载系统版本列表:', filters.system);
                     const versions = await functionalTestCaseService.getProjectVersionsBySystem(filters.system);
-                    setFilterOptions(prev => ({
-                        ...prev,
-                        projectVersions: versions.map(v => v.version_code)
-                    }));
+                    console.log('✅ 版本列表API返回:', versions);
+                    console.log('✅ 版本数量:', versions.length);
+                    console.log('✅ 版本代码列表:', versions.map(v => v.version_code));
+                    
+                    const versionCodes = versions.map(v => v.version_code);
+                    const versionNames = versions.map(v => v.version_name || v.version_code);
+                    console.log('🔍 准备更新的版本代码数组:', versionCodes);
+                    console.log('🔍 准备更新的版本名称数组:', versionNames);
+                    
+                    setFilterOptions(prev => {
+                        const newOptions = {
+                            ...prev,
+                            projectVersions: versionNames  // � 使p用版本名称而不是版本代码
+                        };
+                        console.log('🔍 更新后的 filterOptions:', newOptions);
+                        return newOptions;
+                    });
                 } catch (error) {
-                    console.error('加载系统版本列表失败:', error);
+                    console.error('❌ 加载系统版本列表失败:', error);
                     setFilterOptions(prev => ({
                         ...prev,
                         projectVersions: []

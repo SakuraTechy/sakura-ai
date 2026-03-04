@@ -284,6 +284,8 @@ function AppContent() {
                       <Route path="/test-cases" element={<TestCases />} />
                       <Route path="/test-cases/new" element={<TestCaseDetail />} />
                       <Route path="/test-cases/:id/edit" element={<TestCaseDetail />} />
+                      <Route path="/test-cases/:id/detail" element={<TestCaseDetail />} />
+                      <Route path="/test-cases/:id/execute" element={<FunctionalTestCaseExecuteAlt />} />
 
                       {/* 功能测试用例路由 */}
                       <Route path="/functional-test-cases" element={<FunctionalTestCases />} />

@@ -143,6 +143,7 @@ services:
       - ./uploads:/app/uploads
       - ./artifacts:/app/artifacts
       - ./screenshots:/app/screenshots
+      - ./midscene_run:/app/midscene_run
       - ./logs:/app/logs
     depends_on:
       mysql:

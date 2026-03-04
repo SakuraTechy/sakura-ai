@@ -21,6 +21,7 @@ import { Button } from '../components/ui/button';
 import { TagInput } from '../components/ui/TagInput';
 import { StepTableEditor } from '../components/StepTableEditor';
 import { parseStepsText, serializeStepsToText } from '../utils/stepConverter';
+import { useTabs } from '../contexts/TabContext';  // 🔥 新增：导入useTabs
 
 interface TestCaseForm {
   name: string;
@@ -39,8 +40,17 @@ export function TestCaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  // 判断是否为编辑模式：路径包含 /edit 或者 id 存在且不等于 'new'
-  const isEditMode = location.pathname.includes('/edit') || (id !== undefined && id !== 'new');
+  const { activeTabId, removeTab } = useTabs();  // 🔥 新增：获取Tab操作函数
+  
+  // 🔥 判断页面模式
+  const isViewMode = location.pathname.includes('/detail'); // 查看模式（只读）
+  const isEditMode = location.pathname.includes('/edit'); // 编辑模式
+  const isCreateMode = id === 'new' || !id; // 创建模式
+  
+  // 🔥 从URL参数获取复制源ID
+  const searchParams = new URLSearchParams(location.search);
+  const copyFromId = searchParams.get('copyFrom');
+  const isCopyMode = !!copyFromId; // 复制模式
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -137,11 +147,14 @@ export function TestCaseDetail() {
   }, [testCase, stepsEditorMode]);
 
   const loadTestCase = async () => {
-    if (!id || id === 'new') return;
+    // 🔥 复制模式：加载源用例数据
+    const sourceId = isCopyMode ? copyFromId : id;
+    
+    if (!sourceId || sourceId === 'new') return;
 
     try {
       setLoading(true);
-      const response = await testService.getTestCaseById(parseInt(id));
+      const response = await testService.getTestCaseById(parseInt(sourceId));
       setTestCase(response);
 
       // 填充表单数据
@@ -150,7 +163,7 @@ export function TestCaseDetail() {
         : (response.steps ? JSON.stringify(response.steps) : '');
 
       setFormData({
-        name: response.name || response.title || '',
+        name: isCopyMode ? `${response.name || response.title || ''} (副本)` : (response.name || response.title || ''),
         preconditions: (response as any).preconditions || '',
         testData: (response as any).testData || '',
         steps: stepsText,
@@ -268,8 +281,12 @@ export function TestCaseDetail() {
         showToast.success('测试用例创建成功');
       }
 
-      // 返回列表页
+      // 🔥 关闭当前Tab并返回列表页
+      const currentTabId = activeTabId;
       navigate('/test-cases');
+      if (currentTabId) {
+        setTimeout(() => removeTab(currentTabId, '/test-cases'), 100);
+      }
     } catch (error) {
       console.error('保存测试用例失败:', error);
       showToast.error(isEditMode ? '更新测试用例失败' : '创建测试用例失败');
@@ -337,7 +354,14 @@ export function TestCaseDetail() {
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate('/test-cases')}
+              onClick={() => {
+                // 🔥 取消操作：关闭当前Tab并返回列表页
+                const currentTabId = activeTabId;
+                navigate('/test-cases');
+                if (currentTabId) {
+                  setTimeout(() => removeTab(currentTabId, '/test-cases'), 100);
+                }
+              }}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />

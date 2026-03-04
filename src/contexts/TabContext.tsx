@@ -77,6 +77,14 @@ const getRouteConfig = (pathname: string): { title: string; icon: React.ReactNod
     return { title: '编辑测试用例', icon: <Edit3 className="h-4 w-4" /> };
   }
 
+  if (pathname.match(/^\/test-cases\/\d+\/detail$/)) {
+    return { title: '查看测试用例', icon: <FileText className="h-4 w-4" /> };
+  }
+
+  if (pathname.match(/^\/test-cases\/\d+\/execute$/)) {
+    return { title: '执行测试用例', icon: <Play className="h-4 w-4" /> };
+  }
+
   // 🔥 测试执行详情页不创建新tab，复用 /test-runs 的tab
   if (pathname.match(/^\/test-runs\/.+\/detail$/)) {
     return null;
@@ -89,6 +97,26 @@ const getRouteConfig = (pathname: string): { title: string; icon: React.ReactNod
 
   if (pathname === '/functional-test-cases/create') {
     return { title: '创建功能用例', icon: <PlusCircle className="h-4 w-4" /> };
+  }
+
+  // 🔥 功能用例详情页
+  if (pathname.match(/^\/functional-test-cases\/\d+\/detail$/)) {
+    return { title: '查看功能用例', icon: <FileText className="h-4 w-4" /> };
+  }
+
+  // 🔥 功能用例编辑页
+  if (pathname.match(/^\/functional-test-cases\/\d+\/edit$/)) {
+    return { title: '编辑功能用例', icon: <Edit3 className="h-4 w-4" /> };
+  }
+
+  // 🔥 功能用例执行页
+  if (pathname.match(/^\/functional-test-cases\/\d+\/execute$/)) {
+    return { title: '执行功能用例', icon: <Play className="h-4 w-4" /> };
+  }
+
+  // 🔥 功能用例执行页（备用）
+  if (pathname.match(/^\/functional-test-cases\/\d+\/execute-alt$/)) {
+    return { title: '执行功能用例', icon: <Play className="h-4 w-4" /> };
   }
 
   if (pathname.match(/^\/functional-test-cases\/test-points\/.+\/edit$/)) {
@@ -326,7 +354,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
   }, []);
 
   // 移除Tab
-  const removeTab = useCallback((tabId: string) => {
+  const removeTab = useCallback((tabId: string, targetPath?: string) => {
     setTabs(prevTabs => {
       const tab = prevTabs.find(t => t.id === tabId);
 
@@ -339,6 +367,17 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
 
       // 如果关闭的是当前激活的Tab，需要切换到其他Tab
       if (activeTabId === tabId) {
+        // 如果指定了目标路径，尝试找到对应的Tab并激活
+        if (targetPath) {
+          const targetTab = newTabs.find(t => t.path === targetPath);
+          if (targetTab) {
+            setActiveTabId(targetTab.id);
+            navigate(targetTab.path);
+            return newTabs;
+          }
+        }
+        
+        // 否则使用默认逻辑：切换到相邻Tab
         const currentIndex = prevTabs.findIndex(t => t.id === tabId);
         const nextTab = newTabs[currentIndex] || newTabs[currentIndex - 1] || homeTab;
         setActiveTabId(nextTab.id);

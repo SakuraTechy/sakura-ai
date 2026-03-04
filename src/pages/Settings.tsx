@@ -634,7 +634,7 @@ export function Settings() {
                 </div>
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900">{selectedModel.name}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{selectedModel.description}</p>
+                  <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{selectedModel.description}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {selectedModel.capabilities.map((capability) => (
                       <span
@@ -911,6 +911,12 @@ export function Settings() {
                           从 <a href="https://claude.ticketpro.cc/register?aff=X1E2" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">NewApi平台</a> 获取API密钥（兼容OpenAI格式）
                         </>
                       );
+                    } else if (selectedModel?.provider === 'AICodeMirror') {
+                      return (
+                        <>
+                          从 <a href="https://www.aicodemirror.com/register?invitecode=R58C47" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">AICodeMirror平台</a> 获取API密钥（兼容OpenAI格式）
+                        </>
+                      );  
                     } else {
                       return `从 ${selectedModel?.provider || '模型提供商'} 获取认证密钥（参考项目文档配置）`;
                     }

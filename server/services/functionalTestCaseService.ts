@@ -297,10 +297,13 @@ export class FunctionalTestCaseService {
     }
     if (riskLevel) caseWhere.risk_level = riskLevel;
     
-    // 🆕 项目版本筛选
+    // 🆕 项目版本筛选 - 支持按版本名称或版本代码筛选
     if (projectVersion) {
       caseWhere.project_version = {
-        version_code: projectVersion
+        OR: [
+          { version_code: projectVersion },
+          { version_name: projectVersion }
+        ]
       };
     }
 
@@ -962,22 +965,42 @@ export class FunctionalTestCaseService {
     });
 
     try {
-      // 🆕 如果有项目版本ID，先替换硬编码为配置变量占位符
-      let processedData = data;
+      // 🆕 获取项目ID用于配置变量替换
+      let projectId: number | null = null;
+      
+      // 方式1：从提供的 projectVersionId 获取
       if (data.projectVersionId) {
-        // 获取项目ID
         const projectVersion = await this.prisma.project_versions.findUnique({
           where: { id: data.projectVersionId },
           select: { project_id: true }
         });
-        
-        if (projectVersion?.project_id) {
-          console.log(`🔄 [ConfigVariable] 替换更新测试用例中的硬编码数据...`);
-          processedData = await this.configVariableService.replaceHardcodedWithPlaceholders(
-            data,
-            projectVersion.project_id
-          );
-        }
+        projectId = projectVersion?.project_id || null;
+      }
+      
+      // 方式2：如果没有 projectVersionId，从现有测试用例获取
+      if (!projectId) {
+        const existingCase = await this.prisma.functional_test_cases.findUnique({
+          where: { id },
+          select: {
+            project_version_id: true,
+            project_version: {
+              select: { project_id: true }
+            }
+          }
+        });
+        projectId = existingCase?.project_version?.project_id || null;
+      }
+      
+      // 🆕 如果有项目ID，先替换硬编码为配置变量占位符
+      let processedData = data;
+      if (projectId) {
+        console.log(`🔄 [ConfigVariable] 替换更新测试用例中的硬编码数据 (项目ID: ${projectId})...`);
+        processedData = await this.configVariableService.replaceHardcodedWithPlaceholders(
+          data,
+          projectId
+        );
+      } else {
+        console.log(`⚠️ [ConfigVariable] 无法获取项目ID，跳过配置变量替换`);
       }
 
       // 🆕 从 testPoints 数组中提取第一个测试点信息（如果有）
@@ -1420,42 +1443,49 @@ export class FunctionalTestCaseService {
     try {
       console.log('📋 获取系统版本列表:', systemName);
       
-      // 查询该系统下的所有用例的版本信息
+      // 🔥 修复：先查询该系统下所有用例的版本ID（去重）
       const cases = await this.prisma.functional_test_cases.findMany({
         where: {
           system: systemName,
-          deleted_at: null  // 🆕 软删除过滤
-        },
-        select: {
-          project_version: {
-            select: {
-              id: true,
-              version_code: true,
-              version_name: true,
-              is_main: true
-            }
+          deleted_at: null,  // 软删除过滤
+          project_version_id: {
+            not: null  // 只查询有版本的用例
           }
         },
-        distinct: ['project_version_id']
-      });
-
-      // 去重并排序（主版本在前）
-      const versionMap = new Map<number, any>();
-      cases.forEach(c => {
-        if (c.project_version && c.project_version.id) {
-          versionMap.set(c.project_version.id, c.project_version);
+        select: {
+          project_version_id: true
         }
       });
 
-      const versions = Array.from(versionMap.values()).sort((a, b) => {
-        // 主版本排在前面
-        if (a.is_main && !b.is_main) return -1;
-        if (!a.is_main && b.is_main) return 1;
-        // 其他按版本代码排序
-        return a.version_code.localeCompare(b.version_code);
+      // 提取唯一的版本ID
+      const versionIds = [...new Set(cases.map(c => c.project_version_id).filter(id => id !== null))] as number[];
+      
+      if (versionIds.length === 0) {
+        console.log('⚠️ 该系统下没有关联版本的用例');
+        return [];
+      }
+
+      // 🔥 修复：根据版本ID查询版本详情
+      const versions = await this.prisma.project_versions.findMany({
+        where: {
+          id: {
+            in: versionIds
+          },
+          status: 'active'  // 只返回激活状态的版本
+        },
+        select: {
+          id: true,
+          version_code: true,
+          version_name: true,
+          is_main: true
+        },
+        orderBy: [
+          { is_main: 'desc' },  // 主版本排在前面
+          { version_code: 'asc' }  // 其他按版本代码排序
+        ]
       });
 
-      console.log(`✅ 找到 ${versions.length} 个版本`);
+      console.log(`✅ 找到 ${versions.length} 个版本:`, versions.map(v => v.version_code));
       return versions;
     } catch (error: any) {
       console.error('❌ 获取系统版本列表失败:', error);
