@@ -90,7 +90,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
             >
-              一站式 · 智能自动化平台
+              智能化 · 自动化研发平台
             </motion.span>
           )}
         </div>

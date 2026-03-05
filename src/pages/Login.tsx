@@ -163,7 +163,7 @@ export const Login: React.FC = () => {
               Ankki AI
             </h1>
             <p className="text-sm font-light tracking-[0.15em] bg-clip-text text-transparent bg-gradient-to-r from-purple-300/90 via-purple-200/80 to-purple-100/90 drop-shadow-[0_0_4px_rgba(168,85,247,0.4)]">
-              智能化 · 一站式自动化平台
+              全链路 · 一站式自动化研发平台
             </p>
           </motion.div>
 
