@@ -79,7 +79,7 @@ export function FunctionalTestCaseCreateSimple() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const copyFromId = searchParams.get('copyFrom');  // 🆕 复制模式：源用例ID
-  const { addTab } = useTabs();
+  const { tabs, addTab, activeTabId, removeTab, setActiveTab } = useTabs();  // 🔥 新增：获取Tab操作函数
   const [saving, setSaving] = useState(false);
   const [generatingData, setGeneratingData] = useState(false);
   const [loadingCopySource, setLoadingCopySource] = useState(false);  // 🆕 加载源用例状态
@@ -956,9 +956,14 @@ export function FunctionalTestCaseCreateSimple() {
         localStorage.removeItem(DRAFT_CACHE_KEY);
         
         showToast.success('测试用例创建成功');
+        
+        const currentTabId = activeTabId;
         setTimeout(() => {
           navigate('/functional-test-cases');
-        }, 1000);
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
+        }, 500);
       } else {
         showToast.error('创建失败：' + (result.error || '未知错误'));
       }
@@ -989,14 +994,26 @@ export function FunctionalTestCaseCreateSimple() {
         cancelText: '直接离开',
         onOk: () => {
           handleSaveDraft();
+          const currentTabId = activeTabId;
           navigate('/functional-test-cases');
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
         },
         onCancel: () => {
+          const currentTabId = activeTabId;
           navigate('/functional-test-cases');
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
         }
       });
     } else {
+      const currentTabId = activeTabId;
       navigate('/functional-test-cases');
+      if (currentTabId) {
+        setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+      }
     }
   };
   

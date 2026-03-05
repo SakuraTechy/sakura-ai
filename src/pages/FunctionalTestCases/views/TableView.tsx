@@ -69,6 +69,9 @@ const defaultColumnWidths: Record<string, number> = {
     actions: 190,  // 🆕 增加宽度以容纳复制按钮
 };
 
+// LocalStorage key for column widths
+const COLUMN_WIDTHS_STORAGE_KEY = 'functional-test-cases-table-column-widths';
+
 export const TableView: React.FC<ViewProps> = ({
     testCases,
     loading,
@@ -85,8 +88,21 @@ export const TableView: React.FC<ViewProps> = ({
     onPageChange,
     runningTestId  // 🆕 接收正在运行的测试ID
 }) => {
-    // 列宽状态管理 - 初始化为空对象，后续从列定义中获取
-    const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+    // 🔥 列宽状态管理 - 从 localStorage 恢复
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+        try {
+            const saved = localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                console.log('📏 [TableView] 恢复列宽:', parsed);
+                return parsed;
+            }
+        } catch (error) {
+            console.error('恢复列宽失败:', error);
+        }
+        console.log('📏 [TableView] 使用默认列宽（空对象）');
+        return {};
+    });
     const isInitializedRef = useRef(false);
     
     // 拖动状态
@@ -150,6 +166,19 @@ export const TableView: React.FC<ViewProps> = ({
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, []);
+
+    // 🔥 保存列宽到 localStorage
+    useEffect(() => {
+        // 只有当列宽不为空时才保存（避免保存初始空对象）
+        if (Object.keys(columnWidths).length > 0) {
+            try {
+                console.log('💾 [TableView] 保存列宽:', columnWidths);
+                localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
+            } catch (error) {
+                console.error('保存列宽失败:', error);
+            }
+        }
+    }, [columnWidths]);
 
     // 将测试用例数据转换为平铺的行数据
     const flatData: FlatRowData[] = useMemo(() => {
@@ -837,21 +866,30 @@ export const TableView: React.FC<ViewProps> = ({
         runningTestId,
     ]);
 
-    // 初始化列宽：从列定义中获取宽度，如果没有则使用默认值
+    // 🔥 初始化列宽：只有当 localStorage 中没有保存的列宽时才使用默认值
     useEffect(() => {
         if (!isInitializedRef.current && columns.length > 0) {
-            const initialWidths: Record<string, number> = {};
-            columns.forEach((col) => {
-                const columnKey = col.key as string;
-                if (columnKey) {
-                    // 优先使用列定义中的 width，否则使用 defaultColumnWidths，最后使用 100
-                    initialWidths[columnKey] = (col.width as number) || defaultColumnWidths[columnKey] || 100;
-                }
-            });
-            setColumnWidths(initialWidths);
+            // 检查是否已经从 localStorage 恢复了列宽
+            const hasRestoredWidths = Object.keys(columnWidths).length > 0;
+            
+            if (!hasRestoredWidths) {
+                // 只有当没有恢复的列宽时，才使用默认值初始化
+                console.log('📏 [TableView] 使用默认列宽初始化');
+                const initialWidths: Record<string, number> = {};
+                columns.forEach((col) => {
+                    const columnKey = col.key as string;
+                    if (columnKey) {
+                        // 优先使用列定义中的 width，否则使用 defaultColumnWidths，最后使用 100
+                        initialWidths[columnKey] = (col.width as number) || defaultColumnWidths[columnKey] || 100;
+                    }
+                });
+                setColumnWidths(initialWidths);
+            } else {
+                console.log('📏 [TableView] 已从 localStorage 恢复列宽，跳过默认初始化');
+            }
             isInitializedRef.current = true;
         }
-    }, [columns]);
+    }, [columns, columnWidths]);
 
     // 双击重置单列宽度
     const handleDoubleClick = useCallback((key: string, e: React.MouseEvent) => {
@@ -881,12 +919,18 @@ export const TableView: React.FC<ViewProps> = ({
 
     // 将列配置转换为可调整宽度的列配置
     const resizableColumns: ColumnsType<FlatRowData> = useMemo(() => {
+        console.log('🔄 [TableView] 重新计算列配置，当前 columnWidths:', columnWidths);
         return columns.map((col) => {
             const columnKey = col.key as string;
             // 宽度优先级：1. columnWidths（用户调整后的值） 2. col.width（列定义中的值） 3. defaultColumnWidths 4. 100
             const currentWidth = columnWidths[columnKey] !== undefined 
                 ? columnWidths[columnKey] 
                 : ((col.width as number) || defaultColumnWidths[columnKey] || 100);
+            
+            if (columnKey && columnWidths[columnKey] !== undefined) {
+                console.log(`  📏 列 ${columnKey}: 使用保存的宽度 ${currentWidth}px`);
+            }
+            
             const originalTitle = col.title;
             
             // 为标题添加拖动区域（覆盖在原有分割线位置）

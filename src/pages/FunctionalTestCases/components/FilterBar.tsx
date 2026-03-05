@@ -33,6 +33,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
+    // 🔍 调试：监听 filterOptions 变化
+    React.useEffect(() => {
+        console.log('🔍 [FilterBar] filterOptions 变化:', filterOptions);
+        console.log('🔍 [FilterBar] projectVersions:', filterOptions?.projectVersions);
+    }, [filterOptions]);
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             onSearch();
@@ -78,15 +84,34 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 {/* 🆕 版本筛选 - 依赖于系统选择 */}
                 <select
                     value={filters.projectVersion}
-                    onChange={e => handleChange('projectVersion', e.target.value)}
+                    onChange={e => {
+                        console.log('🔍 [FilterBar] 版本选择变化:', e.target.value);
+                        handleChange('projectVersion', e.target.value);
+                    }}
                     disabled={!filters.system}  // 未选择系统时禁用
                     className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm
                    focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onFocus={() => {
+                        console.log('🔍 [FilterBar] 版本下拉框获得焦点');
+                        console.log('🔍 [FilterBar] filterOptions:', filterOptions);
+                        console.log('🔍 [FilterBar] projectVersions:', filterOptions?.projectVersions);
+                        console.log('🔍 [FilterBar] projectVersions length:', filterOptions?.projectVersions?.length);
+                    }}
                 >
                     <option value="">{!filters.system ? '请先选择项目' : '所有版本'}</option>
-                    {filterOptions?.projectVersions?.map(version => (
-                        <option key={version} value={version}>{version}</option>
-                    ))}
+                    {(() => {
+                        console.log('🔍 [FilterBar] 渲染版本选项，projectVersions:', filterOptions?.projectVersions);
+                        if (filterOptions?.projectVersions && filterOptions.projectVersions.length > 0) {
+                            console.log('🔍 [FilterBar] 渲染版本列表:', filterOptions.projectVersions);
+                            return filterOptions.projectVersions.map(version => (
+                                <option key={version} value={version}>{version}</option>
+                            ));
+                        } else if (filters.system) {
+                            console.log('🔍 [FilterBar] 显示暂无版本数据');
+                            return <option disabled>暂无版本数据</option>;
+                        }
+                        return null;
+                    })()}
                 </select>
 
                 <select

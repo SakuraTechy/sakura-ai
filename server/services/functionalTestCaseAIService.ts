@@ -2736,6 +2736,42 @@ ${projectConfigPrompt}
 
 ## 输出格式
 
+🚨 **JSON 格式严格要求（必须遵守）：**
+
+1. **必须返回有效的 JSON 格式**，不要包含任何非 JSON 内容
+2. **字符串值中的换行符必须使用 \\n 转义**，不要使用真实的换行符
+3. **字符串值中的双引号必须使用 \\" 转义**，不要使用未转义的双引号
+4. **字符串值中的反斜杠必须使用 \\\\ 转义**
+5. **所有引号必须使用英文双引号 "**，不要使用中文引号 "" 或单引号 ''
+6. **JSON 对象的最后一个属性后不要加逗号**
+
+**正确示例：**
+\`\`\`json
+{
+  "testCases": [
+    {
+      "name": "用户名和密码均正确，登录成功",
+      "steps": "1. 【操作】打开登录页面\\n   【预期】页面正常加载\\n2. 【操作】输入用户名\\"admin\\"\\n   【预期】输入框正常接收"
+    }
+  ]
+}
+\`\`\`
+
+**错误示例（禁止）：**
+\`\`\`json
+{
+  "testCases": [
+    {
+      "name": "用户名和密码均正确，登录成功",
+      "steps": "1. 【操作】打开登录页面
+   【预期】页面正常加载
+2. 【操作】输入用户名"admin"
+   【预期】输入框正常接收"
+    }
+  ]
+}
+\`\`\`
+
 请输出JSON格式：
 \`\`\`json
 {
@@ -4131,6 +4167,19 @@ ${requirementDoc.substring(0, 1500)}...
     // 2. 清理JSON文本
     jsonText = jsonText.trim();
     
+    // 🔥 修复中文引号（必须在其他处理之前）
+    console.log(`🔧 [${context}] 开始修复中文引号，原始长度: ${jsonText.length}`);
+    const beforeQuoteFix = jsonText.length;
+    jsonText = jsonText
+      .replace(/"/g, '"')  // 中文左双引号 → 英文双引号
+      .replace(/"/g, '"')  // 中文右双引号 → 英文双引号
+      .replace(/'/g, "'")  // 中文左单引号 → 英文单引号
+      .replace(/'/g, "'"); // 中文右单引号 → 英文单引号
+    const afterQuoteFix = jsonText.length;
+    if (beforeQuoteFix !== afterQuoteFix) {
+      console.log(`✅ [${context}] 中文引号修复完成，长度变化: ${beforeQuoteFix} → ${afterQuoteFix}`);
+    }
+    
     console.log(`🔧 [${context}] 开始修复控制字符，原始长度: ${jsonText.length}`);
     
     // 🔍 诊断：检查是否有控制字符
@@ -4298,25 +4347,74 @@ ${requirementDoc.substring(0, 1500)}...
         console.error(`   ${' '.repeat(Math.min(100, errorPos - start))}^`);
       }
       
-      // 🔥 尝试更激进的修复：逐行处理字符串值中的换行符
+      // 🔥 尝试更激进的修复：手动扫描并修复字符串值
       console.log(`🔧 [${context}] 尝试更激进的JSON修复...`);
       try {
-        // 方法1：使用更精确的正则表达式修复字符串中的换行
-        let fixedJson = jsonText;
+        // 方法1：手动扫描JSON，修复字符串值中的控制字符和嵌套引号
+        let fixedJson = '';
+        let inString = false;
+        let escapeNext = false;
         
-        // 找到所有字符串值并修复其中的控制字符
-        fixedJson = fixedJson.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content) => {
-          // 替换未转义的控制字符
-          const fixed = content
-            .replace(/(?<!\\)\n/g, '\\n')
-            .replace(/(?<!\\)\r/g, '\\r')
-            .replace(/(?<!\\)\t/g, '\\t');
-          return `"${fixed}"`;
-        });
+        for (let idx = 0; idx < jsonText.length; idx++) {
+          const char = jsonText[idx];
+          const charCode = char.charCodeAt(0);
+          
+          // 处理转义字符
+          if (escapeNext) {
+            fixedJson += char;
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            fixedJson += char;
+            escapeNext = true;
+            continue;
+          }
+          
+          // 检测字符串边界
+          if (char === '"') {
+            fixedJson += char;
+            inString = !inString;
+            continue;
+          }
+          
+          // 在字符串内部，转义特殊字符
+          if (inString) {
+            if (charCode === 10) { // \n
+              fixedJson += '\\n';
+            } else if (charCode === 13) { // \r
+              fixedJson += '\\r';
+            } else if (charCode === 9) { // \t
+              fixedJson += '\\t';
+            } else if (charCode === 8) { // \b
+              fixedJson += '\\b';
+            } else if (charCode === 12) { // \f
+              fixedJson += '\\f';
+            } else if (charCode < 32) {
+              // 其他控制字符
+              fixedJson += '\\u' + charCode.toString(16).padStart(4, '0');
+            } else {
+              fixedJson += char;
+            }
+          } else {
+            fixedJson += char;
+          }
+        }
         
+        console.log(`✅ [${context}] 激进修复完成，尝试解析...`);
         return JSON.parse(fixedJson);
       } catch (retryError1: any) {
         console.error(`❌ [${context}] 激进修复1失败: ${retryError1.message}`);
+        
+        // 显示修复后的错误位置
+        const errorPos = parseInt(retryError1.message.match(/position (\d+)/)?.[1] || '0');
+        if (errorPos > 0) {
+          console.error(`📍 修复后错误位置附近的文本:`);
+          const start = Math.max(0, errorPos - 100);
+          const end = Math.min(jsonText.length, errorPos + 100);
+          console.error(`   ${jsonText.substring(start, end)}`);
+        }
       }
       
       // 尝试更激进的修复（针对testPoints数组）

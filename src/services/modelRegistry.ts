@@ -25,6 +25,7 @@ export class ModelRegistry {
 
   private constructor() {
     this.models = [
+      
       // ============ 智谱AI GLM 系列 ============
       {
         id: 'glm-series',
@@ -188,6 +189,27 @@ export class ModelRegistry {
         },
         capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'long-context'],
         description: 'Anthropic Claude Sonnet 4.5模型，平衡性能与成本，支持长上下文',
+        costLevel: 'medium'
+      },
+      // ============ AICodeMirror 系列 (Claude Code 官方共享平台) ============
+      // API文档: https://www.aicodemirror.com/dashboard/openai-sdk-docs
+      // 订阅模式: 按量付费(PAYGO)、包月订阅(PRO/MAX/ULTRA)，折扣7.5-8.5折
+      // 使用前提: 需在 aicodemirror.com 注册并获取 API KEY
+      // 注意: 不支持 /v1/models 自动获取，需手动输入API端点和模型名称
+      {
+        id: 'aicodemirror-series',
+        name: 'AICodeMirror 系列',
+        provider: 'AICodeMirror',
+        openRouterModel: 'claude-sonnet-4-6',
+        customBaseUrl: 'https://api.aicodemirror.com/api/claudecode/v1',
+        requiresCustomAuth: true,
+        requiresManualInput: true,
+        defaultConfig: {
+          temperature: 0.3,
+          maxTokens: 4096
+        },
+        capabilities: ['text-generation', 'multimodal', 'reasoning', 'code-analysis', 'chinese-friendly', 'long-context'],
+        description: 'AICodeMirror Claude Code官方共享平台，支持三个系列模型：\n【ClaudeCode】API端点 https://api.aicodemirror.com/api/claudecode/v1，模型名称 claude-opus-4-6/claude-sonnet-4-6/claude-opus-4-5-20251101/claude-haiku-4-5-20251001\n【Codex】API端点 https://api.aicodemirror.com/api/codex/v1，模型名称 gpt-5.1/gpt-5.1-codex/gpt-5.1-codex-max/gpt-5.2/gpt-5.2-codex/gpt-5.3-codex\n【Gemini】API端点 https://api.aicodemirror.com/api/gemini/v1，模型名称 gemini-3.1-pro-preview/gemini-3-pro-preview/gemini-3-flash-preview/gemini-2.5-pro/gemini-2.5-flash\n使用时需手动输入对应的API端点和模型名称',
         costLevel: 'medium'
       },
       // ============ OpenRouter 系列 (包含OpenAI、Anthropic等) ============
