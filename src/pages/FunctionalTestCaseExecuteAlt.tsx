@@ -4,6 +4,7 @@ import { Save, Loader2 } from 'lucide-react';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import { showToast } from '../utils/toast';
 import { Modal } from 'antd';
+import { useTabs } from '../contexts/TabContext';  // 🔥 新增：导入useTabs
 import './FunctionalTestCaseExecute.css';
 
 // 草稿缓存的 LocalStorage Key（执行页面专用）
@@ -689,7 +690,11 @@ export function TestCaseExecutor({
           
           const resultText = finalResult === 'pass' ? '✅ 通过' : finalResult === 'fail' ? '❌ 失败' : '🚫 阻塞';
           showToast.success(`执行结果已提交！最终结果：${resultText}，执行时长：${formatTime(executionTime)}`);
-          onCancel;
+          
+          // 提交成功后返回列表页面
+          if (onCancel) {
+            onCancel();
+          }
         } else {
           throw new Error(result.error || '提交失败');
         }
@@ -1298,6 +1303,7 @@ export function TestCaseExecutor({
 export function FunctionalTestCaseExecuteAlt() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { tabs, activeTabId, removeTab, setActiveTab } = useTabs();  // 🔥 新增：获取Tab操作函数
   const [loading, setLoading] = useState(true);
   const [testCase, setTestCase] = useState<any>(null);
 
@@ -1314,19 +1320,27 @@ export function FunctionalTestCaseExecuteAlt() {
           setTestCase(result.data);
         } else {
           showToast.error('加载测试用例失败');
+          // 🔥 新增：加载失败时关闭当前Tab
           navigate('/functional-test-cases');
+          if (activeTabId) {
+            setTimeout(() => removeTab(activeTabId), 300);
+          }
         }
       } catch (error) {
         console.error('加载测试用例失败:', error);
         showToast.error('加载测试用例失败');
+        // 🔥 新增：加载失败时关闭当前Tab
         navigate('/functional-test-cases');
+        if (activeTabId) {
+          setTimeout(() => removeTab(activeTabId), 300);
+        }
       } finally {
         setLoading(false);
       }
     };
     
     loadTestCase();
-  }, [id, navigate]);
+  }, [id, navigate, activeTabId, removeTab]);
 
   if (loading) {
     return (
@@ -1343,10 +1357,19 @@ export function FunctionalTestCaseExecuteAlt() {
     return null;
   }
 
+  // 🔥 新增：取消或完成后关闭当前Tab
+  const handleCancel = () => {
+    const currentTabId = activeTabId;
+    navigate('/functional-test-cases');
+    if (currentTabId) {
+      setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+    }
+  };
+
   return (
     <TestCaseExecutor
       testCase={testCase}
-      onCancel={() => navigate('/functional-test-cases')}
+      onCancel={handleCancel}
     />
   );
 }

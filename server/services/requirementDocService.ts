@@ -113,7 +113,11 @@ export class RequirementDocService {
               select: { id: true, version_name: true, version_code: true }
             },
             _count: {
-              select: { test_cases: true }
+              select: { 
+                test_cases: {
+                  where: { deleted_at: null }  // 🔧 只统计未删除的测试用例
+                }
+              }
             }
           }
         }),
@@ -156,6 +160,9 @@ export class RequirementDocService {
             select: { id: true, version_name: true, version_code: true }
           },
           test_cases: {
+            where: {
+              deleted_at: null  // 🔧 过滤已删除的测试用例
+            },
             select: {
               id: true,
               name: true,
@@ -323,7 +330,10 @@ export class RequirementDocService {
   async updateTestCaseCount(id: number) {
     try {
       const count = await this.prisma.functional_test_cases.count({
-        where: { requirement_doc_id: id }
+        where: { 
+          requirement_doc_id: id,
+          deleted_at: null  // 🔧 只统计未删除的测试用例
+        }
       });
 
       await this.prisma.requirement_documents.update({
@@ -345,7 +355,10 @@ export class RequirementDocService {
     try {
       const [testCases, total] = await Promise.all([
         this.prisma.functional_test_cases.findMany({
-          where: { requirement_doc_id: id },
+          where: { 
+            requirement_doc_id: id,
+            deleted_at: null  // 🔧 只查询未删除的测试用例
+          },
           skip: (page - 1) * pageSize,
           take: pageSize,
           orderBy: { created_at: 'desc' },
@@ -356,7 +369,10 @@ export class RequirementDocService {
           }
         }),
         this.prisma.functional_test_cases.count({
-          where: { requirement_doc_id: id }
+          where: { 
+            requirement_doc_id: id,
+            deleted_at: null  // 🔧 只统计未删除的测试用例
+          }
         })
       ]);
 

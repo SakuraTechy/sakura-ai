@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import { showToast } from '../utils/toast';
+import { useTabs } from '../contexts/TabContext';
 import './FunctionalTestCaseExecute.css';
 
 type StepResult = 'pass' | 'fail' | 'block' | null;
@@ -39,6 +40,7 @@ interface TestCase {
 export function FunctionalTestCaseExecute() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { tabs, activeTabId, removeTab, setActiveTab } = useTabs();
   const [loading, setLoading] = useState(true);
   const [testCase, setTestCase] = useState<TestCase | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -172,6 +174,16 @@ export function FunctionalTestCaseExecute() {
     showToast.success('测试结果草稿已保存');
   };
 
+  // 取消并关闭Tab
+  const handleCancel = () => {
+    const currentTabId = activeTabId;
+    navigate('/functional-test-cases');
+    // 延迟足够长的时间，确保导航完成并且Tab已切换
+    if (currentTabId) {
+      setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+    }
+  };
+
   // 提交结果
   const handleSubmit = async () => {
     if (!finalResult) {
@@ -230,7 +242,11 @@ export function FunctionalTestCaseExecute() {
       if (result.success) {
         const resultText = finalResult === 'pass' ? '✅ 通过' : finalResult === 'fail' ? '❌ 失败' : '🚫 阻塞';
         showToast.success(`测试结果已提交！最终结果：${resultText}，执行时长：${formattedTime}`);
+        const currentTabId = activeTabId;
         navigate('/functional-test-cases');
+        if (currentTabId) {
+          setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+        }
       } else {
         throw new Error(result.error || '提交失败');
       }
@@ -311,7 +327,7 @@ export function FunctionalTestCaseExecute() {
                 📁 {testCase.system || '-'} → 🎯 {testCase.scenario_name || testCase.section_name || '-'} → 📝 {testCase.test_point_name || '-'}
               </div>
             </div>
-            <button className="back-btn" onClick={() => navigate('/functional-test-cases')}>
+            <button className="back-btn" onClick={handleCancel}>
               返回列表
             </button>
           </div>
@@ -543,7 +559,7 @@ export function FunctionalTestCaseExecute() {
 
           {/* 底部操作栏 */}
           <div className="action-bar">
-            <button className="btn btn-secondary" onClick={() => navigate('/functional-test-cases')}>
+            <button className="btn btn-secondary" onClick={handleCancel}>
               取消
             </button>
             <button className="btn btn-secondary" onClick={handleSaveDraft}>

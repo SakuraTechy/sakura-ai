@@ -17,6 +17,8 @@ import {
   ChevronsLeft,
   ChevronRight as ChevronRightIcon,
   ChevronsRight,
+  FileText,
+  Code,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { TestCase } from '../types/test';
@@ -27,6 +29,8 @@ interface TestCaseTableProps {
   onRunTest: (testCase: TestCase) => void;
   onEditTestCase: (testCase: TestCase) => void;
   onDeleteTestCase: (testCase: TestCase) => void;
+  onViewTestCase?: (testCase: TestCase) => void; // 🔥 新增：查看用例
+  onCopyTestCase?: (testCase: TestCase) => void; // 🔥 新增：复制用例
   runningTestId: number | null;
   loading?: boolean;
   // 分页相关props
@@ -662,7 +666,7 @@ export function TestCaseTable({
                   {/* 固定列：操作 */}
                   <td className={clsx(
                     "sticky right-0 z-10 px-4 py-3 border-l border-gray-200 transition-colors sticky-column-right",
-                    expandedRows.has(testCase.id) ? "bg-blue-50" : "bg-white group-hover:bg-gray-50"
+                    selectedIds.includes(testCase.id) ? "bg-blue-100" : expandedRows.has(testCase.id) ? "bg-blue-50" : "bg-white group-hover:bg-gray-50"
                   )}>
                     <div className="flex items-center justify-start space-x-1">
                       <button

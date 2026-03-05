@@ -77,6 +77,10 @@ interface CreateTestSuiteForm {
   project: string; // 🔥 新增：项目字段
 }
 
+// LocalStorage keys for state persistence
+const FILTERS_STORAGE_KEY = 'test-cases-filters';
+const PAGINATION_STORAGE_KEY = 'test-cases-pagination';
+
 export function TestCases() {
   // 🔥 获取当前用户信息
   const { user } = useAuth();
@@ -87,12 +91,63 @@ export function TestCases() {
   // 🔥 新增：Tab状态管理
   const [activeTab, setActiveTab] = useState<'cases' | 'suites' | 'runs'>('cases');
   
-  const [searchTerm, setSearchTerm] = useState('');
+  // 🔥 从 localStorage 恢复筛选条件
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.searchTerm || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
+  
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState('');
+  
+  const [selectedTag, setSelectedTag] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.selectedTag || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
+  
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedPriority, setSelectedPriority] = useState('');
-  const [selectedSystem, setSelectedSystem] = useState('');
+  
+  const [selectedPriority, setSelectedPriority] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.selectedPriority || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
+  
+  const [selectedSystem, setSelectedSystem] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.selectedSystem || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
+  
   const [runningTestId, setRunningTestId] = useState<number | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(false);
@@ -113,12 +168,28 @@ export function TestCases() {
   });
   const [showEngineGuide, setShowEngineGuide] = useState(false);
 
-  // 🔥 新增：分页状态管理
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 10,
-    total: 0,
-    totalPages: 0
+  // 🔥 从 localStorage 恢复分页状态
+  const [pagination, setPagination] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PAGINATION_STORAGE_KEY);
+      if (saved) {
+        const pag = JSON.parse(saved);
+        return {
+          page: pag.page || 1,
+          pageSize: pag.pageSize || 10,
+          total: 0,
+          totalPages: 0
+        };
+      }
+    } catch (error) {
+      console.error('恢复分页状态失败:', error);
+    }
+    return {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 0
+    };
   });
   const [editingTestCase, setEditingTestCase] = useState<TestCase | null>(null);
   
@@ -1016,9 +1087,24 @@ export function TestCases() {
     }
   };
 
-  // 处理测试用例数据中的可选字段 - 改为导航到编辑页面
+  // 🔥 查看测试用例详情 - 在新Tab中打开
+  const handleViewTestCase = (testCase: TestCase) => {
+    navigate(`/test-cases/${testCase.id}/detail`);
+  };
+
+  // 🔥 编辑测试用例 - 在新Tab中打开
   const handleEditTestCase = (testCase: TestCase) => {
     navigate(`/test-cases/${testCase.id}/edit`);
+  };
+
+  // 🔥 复制测试用例 - 在新Tab中打开创建页面并传递复制参数
+  const handleCopyTestCase = (testCase: TestCase) => {
+    navigate(`/test-cases/new?copyFrom=${testCase.id}`);
+  };
+
+  // 🔥 执行测试用例 - 在新Tab中打开执行页面
+  const handleExecuteTestCase = (testCase: TestCase) => {
+    navigate(`/test-cases/${testCase.id}/execute`);
   };
 
   const handleDeleteTestCase = (testCase: TestCase) => {
@@ -1457,10 +1543,32 @@ export function TestCases() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [allSuiteTags, setAllSuiteTags] = useState<string[]>([]);
   const [moduleOptions, setModuleOptions] = useState<string[]>([]);
-  const [selectedModule, setSelectedModule] = useState('');
+  const [selectedModule, setSelectedModule] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.selectedModule || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
   // 🔥 新增：版本筛选器状态
   const [versionOptions, setVersionOptions] = useState<string[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState('');
+  const [selectedVersion, setSelectedVersion] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.selectedVersion || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
   
   // 🔥 新增：测试执行搜索和筛选状态
   const [runsSearchTerm, setRunsSearchTerm] = useState('');
@@ -1477,10 +1585,54 @@ export function TestCases() {
   
   // 🔥 新增：测试用例高级筛选状态
   const [casesShowAdvanced, setCasesShowAdvanced] = useState(false);
-  const [casesStatusFilter, setCasesStatusFilter] = useState('');
-  const [casesExecutionStatusFilter, setCasesExecutionStatusFilter] = useState('');  // 🆕 执行状态筛选
-  const [casesExecutionResultFilter, setCasesExecutionResultFilter] = useState('');  // 🆕 执行结果筛选
-  const [casesAuthorFilter, setCasesAuthorFilter] = useState('');
+  const [casesStatusFilter, setCasesStatusFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.casesStatusFilter || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
+  const [casesExecutionStatusFilter, setCasesExecutionStatusFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.casesExecutionStatusFilter || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });  // 🆕 执行状态筛选
+  const [casesExecutionResultFilter, setCasesExecutionResultFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.casesExecutionResultFilter || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });  // 🆕 执行结果筛选
+  const [casesAuthorFilter, setCasesAuthorFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        return filters.casesAuthorFilter || '';
+      }
+    } catch (error) {
+      console.error('恢复筛选条件失败:', error);
+    }
+    return '';
+  });
   
   // 🔥 新增：测试用例筛选选项（从测试用例数据中提取）
   const [casesFilterOptions, setCasesFilterOptions] = useState<{
@@ -1546,6 +1698,38 @@ export function TestCases() {
     const saved = localStorage.getItem('testCases-cases-viewMode');
     return (saved as 'table' | 'detailed' | 'card') || 'table';
   });
+  
+  // 🔥 保存筛选条件到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+        searchTerm,
+        selectedTag,
+        selectedPriority,
+        selectedSystem,
+        selectedModule,
+        selectedVersion,
+        casesStatusFilter,
+        casesExecutionStatusFilter,
+        casesExecutionResultFilter,
+        casesAuthorFilter
+      }));
+    } catch (error) {
+      console.error('保存筛选条件失败:', error);
+    }
+  }, [searchTerm, selectedTag, selectedPriority, selectedSystem, selectedModule, selectedVersion, casesStatusFilter, casesExecutionStatusFilter, casesExecutionResultFilter, casesAuthorFilter]);
+
+  // 🔥 保存分页状态到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(PAGINATION_STORAGE_KEY, JSON.stringify({
+        page: pagination.page,
+        pageSize: pagination.pageSize
+      }));
+    } catch (error) {
+      console.error('保存分页状态失败:', error);
+    }
+  }, [pagination.page, pagination.pageSize]);
   
   // 🔥 保存视图模式偏好
   useEffect(() => {
@@ -2949,8 +3133,10 @@ export function TestCases() {
               {testCasesViewMode === 'table' && (
                 <TestCaseTable
                   testCases={testCases}
-                  onRunTest={handleRunTest}
+                  onViewTestCase={handleViewTestCase}
                   onEditTestCase={handleEditTestCase}
+                  onCopyTestCase={handleCopyTestCase}
+                  onRunTest={handleExecuteTestCase}
                   onDeleteTestCase={handleDeleteTestCase}
                   runningTestId={runningTestId}
                   loading={loading}
@@ -2966,8 +3152,10 @@ export function TestCases() {
               {testCasesViewMode === 'detailed' && (
                 <TestCaseTable
                   testCases={testCases}
-                  onRunTest={handleRunTest}
+                  onViewTestCase={handleViewTestCase}
                   onEditTestCase={handleEditTestCase}
+                  onCopyTestCase={handleCopyTestCase}
+                  onRunTest={handleExecuteTestCase}
                   onDeleteTestCase={handleDeleteTestCase}
                   runningTestId={runningTestId}
                   loading={loading}

@@ -4,6 +4,7 @@ import { Edit, Play, Loader2 } from 'lucide-react';
 import { functionalTestCaseService } from '../services/functionalTestCaseService';
 import { showToast } from '../utils/toast';
 import { parseStepsFromString } from '../components/test-case/TestStepsEditor';
+import { useTabs } from '../contexts/TabContext';  // 🔥 新增：导入useTabs
 
 /**
  * 功能测试用例详情页面
@@ -11,6 +12,7 @@ import { parseStepsFromString } from '../components/test-case/TestStepsEditor';
 export function FunctionalTestCaseDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { tabs, activeTabId, removeTab, setActiveTab } = useTabs();  // 🔥 新增：获取Tab操作函数
   const [loading, setLoading] = useState(true);
   const [testCase, setTestCase] = useState<any>(null);
   
@@ -27,19 +29,27 @@ export function FunctionalTestCaseDetail() {
           setTestCase(result.data);
         } else {
           showToast.error('加载测试用例失败');
+          // 🔥 新增：加载失败时关闭当前Tab
           navigate('/functional-test-cases');
+          if (activeTabId) {
+            setTimeout(() => removeTab(activeTabId), 300);
+          }
         }
       } catch (error) {
         console.error('加载测试用例失败:', error);
         showToast.error('加载测试用例失败');
+        // 🔥 新增：加载失败时关闭当前Tab
         navigate('/functional-test-cases');
+        if (activeTabId) {
+          setTimeout(() => removeTab(activeTabId), 300);
+        }
       } finally {
         setLoading(false);
       }
     };
     
     loadTestCase();
-  }, [id, navigate]);
+  }, [id, navigate, activeTabId, removeTab]);
   
   const handleEdit = () => {
     navigate(`/functional-test-cases/${id}/edit`);
@@ -49,12 +59,25 @@ export function FunctionalTestCaseDetail() {
     navigate(`/functional-test-cases/${id}/execute`);
   };
   
+  // 🔥 新增：返回列表并关闭当前Tab
+  const handleBack = () => {
+    const currentTabId = activeTabId;
+    navigate('/functional-test-cases');
+    if (currentTabId) {
+      setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+    }
+  };
+  
   const handleExecuteAlt = () => {
     navigate(`/functional-test-cases/${id}/execute-alt`);
   };
   
   const handleClose = () => {
+    const currentTabId = activeTabId;
     navigate('/functional-test-cases');
+    if (currentTabId) {
+      setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+    }
   };
   
   if (loading) {

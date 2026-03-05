@@ -6,6 +6,7 @@ import * as systemService from '../services/systemService';
 import type { SystemOption, ProjectVersion } from '../types/test';
 import { showToast } from '../utils/toast';
 import { Input, Select, Modal } from 'antd';
+import { useTabs } from '../contexts/TabContext';  // 🔥 新增：导入useTabs
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -69,6 +70,7 @@ interface DraftData {
 export function FunctionalTestCaseEdit() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { tabs, activeTabId, removeTab, setActiveTab } = useTabs();  // 🔥 新增：获取Tab操作函数
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generatingData, setGeneratingData] = useState(false);
@@ -819,9 +821,14 @@ export function FunctionalTestCaseEdit() {
         }
         
         showToast.success('测试用例已保存');
+        
+        const currentTabId = activeTabId;
         setTimeout(() => {
           navigate('/functional-test-cases');
-        }, 1000);
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
+        }, 500);
       } else {
         showToast.error('保存失败：' + result.error);
       }
@@ -851,14 +858,27 @@ export function FunctionalTestCaseEdit() {
         cancelText: '直接离开',
         onOk: () => {
           handleSaveDraft();
+          const currentTabId = activeTabId;
           navigate('/functional-test-cases');
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
         },
         onCancel: () => {
+          const currentTabId = activeTabId;
           navigate('/functional-test-cases');
+          if (currentTabId) {
+            setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+          }
         }
       });
     } else {
+      // 🔥 新增：关闭当前Tab并返回列表页
+      const currentTabId = activeTabId; // 保存当前Tab ID
       navigate('/functional-test-cases');
+      if (currentTabId) {
+        setTimeout(() => removeTab(currentTabId, '/functional-test-cases'), 100);
+      }
     }
   };
   
