@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { Table, Button, Space, Tooltip, Checkbox, Pagination, Tag, Dropdown } from 'antd';
-import { Edit3, Trash2, Eye, FileText, User, Bot, PlayCircle, RotateCcw, Loader2, Copy } from 'lucide-react';
+import { Table, Button, Space, Tooltip, Checkbox, Pagination, Tag, Dropdown, Modal } from 'antd';
+import { Edit3, Trash2, Eye, FileText, User, Bot, PlayCircle, RotateCcw, Loader2, Copy, Settings } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { ViewProps } from '../types';
 import { getCaseTypeInfo } from '../../../utils/caseTypeHelper';
@@ -71,6 +71,35 @@ const defaultColumnWidths: Record<string, number> = {
 
 // LocalStorage key for column widths
 const COLUMN_WIDTHS_STORAGE_KEY = 'functional-test-cases-table-column-widths';
+// LocalStorage key for visible columns
+const VISIBLE_COLUMNS_STORAGE_KEY = 'functional-test-cases-table-visible-columns';
+
+// 列配置定义
+interface ColumnConfig {
+    key: string;
+    title: string;
+    required?: boolean; // 必需列，不可隐藏
+}
+
+// 所有可配置的列
+const COLUMN_CONFIGS: ColumnConfig[] = [
+    { key: 'select', title: '选择', required: true },
+    { key: 'id', title: 'ID', required: true },
+    { key: 'system', title: '所属项目' },
+    { key: 'project_version', title: '所属版本' },
+    { key: 'module', title: '所属模块' },
+    { key: 'scenario_name', title: '测试场景' },
+    { key: 'test_point_name', title: '测试点' },
+    { key: 'name', title: '用例标题' },
+    { key: 'case_type', title: '用例类型' },
+    { key: 'priority', title: '优先级' },
+    { key: 'execution_status', title: '执行结果' },
+    { key: 'source', title: '用例来源' },
+    { key: 'creator', title: '创建者' },
+    { key: 'created_at', title: '创建时间' },
+    { key: 'updated_at', title: '更新时间' },
+    { key: 'actions', title: '操作', required: true },
+];
 
 export const TableView: React.FC<ViewProps> = ({
     testCases,
@@ -104,6 +133,26 @@ export const TableView: React.FC<ViewProps> = ({
         return {};
     });
     const isInitializedRef = useRef(false);
+    
+    // 🆕 列显示状态管理 - 从 localStorage 恢复
+    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem(VISIBLE_COLUMNS_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                console.log('👁️ [TableView] 恢复列显示状态:', parsed);
+                return new Set(parsed);
+            }
+        } catch (error) {
+            console.error('恢复列显示状态失败:', error);
+        }
+        // 默认显示所有列
+        console.log('👁️ [TableView] 使用默认列显示状态（全部显示）');
+        return new Set(COLUMN_CONFIGS.map(col => col.key));
+    });
+    
+    // 🆕 列配置弹窗状态
+    const [columnSettingsVisible, setColumnSettingsVisible] = useState(false);
     
     // 拖动状态
     const dragStateRef = useRef<{
@@ -179,6 +228,17 @@ export const TableView: React.FC<ViewProps> = ({
             }
         }
     }, [columnWidths]);
+    
+    // 🆕 保存列显示状态到 localStorage
+    useEffect(() => {
+        try {
+            const visibleArray = Array.from(visibleColumns);
+            console.log('💾 [TableView] 保存列显示状态:', visibleArray);
+            localStorage.setItem(VISIBLE_COLUMNS_STORAGE_KEY, JSON.stringify(visibleArray));
+        } catch (error) {
+            console.error('保存列显示状态失败:', error);
+        }
+    }, [visibleColumns]);
 
     // 将测试用例数据转换为平铺的行数据
     const flatData: FlatRowData[] = useMemo(() => {
@@ -916,11 +976,48 @@ export const TableView: React.FC<ViewProps> = ({
         });
         setColumnWidths(resetWidths);
     }, [columns]);
+    
+    // 🆕 切换列显示状态
+    const handleToggleColumn = useCallback((columnKey: string) => {
+        setVisibleColumns(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(columnKey)) {
+                newSet.delete(columnKey);
+            } else {
+                newSet.add(columnKey);
+            }
+            return newSet;
+        });
+    }, []);
+    
+    // 🆕 全选/取消全选列
+    const handleToggleAllColumns = useCallback((checked: boolean) => {
+        if (checked) {
+            // 全选：显示所有列
+            setVisibleColumns(new Set(COLUMN_CONFIGS.map(col => col.key)));
+        } else {
+            // 取消全选：只保留必需列
+            setVisibleColumns(new Set(COLUMN_CONFIGS.filter(col => col.required).map(col => col.key)));
+        }
+    }, []);
+    
+    // 🆕 重置列显示状态
+    const handleResetColumnVisibility = useCallback(() => {
+        setVisibleColumns(new Set(COLUMN_CONFIGS.map(col => col.key)));
+    }, []);
 
-    // 将列配置转换为可调整宽度的列配置
+    // 将列配置转换为可调整宽度的列配置，并根据 visibleColumns 过滤
     const resizableColumns: ColumnsType<FlatRowData> = useMemo(() => {
         console.log('🔄 [TableView] 重新计算列配置，当前 columnWidths:', columnWidths);
-        return columns.map((col) => {
+        console.log('🔄 [TableView] 当前可见列:', Array.from(visibleColumns));
+        
+        // 🆕 先过滤出可见的列
+        const filteredColumns = columns.filter(col => {
+            const columnKey = col.key as string;
+            return visibleColumns.has(columnKey);
+        });
+        
+        return filteredColumns.map((col) => {
             const columnKey = col.key as string;
             // 宽度优先级：1. columnWidths（用户调整后的值） 2. col.width（列定义中的值） 3. defaultColumnWidths 4. 100
             const currentWidth = columnWidths[columnKey] !== undefined 
@@ -952,7 +1049,7 @@ export const TableView: React.FC<ViewProps> = ({
                 width: currentWidth,
             };
         });
-    }, [columns, columnWidths, handleMouseDown, handleDoubleClick]);
+    }, [columns, columnWidths, visibleColumns, handleMouseDown, handleDoubleClick]);
 
     // 处理分页变化
     const handlePageChange = (page: number, pageSize: number) => {
@@ -1023,6 +1120,17 @@ export const TableView: React.FC<ViewProps> = ({
                                     重置列宽
                                 </Button>
                             </Tooltip>
+                            <Tooltip title="列显示设置">
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<Settings className="w-3.5 h-3.5" />}
+                                    onClick={() => setColumnSettingsVisible(true)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    列设置
+                                </Button>
+                            </Tooltip>
                         </div>
                         <Pagination
                             current={pagination.page}
@@ -1044,6 +1152,97 @@ export const TableView: React.FC<ViewProps> = ({
                     </div>
                 )}
             </div>
+            
+            {/* 🆕 列显示设置弹窗 */}
+            <Modal
+                title={
+                    <div className="flex items-center gap-2">
+                        <Settings className="w-5 h-5 text-blue-600" />
+                        <span>列显示设置</span>
+                    </div>
+                }
+                open={columnSettingsVisible}
+                onCancel={() => setColumnSettingsVisible(false)}
+                footer={
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="small"
+                                onClick={() => handleToggleAllColumns(true)}
+                            >
+                                全选
+                            </Button>
+                            <Button
+                                size="small"
+                                onClick={() => handleToggleAllColumns(false)}
+                            >
+                                取消全选
+                            </Button>
+                            <Button
+                                size="small"
+                                icon={<RotateCcw className="w-3.5 h-3.5" />}
+                                onClick={handleResetColumnVisibility}
+                            >
+                                重置
+                            </Button>
+                        </div>
+                        <Button
+                            type="primary"
+                            onClick={() => setColumnSettingsVisible(false)}
+                        >
+                            确定
+                        </Button>
+                    </div>
+                }
+                width={500}
+                centered
+            >
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto py-2">
+                    {COLUMN_CONFIGS.map(col => (
+                        <div
+                            key={col.key}
+                            className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                                visibleColumns.has(col.key)
+                                    ? 'bg-blue-50 border-blue-200'
+                                    : 'bg-gray-50 border-gray-200'
+                            } ${col.required ? 'opacity-60' : 'hover:shadow-sm cursor-pointer'}`}
+                            onClick={() => !col.required && handleToggleColumn(col.key)}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Checkbox
+                                    checked={visibleColumns.has(col.key)}
+                                    disabled={col.required}
+                                    onChange={() => handleToggleColumn(col.key)}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                <span className={`font-medium ${
+                                    visibleColumns.has(col.key) ? 'text-gray-900' : 'text-gray-500'
+                                }`}>
+                                    {col.title}
+                                </span>
+                            </div>
+                            {col.required && (
+                                <Tag color="blue" className="text-xs">
+                                    必需
+                                </Tag>
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-2 text-xs text-blue-700">
+                        <span className="flex-shrink-0 mt-0.5">💡</span>
+                        <div>
+                            <div className="font-medium mb-1">提示</div>
+                            <ul className="space-y-1 list-disc list-inside">
+                                <li>勾选列将在表格中显示，取消勾选则隐藏</li>
+                                <li>标记为"必需"的列无法隐藏</li>
+                                <li>设置会自动保存，刷新页面后保持</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };
