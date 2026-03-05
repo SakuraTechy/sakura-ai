@@ -1102,9 +1102,10 @@ export function TestCases() {
     navigate(`/test-cases/new?copyFrom=${testCase.id}`);
   };
 
-  // 🔥 执行测试用例 - 在新Tab中打开执行页面
+  // 🔥 执行测试用例 - 显示执行配置对话框
   const handleExecuteTestCase = (testCase: TestCase) => {
-    navigate(`/test-cases/${testCase.id}/execute`);
+    // 复用 handleRunTest 的逻辑
+    handleRunTest(testCase);
   };
 
   const handleDeleteTestCase = (testCase: TestCase) => {
