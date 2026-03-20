@@ -16,7 +16,10 @@ import {
   FolderKanban,
   BookOpen,
   Target,
-  Database
+  Database,
+  TrendingUp,
+  Newspaper,
+  FileSearch
 } from 'lucide-react';
 
 export interface Tab {
@@ -54,7 +57,10 @@ const routeConfig: Record<string, { title: string; icon: React.ReactNode }> = {
   '/test-factory': { title: '测试工厂', icon: <Factory className="h-4 w-4" /> },
   '/llm-assistant': { title: 'AI 助手', icon: <Bot className="h-4 w-4" /> },
   '/systems': { title: '项目管理', icon: <FolderKanban className="h-4 w-4" /> },
-  '/requirement-docs': { title: '需求文档', icon: <FileText className="h-4 w-4" /> },
+  '/market-insights': { title: '市场洞察', icon: <TrendingUp className="h-4 w-4" /> },
+  '/industry-news': { title: '行业资讯', icon: <Newspaper className="h-4 w-4" /> },
+  '/requirement-analysis': { title: '需求分析', icon: <FileSearch className="h-4 w-4" /> },
+  '/requirement-docs': { title: '需求管理', icon: <FileText className="h-4 w-4" /> },
   '/knowledge': { title: '知识库', icon: <BookOpen className="h-4 w-4" /> },
   '/user-management': { title: '用户管理', icon: <Users className="h-4 w-4" /> },
   '/settings': { title: '设置', icon: <Settings className="h-4 w-4" /> },

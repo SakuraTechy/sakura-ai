@@ -918,3 +918,65 @@ model database_configs {
   @@index([project_id])
   @@index([is_default])
 }
+
+// ==================== 市场洞察任务表 ====================
+model market_insight_tasks {
+  id               Int       @id @default(autoincrement())
+  title            String    @db.VarChar(255)
+  description      String?   @db.Text
+  trigger_type     String    @db.VarChar(50) // daily / weekly / monthly / custom
+  trigger_time     String    @db.VarChar(50) // e.g. "02:00"
+  trigger_day      Int?      // 周几(1-7) or 月几号(1-31)
+  data_sources     String?   @db.Text // JSON 数组
+  is_active        Boolean   @default(true)
+  last_executed_at DateTime? @db.Timestamp(0)
+  created_at       DateTime  @default(now()) @db.Timestamp(0)
+  updated_at       DateTime  @updatedAt @db.DateTime(0)
+
+  reports market_insight_reports[]
+
+  @@index([is_active])
+  @@index([created_at])
+}
+
+// ==================== 市场洞察报告表 ====================
+model market_insight_reports {
+  id          Int      @id @default(autoincrement())
+  task_id     Int?
+  title       String   @db.VarChar(255)
+  summary     String?  @db.Text
+  content     String   @db.LongText
+  stats_json  String?  @db.Text // JSON: { totalFeeds, successFeeds, totalArticles, ... }
+  category    String   @db.VarChar(100)
+  status      String   @db.VarChar(50) // success / failed / running
+  executed_at DateTime @db.Timestamp(0)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  updated_at  DateTime @updatedAt @db.DateTime(0)
+
+  task market_insight_tasks? @relation(fields: [task_id], references: [id], onDelete: SetNull)
+
+  @@index([task_id])
+  @@index([status])
+  @@index([category])
+  @@index([executed_at])
+  @@index([created_at])
+}
+
+// ==================== 行业资讯文章表 ====================
+model insights_articles {
+  id           Int      @id @default(autoincrement())
+  title        String   @db.VarChar(255)
+  category     String   @db.VarChar(100)
+  url          String   @db.VarChar(500)
+  content      String   @db.LongText
+  summary      String?  @db.Text
+  source       String?  @db.VarChar(50) // digest_import | market_insight | manual
+  published_at DateTime @db.Timestamp(0)
+  created_at   DateTime @default(now()) @db.Timestamp(0)
+  updated_at   DateTime @updatedAt @db.DateTime(0)
+
+  @@index([category])
+  @@index([published_at])
+  @@index([title])
+  @@index([source])
+}
