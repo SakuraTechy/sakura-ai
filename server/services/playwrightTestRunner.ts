@@ -91,8 +91,9 @@ export class PlaywrightTestRunner {
     
     // 启动浏览器
     // CentOS 7 兼容性配置
+    // 🔥 注意：--start-maximized 在 Playwright 设置了固定 viewport 时无效，改用 --window-size
     const launchArgs = [
-      '--start-maximized',
+      '--window-size=1920,1080',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -174,6 +175,22 @@ export class PlaywrightTestRunner {
 
     // 创建页面
     this.page = await this.context.newPage();
+
+    // 🔥 非 headless 模式下，通过 CDP 设置窗口全屏，确保浏览器窗口最大化显示
+    if (!finalHeadless) {
+      try {
+        const session = await this.context.newCDPSession(this.page);
+        const { windowId } = await session.send('Browser.getWindowForTarget');
+        await session.send('Browser.setWindowBounds', {
+          windowId,
+          bounds: { windowState: 'maximized' }
+        });
+        await session.detach();
+        console.log(`🖥️ [${runId}] 浏览器窗口已设置为最大化`);
+      } catch (e) {
+        console.log(`⚠️ [${runId}] 设置全屏失败，使用默认视口: ${(e as Error).message}`);
+      }
+    }
 
     // 🔥 新增：启动文本历史记录监听器
     // 每隔 500ms 扫描页面文本，记录所有出现过的文本

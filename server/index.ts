@@ -1,4 +1,4 @@
-// 🔥 首先加载环境变量（必须在其他导入之前）
+// 加载环境变量（必须在其他导入之前）
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -56,6 +56,12 @@ import { createAxureRoutes } from './routes/axure.js';
 import { createFunctionalTestCaseRoutes } from './routes/functionalTestCase.js';
 // 🆕 需求文档管理路由
 import { createRequirementDocRoutes } from './routes/requirementDoc.js';
+// 行业资讯和需求分析路由
+import { createInsightsRoutes } from './routes/insights.js';
+import { createAnalysisRoutes } from './routes/analysis.js';
+// 🆕 市场洞察路由
+import { createMarketInsightRoutes } from './routes/marketInsight.js';
+import { MarketInsightScheduler } from './services/marketInsightScheduler.js';
 // 🔥 新增：系统字典管理路由
 import systemsRouter from './routes/systems.js';
 // 🔥 新增：账号配置路由
@@ -757,6 +763,18 @@ async function startServer() {
     console.log('🔧 注册需求文档管理路由...');
     app.use('/api/v1/requirement-docs', authenticate, createRequirementDocRoutes());
 
+    // 行业资讯路由
+    console.log('🔧 注册行业资讯路由...');
+    app.use('/api/insights', authenticate, createInsightsRoutes());
+
+    // 🆕 需求分析路由
+    console.log('🔧 注册需求分析路由...');
+    app.use('/api/analysis', authenticate, createAnalysisRoutes());
+
+    // 🆕 市场洞察路由
+    console.log('🔧 注册市场洞察路由...');
+    app.use('/api/market-insights', authenticate, createMarketInsightRoutes());
+
     // 🔥 新增：系统字典管理路由
     console.log('🔧 注册系统字典管理路由...');
     app.use('/api/v1/systems', authenticate, systemsRouter);
@@ -789,6 +807,18 @@ async function startServer() {
     console.log('🔧 注册Midscene报告路由...');
     const midsceneReportRouter = (await import('./routes/midsceneReport.js')).default;
     app.use('/api/midscene-report', midsceneReportRouter);
+
+    // 🔥 新增：OpenClaw Gateway 管理路由
+    console.log('🔧 注册 OpenClaw Gateway 管理路由...');
+    const { createOpenClawRoutes, createOpenClawProxyRoute } = await import('./routes/openclaw.js');
+    
+    // ⚠️ 重要：路由注册顺序很关键
+    // 1. 先注册管理 API 路由（需要认证）
+    app.use('/api/openclaw', authenticate, createOpenClawRoutes());
+    
+    // 2. 再注册代理路由作为兜底（不需要认证，用于 iframe 嵌入和静态资源）
+    // 注意：这里使用 /api/openclaw-proxy 作为代理的基础路径，避免与管理 API 冲突
+    app.use('/api/openclaw-proxy', createOpenClawProxyRoute());
 
     console.log('✅ API路由注册完成');
 
@@ -837,6 +867,15 @@ async function startServer() {
     console.log('🔧 准备设置定时清理任务...');
     setupCleanupTasks();
     console.log('✅ 定时清理任务设置完成');
+
+    // 🆕 初始化市场洞察定时调度器
+    console.log('🔧 初始化市场洞察定时调度器...');
+    try {
+      await MarketInsightScheduler.getInstance().start();
+      console.log('✅ 市场洞察定时调度器初始化完成');
+    } catch (error: any) {
+      console.warn('⚠️ 市场洞察定时调度器初始化失败:', error.message);
+    }
 
     console.log('🔧 准备启动HTTP服务器...');
     // 🔥 改进：监听所有网络接口 (0.0.0.0)，允许从局域网和链路本地地址访问
@@ -1013,6 +1052,9 @@ process.on('SIGINT', async () => {
   console.log('🔌 正在关闭服务器...');
   
   try {
+    // 停止市场洞察定时调度器
+    MarketInsightScheduler.getInstance().stop();
+
     // 关闭WebSocket连接
     wsManager.shutdown();
     

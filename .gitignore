@@ -159,3 +159,5 @@ midscene_run/
 # midscene_run/report
 # midscene_run/tmp
 # midscene_run/log
+
+.openclaw*/

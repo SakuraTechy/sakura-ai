@@ -1,7 +1,7 @@
 {
   "name": "sakura-ai",
   "private": true,
-  "version": "v1.9.0",
+  "version": "v2.0.0",
   "type": "module",
   "scripts": {
     "start": "node scripts/start.cjs",
@@ -24,7 +24,10 @@
     "test": "jest",
     "knowledge:status": "node scripts/showKnowledgeStatus.mjs",
     "knowledge:init": "node scripts/createCollectionsForAllSystems.mjs",
-    "systems:list": "node scripts/listSystems.mjs"
+    "systems:list": "node scripts/listSystems.mjs",
+    "db:reset": "npx prisma migrate reset --force",
+    "db:migrate": "npx prisma migrate deploy",
+    "db:generate": "npx prisma generate"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.1",
@@ -33,7 +36,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@playwright/mcp": "^0.0.32",
     "@playwright/test": "1.56.1",
-    "@prisma/client": "^6.11.1",
+    "@prisma/client": "^6.19.2",
     "@qdrant/js-client-rest": "^1.15.1",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -62,6 +65,7 @@
     "mssql": "^10.0.1",
     "multer": "^2.0.2",
     "mysql2": "^3.14.3",
+    "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
     "openai": "^6.7.0",
     "oracledb": "^6.10.0",
@@ -71,7 +75,6 @@
     "pdfjs-dist": "^5.4.449",
     "pg": "^8.11.3",
     "playwright": "1.56.1",
-    "prisma": "^6.11.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-dropzone": "^14.3.8",
@@ -101,6 +104,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.8",
     "@types/node": "^20.19.8",
+    "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.10.9",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
@@ -121,6 +125,7 @@
     "globals": "^15.9.0",
     "jest": "^30.0.5",
     "postcss": "^8.4.35",
+    "prisma": "^6.19.2",
     "supertest": "^7.1.4",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.4.0",

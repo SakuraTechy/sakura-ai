@@ -5,7 +5,7 @@ import {
   RotateCcw, Calendar, User, FolderKanban, Tag, ChevronRight,
   FileCode, TestTube2, Filter, X, Bot
 } from 'lucide-react';
-import { Modal, Input, Pagination, Empty, Spin, Tooltip, Tag as AntTag, Checkbox } from 'antd';
+import { Modal, Input, Pagination, Empty, Spin, Tooltip, Tag as AntTag, Checkbox, Select } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requirementDocService, RequirementDoc, RequirementDocListParams } from '../services/requirementDocService';
 import * as systemService from '../services/systemService';
@@ -75,7 +75,9 @@ export function RequirementDocs() {
     content: '',
     summary: '',
     system: '',
-    module: ''
+    module: '',
+    projectId: undefined as number | undefined,
+    projectVersionId: undefined as number | undefined
   });
   
   // 批量选择状态
@@ -216,18 +218,51 @@ export function RequirementDocs() {
     try {
       const detail = await requirementDocService.getById(doc.id);
       setCurrentDoc(detail);
+
+      const projectId = detail.project_id ?? undefined;
+      const project = projectId ? (projects.find(p => p.id === projectId) as any) : undefined;
+      const versions: Array<any> = project?.project_versions ?? [];
+      const mainVersion = versions.find(v => v.is_main) ?? versions[0];
+      const resolvedProjectVersionId = (detail.project_version_id ?? undefined) ?? mainVersion?.id;
+
       setEditForm({
         title: detail.title,
         content: detail.content,
         summary: detail.summary || '',
         system: detail.system || '',
-        module: detail.module || ''
+        module: detail.module || '',
+        projectId,
+        projectVersionId: resolvedProjectVersionId
       });
     } catch (error: any) {
       showToast.error('加载详情失败: ' + error.message);
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const editProjectVersions = editForm.projectId
+    ? ((projects.find(p => p.id === editForm.projectId) as any)?.project_versions ?? [])
+    : [];
+
+  const handleEditProjectChange = (value: number | undefined) => {
+    const projectId = value;
+    const project = projectId ? projects.find(p => p.id === projectId) as any : undefined;
+    const versions: Array<any> = project?.project_versions ?? [];
+    const mainVersion = versions.find(v => v.is_main) ?? versions[0];
+
+    setEditForm(prev => ({
+      ...prev,
+      projectId,
+      projectVersionId: mainVersion?.id
+    }));
+  };
+
+  const handleEditVersionChange = (value: number | undefined) => {
+    setEditForm(prev => ({
+      ...prev,
+      projectVersionId: value
+    }));
   };
   
   // 保存编辑
@@ -243,18 +278,43 @@ export function RequirementDocs() {
       showToast.error('请输入文档内容');
       return;
     }
+
+    if (!editForm.projectId || !editForm.projectVersionId) {
+      showToast.error('请选择对应的项目与版本后再保存');
+      return;
+    }
     
     setDetailLoading(true);
     try {
-      const updated = await requirementDocService.update(currentDoc.id, {
+      await requirementDocService.update(currentDoc.id, {
         title: editForm.title.trim(),
         content: editForm.content.trim(),
         summary: editForm.summary.trim() || undefined,
         system: editForm.system.trim() || undefined,
-        module: editForm.module.trim() || undefined
+        module: editForm.module.trim() || undefined,
+        projectId: editForm.projectId,
+        projectVersionId: editForm.projectVersionId
       });
-      
-      setCurrentDoc(updated);
+
+      // 更新后重新拉取详情，确保项目/版本关联字段也被刷新（避免只返回部分字段导致页面显示缺失）
+      const refreshed = await requirementDocService.getById(currentDoc.id);
+      setCurrentDoc(refreshed);
+      const refreshedProjectId = refreshed.project_id ?? undefined;
+      const refreshedProject = refreshedProjectId ? (projects.find(p => p.id === refreshedProjectId) as any) : undefined;
+      const refreshedVersions: Array<any> = refreshedProject?.project_versions ?? [];
+      const refreshedMainVersion = refreshedVersions.find(v => v.is_main) ?? refreshedVersions[0];
+      const refreshedResolvedProjectVersionId =
+        (refreshed.project_version_id ?? undefined) ?? refreshedMainVersion?.id;
+
+      setEditForm({
+        title: refreshed.title,
+        content: refreshed.content,
+        summary: refreshed.summary || '',
+        system: refreshed.system || '',
+        module: refreshed.module || '',
+        projectId: refreshedProjectId,
+        projectVersionId: refreshedResolvedProjectVersionId
+      });
       setIsEditing(false);
       showToast.success('保存成功');
       loadData(); // 刷新列表
@@ -823,7 +883,9 @@ export function RequirementDocs() {
             content: currentDoc?.content || '',
             summary: currentDoc?.summary || '',
             system: currentDoc?.system || '',
-            module: currentDoc?.module || ''
+            module: currentDoc?.module || '',
+            projectId: currentDoc?.project_id,
+            projectVersionId: currentDoc?.project_version_id
           })) {
             Modal.confirm({
               title: '确认关闭',
@@ -979,6 +1041,41 @@ export function RequirementDocs() {
                           value={editForm.summary}
                           onChange={e => setEditForm(prev => ({ ...prev, summary: e.target.value }))}
                           placeholder="请输入文档摘要（可选）"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          关联项目 <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                          value={editForm.projectId}
+                          onChange={(value) => handleEditProjectChange(value ? Number(value) : undefined)}
+                          placeholder="选择关联项目"
+                          size="large"
+                          style={{ width: '100%' }}
+                          options={(projects ?? []).map(p => ({ label: p.name, value: p.id }))}
+                          allowClear
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          关联版本 <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                          value={editForm.projectVersionId}
+                          onChange={(value) => handleEditVersionChange(value ? Number(value) : undefined)}
+                          placeholder={editForm.projectId ? '选择对应版本' : '先选择项目'}
+                          size="large"
+                          style={{ width: '100%' }}
+                          disabled={!editForm.projectId || editProjectVersions.length === 0}
+                          allowClear
+                          options={editProjectVersions.map(v => ({
+                            label: `${v.version_name ?? ''}${v.version_code ? ` (${v.version_code})` : ''}`,
+                            value: v.id
+                          }))}
                         />
                       </div>
                     </div>

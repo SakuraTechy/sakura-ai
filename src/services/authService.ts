@@ -145,6 +145,77 @@ class AuthService {
     }
     return {};
   }
+
+  /**
+   * 用户注册
+   */
+  async register(data: {
+    email: string;
+    username: string;
+    password: string;
+    accountName?: string;
+    department?: string;
+  }): Promise<AuthUser> {
+    try {
+      const response = await axios.post<{ success: boolean; data: AuthUser; error?: string }>(
+        `${API_BASE_URL}/api/auth/register`,
+        data
+      );
+
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || '注册失败');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw new Error('注册失败，请检查网络连接');
+    }
+  }
+
+  /**
+   * 发送重置密码验证码
+   */
+  async sendResetCode(email: string): Promise<void> {
+    try {
+      const response = await axios.post<{ success: boolean; error?: string }>(
+        `${API_BASE_URL}/api/auth/send-reset-code`,
+        { email }
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || '发送验证码失败');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw new Error('发送验证码失败，请检查网络连接');
+    }
+  }
+
+  /**
+   * 重置密码
+   */
+  async resetPassword(email: string, code: string, newPassword: string): Promise<void> {
+    try {
+      const response = await axios.post<{ success: boolean; error?: string }>(
+        `${API_BASE_URL}/api/auth/reset-password`,
+        { email, code, newPassword }
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || '重置密码失败');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw new Error('重置密码失败，请检查网络连接');
+    }
+  }
 }
 
 export const authService = new AuthService();

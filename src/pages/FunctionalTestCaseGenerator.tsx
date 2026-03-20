@@ -3171,12 +3171,12 @@ export function FunctionalTestCaseGenerator() {
           />
         ) : generating ? (
           <AIThinking
-            title="AI 正在生成需求文档..."
-            subtitle="预计需要 30-90 秒，请耐心等待"
+            title="AI 正在分析并生成需求文档"
+            subtitle="预计需要 30-90 秒，请耐心等待..."
             progressItems={[
               { label: '读取原始文本内容', status: 'completed' },
               { label: 'AI分析结构和元素', status: 'processing' },
-              { label: '生成结构化需求文档', status: 'pending' }
+              { label: '生成结构化的文档', status: 'pending' }
             ]}
           />
         ) : (

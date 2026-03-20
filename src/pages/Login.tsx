@@ -8,11 +8,14 @@ import NET from 'vanta/dist/vanta.net.min';
 import * as THREE from 'three';
 import '../styles/login.css';
 import packageJson from '../../package.json';
+import { Register } from './Register';
+import { ForgotPassword } from './ForgotPassword';
 
 export const Login: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -33,16 +36,15 @@ export const Login: React.FC = () => {
         minWidth: 200.0,
         scale: 1.0,
         scaleMobile: 1.0,
-        color: 0xa855f7,        // 紫色网络线条
-        backgroundColor: 0x0f0a1e, // 深紫色背景
-        points: 8.0,            // 网络节点数量
-        maxDistance: 20.0,      // 连接线最大距离
-        spacing: 16.0,          // 节点间距
-        showDots: true          // 显示节点
+        color: 0xa855f7,
+        backgroundColor: 0x0f0a1e,
+        points: 8.0,
+        maxDistance: 20.0,
+        spacing: 16.0,
+        showDots: true
       });
     }
 
-    // 组件卸载时清理 VANTA 实例
     return () => {
       if (vantaEffect.current) {
         vantaEffect.current.destroy();
@@ -56,10 +58,8 @@ export const Login: React.FC = () => {
     const networkBg = document.getElementById('networkBg');
     if (!networkBg) return;
 
-    // 清除已存在的元素
     networkBg.innerHTML = '';
 
-    // 创建连接线
     const lines = 20;
     for (let i = 0; i < lines; i++) {
       const line = document.createElement('div');
@@ -72,7 +72,6 @@ export const Login: React.FC = () => {
       networkBg.appendChild(line);
     }
 
-    // 创建节点
     const dots = 15;
     for (let i = 0; i < dots; i++) {
       const dot = document.createElement('div');
@@ -100,203 +99,121 @@ export const Login: React.FC = () => {
 
   return (
     <div className="h-screen relative overflow-hidden">
-      {/* VANTA.js 3D 网络背景 */}
-      <div
-        ref={vantaRef}
-        className="absolute inset-0"
-        style={{ zIndex: 0 }}
-      />
+      <div ref={vantaRef} className="absolute inset-0" style={{ zIndex: 0 }} />
 
-      {/* CSS 背景层（备用方案） */}
       <div className="background-container">
         <div className="network-background" id="networkBg"></div>
         <div className="glow-effect glow-purple"></div>
         <div className="glow-effect glow-blue"></div>
       </div>
 
-      {/* 渐变背景（降级方案/VANTA加载前显示） */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" style={{ zIndex: -1 }} />
 
-      {/* 内容层 */}
       <div className="relative z-10 h-screen flex items-center justify-center px-4 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="w-full max-w-md mx-auto"
-        >
-          {/* Logo 和标题 */}
+        {view === 'register' ? (
+          <Register
+            onSwitchToLogin={() => {
+              setView('login');
+              form.setFieldsValue({ username: '', password: '' });
+            }}
+            onRegisterSuccess={() => {
+              setView('login');
+              form.setFieldsValue({ username: '', password: '' });
+            }}
+          />
+        ) : view === 'forgot' ? (
+          <ForgotPassword
+            onBackToLogin={() => {
+              setView('login');
+              form.setFieldsValue({ username: '', password: '' });
+            }}
+          />
+        ) : (
           <motion.div
-            className="flex flex-col items-center mb-16 py-4"
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
+            transition={{ duration: 0.8 }}
+            className="w-full max-w-md mx-auto"
           >
-            {/* <motion.div
-              className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-600 mb-6 shadow-2xl shadow-purple-500/50 p-2"
-              animate={{
-                boxShadow: [
-                  '0 0 20px rgba(168, 85, 247, 0.5)',
-                  '0 0 60px rgba(168, 85, 247, 0.8)',
-                  '0 0 20px rgba(168, 85, 247, 0.5)',
-                ],
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
+            <motion.div
+              className="flex flex-col items-center mb-20 py-4"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.8 }}
             >
-              <div className="w-full h-full bg-white rounded-xl p-2 flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Sakura AI Logo"
-                  className="w-full h-full object-contain"
-                />
+              <div className="w-[110px] h-[110px] mb-0 flex items-center justify-center">
+                <img src="/logo2.png" alt="Sakura Logo" className="w-full h-full object-contain" />
               </div>
-            </motion.div> */}
+              <h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-purple-200 to-purple-100 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+                Ankki AI
+              </h1>
+              <p className="text-sm font-light tracking-[0.15em] bg-clip-text text-transparent bg-gradient-to-r from-purple-300/90 via-purple-200/80 to-purple-100/90 drop-shadow-[0_0_4px_rgba(168,85,247,0.4)]">
+                全链路 · 一站式自动化研发平台
+              </p>
+            </motion.div>
 
-            <div className="w-[110px] h-[110px] mb-0 flex items-center justify-center">
-              <img
-                src="/logo2.png"
-                alt="Sakura Logo"
-                className="w-full h-full object-contain"
-              />
-            </div>
-            <h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-purple-200 to-purple-100 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
-              Ankki AI
-            </h1>
-            <p className="text-sm font-light tracking-[0.15em] bg-clip-text text-transparent bg-gradient-to-r from-purple-300/90 via-purple-200/80 to-purple-100/90 drop-shadow-[0_0_4px_rgba(168,85,247,0.4)]">
-              全链路 · 一站式自动化研发平台
-            </p>
-          </motion.div>
-
-          {/* 登录卡片 */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
-            className="backdrop-blur-xl bg-white/10 rounded-3xl p-8 shadow-2xl border border-white/20"
-          >
-            <AnimatePresence mode="wait">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="mb-6"
-                >
-                  <Alert
-                    message={error}
-                    type="error"
-                    closable
-                    onClose={() => setError(null)}
-                    className="login-alert rounded-xl"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <Form
-              form={form}
-              onFinish={handleSubmit}
-              layout="vertical"
-              requiredMark={false}
-              className="space-y-5"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="backdrop-blur-xl bg-white/10 rounded-3xl p-8 shadow-2xl border border-white/20"
             >
-              <Form.Item
-                name="username"
-                rules={[{ required: true, message: '请输入用户名' }]}
-                className="login-input"
-              >
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="w-5 h-5 text-purple-300 group-hover:text-purple-200 transition-colors" />
+              <AnimatePresence mode="wait">
+                {error && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-6">
+                    <Alert message={error} type="error" closable onClose={() => setError(null)} className="login-alert rounded-xl" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <Form form={form} onFinish={handleSubmit} layout="vertical" requiredMark={false} className="space-y-5">
+                <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]} className="login-input">
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <User className="w-5 h-5 text-purple-300 group-hover:text-purple-200 transition-colors" />
+                    </div>
+                    <Input placeholder="用户名" autoComplete="username" className="h-14 pl-12 pr-4 rounded-xl transition-all" />
                   </div>
-                  <Input
-                    placeholder="用户名"
-                    autoComplete="username"
-                    className="h-14 pl-12 pr-4 rounded-xl transition-all"
-                  />
-                </div>
-              </Form.Item>
+                </Form.Item>
 
-              <Form.Item
-                name="password"
-                rules={[{ required: true, message: '请输入密码' }]}
-                className="login-input"
-              >
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="w-5 h-5 text-purple-300 group-hover:text-purple-200 transition-colors" />
+                <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]} className="login-input">
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <Lock className="w-5 h-5 text-purple-300 group-hover:text-purple-200 transition-colors" />
+                    </div>
+                    <Input.Password placeholder="密码" autoComplete="current-password" className="h-14 pl-12 pr-4 rounded-xl transition-all" />
                   </div>
-                  <Input.Password
-                    placeholder="密码"
-                    autoComplete="current-password"
-                    className="h-14 pl-12 pr-4 rounded-xl transition-all"
-                  />
-                </div>
-              </Form.Item>
+                </Form.Item>
 
-              <Form.Item className="mb-0">
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    loading={loading}
-                    block
-                    className="login-button h-14 rounded-xl text-base font-semibold transition-all"
-                    // icon={!loading && <ArrowRight className="w-5 h-5 ml-2" />}
-                  >
-                    {loading ? '登录中...' : '登 录'}
-                  </Button>
-                </motion.div>
-              </Form.Item>
-            </Form>
+                <Form.Item className="mb-0">
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button type="primary" htmlType="submit" loading={loading} block className="login-button h-14 rounded-xl text-base font-semibold transition-all">
+                      {loading ? '登录中...' : '登 录'}
+                    </Button>
+                  </motion.div>
+                </Form.Item>
+              </Form>
 
-            {/* 提示信息 */}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }} className="mt-4 pt-4 border-t border-white/10 text-center">
+                <span className="text-purple-300/60 text-sm">还没有账号？</span>
+                <Button type="link" onClick={() => setView('register')} className="text-purple-300 hover:text-purple-200 ml-2 p-0 h-auto text-sm">立即注册</Button>
+                <span className="text-purple-300/60 text-sm mx-2">·</span>
+                <Button type="link" onClick={() => setView('forgot')} className="text-purple-300 hover:text-purple-200 p-0 h-auto text-sm">忘记密码？</Button>
+              </motion.div>
+            </motion.div>
+
+            {/* 底部版权 */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5, duration: 0.5 }}
-              className="mt-6 pt-4 border-t border-white/10"
+              transition={{ delay: 0.6, duration: 0.5 }}
+              className="mt-20 flex flex-col gap-2 text-center"
             >
-              <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-400/20">
-                {/* <p className="text-purple-200/70 text-sm text-center mb-2">
-                  🔐 初始超级管理员账号
-                </p> */}
-                <div className="flex justify-center space-x-6 text-sm">
-                  <div className="text-center">
-                    <span className="text-purple-300/60 block mb-1">用户名</span>
-                    <code className="text-white font-mono bg-white/10 px-3 py-1 rounded-lg">admin</code>
-                  </div>
-                  <div className="text-center">
-                    <span className="text-purple-300/60 block mb-1">密码</span>
-                    <code className="text-white font-mono bg-white/10 px-3 py-1 rounded-lg">admin</code>
-                  </div>
-                </div>
-              </div>
+              <span className="text-purple-300/50 text-sm">版本号：{packageJson.version}</span>
+              <span className="text-purple-300/50 text-sm">Copyright © 2025-2026</span>
             </motion.div>
           </motion.div>
-
-          {/* 底部装饰 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-            className="mt-16 flex flex-col gap-2 text-center"
-          >
-            <span className="text-purple-300/50 text-sm">
-                版本号：{packageJson.version}
-            </span>
-            {/* <p className="text-purple-300/50 text-sm"> */}
-              {/* © 2025 Sakura AI. Powered by AI & Automation */}
-              {/* <span className="text-purple-300/50 text-sm">
-                Ankki AI. Powered by AI & Automation
-              </span> */}
-              {/* <br /> */}
-              <span className="text-purple-300/50 text-sm">
-                Copyright © 2019-2025
-              </span>
-            {/* </p> */}
-          </motion.div>
-        </motion.div>
+        )}
       </div>
     </div>
   );

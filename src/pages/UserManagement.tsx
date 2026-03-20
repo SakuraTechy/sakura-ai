@@ -10,7 +10,8 @@ interface User {
   email: string;
   username: string;
   accountName?: string;
-  project?: string; // 🔥 修复：使用 project 字段
+  project?: string;
+  department?: string;
   isSuperAdmin: boolean;
   createdAt: string;
 }
@@ -20,7 +21,8 @@ interface CreateUserForm {
   username: string;
   password: string;
   accountName?: string;
-  project?: string; // 🔥 修复：使用 project 字段
+  project?: string;
+  department?: string;
   isSuperAdmin: boolean;
 }
 
@@ -28,7 +30,8 @@ interface UpdateUserForm {
   email: string;
   username: string;
   accountName?: string;
-  project?: string; // 🔥 修复：使用 project 字段
+  project?: string;
+  department?: string;
   isSuperAdmin: boolean;
 }
 
@@ -72,7 +75,8 @@ export function UserManagement() {
       createForm.resetFields();
       loadUsers();
     } catch (error: any) {
-      message.error(error.message || '创建用户失败');
+      const errorMessage = error.response?.data?.error || error.message || '创建用户失败';
+      message.error(errorMessage);
       console.error('Create user error:', error);
     }
   };
@@ -89,7 +93,9 @@ export function UserManagement() {
       editForm.resetFields();
       loadUsers();
     } catch (error: any) {
-      message.error(error.message || '更新用户失败');
+      // 正确解析后端返回的错误信息
+      const errorMessage = error.response?.data?.error || error.message || '更新用户失败';
+      message.error(errorMessage);
       console.error('Update user error:', error);
     }
   };
@@ -101,7 +107,8 @@ export function UserManagement() {
       message.success('用户删除成功');
       loadUsers();
     } catch (error: any) {
-      message.error(error.message || '删除用户失败');
+      const errorMessage = error.response?.data?.error || error.message || '删除用户失败';
+      message.error(errorMessage);
       console.error('Delete user error:', error);
     }
   };
@@ -113,7 +120,8 @@ export function UserManagement() {
       email: user.email,
       username: user.username,
       accountName: user.accountName,
-      project: user.project, // 🔥 修复：使用 project 字段
+      project: user.project,
+      department: user.department,
       isSuperAdmin: user.isSuperAdmin,
     });
     setIsEditModalOpen(true);
@@ -136,7 +144,8 @@ export function UserManagement() {
       setPasswordUser(null);
       passwordForm.resetFields();
     } catch (error: any) {
-      message.error(error.message || '修改密码失败');
+      const errorMessage = error.response?.data?.error || error.message || '修改密码失败';
+      message.error(errorMessage);
       console.error('Change password error:', error);
     }
   };
@@ -147,6 +156,13 @@ export function UserManagement() {
       dataIndex: 'id',
       key: 'id',
       width: 80,
+    },
+    {
+      title: '姓名',
+      dataIndex: 'accountName',
+      key: 'accountName',
+      width: 150,
+      render: (text) => text || '-',
     },
     {
       title: '用户名',
@@ -161,15 +177,15 @@ export function UserManagement() {
       width: 200,
     },
     {
-      title: '账户名称',
-      dataIndex: 'accountName',
-      key: 'accountName',
+      title: '部门',
+      dataIndex: 'department',
+      key: 'department',
       width: 150,
       render: (text) => text || '-',
     },
     {
-      title: '项目', // 🔥 修复：改为项目
-      dataIndex: 'project', // 🔥 修复：使用 project 字段
+      title: '项目',
+      dataIndex: 'project',
       key: 'project',
       width: 150,
       render: (text) => text || '-',
@@ -303,6 +319,17 @@ export function UserManagement() {
           initialValues={{ isSuperAdmin: false }}
         >
           <Form.Item
+            label="邮箱"
+            name="email"
+            rules={[
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '请输入有效的邮箱地址' },
+            ]}
+          >
+            <Input placeholder="请输入邮箱" />
+          </Form.Item>
+
+          <Form.Item
             label="用户名"
             name="username"
             rules={[
@@ -314,15 +341,14 @@ export function UserManagement() {
             <Input placeholder="请输入用户名" />
           </Form.Item>
 
-          <Form.Item
-            label="邮箱"
-            name="email"
+           <Form.Item
+            label="姓名"
+            name="accountName"
             rules={[
-              { required: true, message: '请输入邮箱' },
-              { type: 'email', message: '请输入有效的邮箱地址' },
+              { required: true, message: '请输入用户名' },
             ]}
           >
-            <Input placeholder="请输入邮箱" />
+            <Input placeholder="请输入账户姓名" />
           </Form.Item>
 
           <Form.Item
@@ -337,17 +363,17 @@ export function UserManagement() {
           </Form.Item>
 
           <Form.Item
-            label="账户名称"
-            name="accountName"
+            label="部门"
+            name="department"
           >
-            <Input placeholder="请输入账户名称（可选）" />
+            <Input placeholder="请输入部门（可选）" />
           </Form.Item>
 
           <Form.Item
-            label="项目" // 🔥 修复：改为项目
-            name="project" // 🔥 修复：使用 project 字段
+            label="项目"
+            name="project"
           >
-            <Input placeholder="请输入项目（可选）" /> {/* 🔥 修复：改为项目 */}
+            <Input placeholder="请输入项目（可选）" />
           </Form.Item>
 
           <Form.Item
@@ -392,6 +418,17 @@ export function UserManagement() {
           onFinish={handleEditUser}
         >
           <Form.Item
+            label="邮箱"
+            name="email"
+            rules={[
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '请输入有效的邮箱地址' },
+            ]}
+          >
+            <Input placeholder="请输入邮箱" />
+          </Form.Item>
+
+          <Form.Item
             label="用户名"
             name="username"
             rules={[
@@ -404,28 +441,27 @@ export function UserManagement() {
           </Form.Item>
 
           <Form.Item
-            label="邮箱"
-            name="email"
+            label="姓名"
+            name="accountName"
             rules={[
               { required: true, message: '请输入邮箱' },
-              { type: 'email', message: '请输入有效的邮箱地址' },
             ]}
           >
-            <Input placeholder="请输入邮箱" />
+            <Input placeholder="请输入账户姓名" />
           </Form.Item>
 
           <Form.Item
-            label="账户名称"
-            name="accountName"
+            label="部门"
+            name="department"
           >
-            <Input placeholder="请输入账户名称（可选）" />
+            <Input placeholder="请输入部门（可选）" />
           </Form.Item>
 
           <Form.Item
-            label="项目" // 🔥 修复：改为项目
-            name="project" // 🔥 修复：使用 project 字段
+            label="项目"
+            name="project"
           >
-            <Input placeholder="请输入项目（可选）" /> {/* 🔥 修复：改为项目 */}
+            <Input placeholder="请输入项目（可选）" />
           </Form.Item>
 
           <Form.Item
