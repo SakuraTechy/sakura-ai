@@ -1,5 +1,8 @@
 # Git 提交总结
 
+## 2026-03-20
+- fix: 修复 Prisma 迁移外键重复错误，添加数据库管理脚本和命令
+
 ## 2026-03-19
 - fix: init-openclaw.sh 全面加强错误处理和健壮性，所有 patch 操作增加文件检查、错误捕获和友好提示
 - fix: 彻底修复 "Plugin runtime module missing createPluginRuntime export"，通过 patch setup-wizard-helpers 导出和创建 ESM 桥接文件

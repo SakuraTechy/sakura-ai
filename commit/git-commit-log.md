@@ -1,5 +1,10 @@
 ﻿# Git 提交日志
 
+## 2026-03-20
+- fix: 修复 Prisma 迁移外键重复错误，添加数据库重置和迁移管理脚本
+- chore: package.json 新增数据库管理命令（db:reset、db:migrate、db:generate）
+- chore: 创建 scripts/fix-migration.sh 脚本，提供开发和生产环境的迁移修复方案
+
 ## 2026-03-19
 - fix: scripts/init-openclaw.sh 全面加强错误处理和健壮性：所有 patch 操作增加文件存在性检查、错误捕获和友好提示；gateway-cli/Prober/provenance/runtime 四大 patch 全部增加 try-catch 和退出码检查；wecom 插件安装增加每步错误处理和依赖链接计数；所有 Node.js 脚本失败时通过 || { echo "错误"; exit 1; } 阻止容器启动，确保问题及时暴露
 

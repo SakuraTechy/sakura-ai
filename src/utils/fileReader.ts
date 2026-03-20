@@ -6,8 +6,7 @@
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// 设置 PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/scripts/pdf.worker.min.mjs';
 
 export interface FileReadResult {
   success: boolean;
@@ -76,34 +75,41 @@ async function readPdfFile(file: File): Promise<{ content: string; isScanned: bo
       
       // 按行组织文本（保留布局）
       const items = textContent.items as any[];
-      const lines: { y: number; text: string }[] = [];
-      
+      const lineMap = new Map<number, { x: number; text: string }[]>();
+
       items.forEach(item => {
         if (!item.str || item.str.trim().length === 0) return;
-        
+        if (!Array.isArray(item.transform)) return;
+
         const y = Math.round(item.transform[5]);
-        const existingLine = lines.find(line => Math.abs(line.y - y) < 5);
-        
-        if (existingLine) {
-          existingLine.text += ' ' + item.str;
-        } else {
-          lines.push({ y, text: item.str });
-        }
+        const x = Number(item.transform[4]) || 0;
+        const lineKey = findClosestLineKey(lineMap, y);
+        const line = lineMap.get(lineKey) ?? [];
+        line.push({ x, text: sanitizePdfChunk(item.str) });
+        lineMap.set(lineKey, line);
+      });
+
+      const lines = Array.from(lineMap.entries()).map(([y, segments]) => {
+        segments.sort((a, b) => a.x - b.x);
+        return {
+          y,
+          text: mergePdfSegments(segments)
+        };
       });
       
       // 按垂直位置排序（从上到下）
       lines.sort((a, b) => b.y - a.y);
       
       // 检测表格（相邻行有相似的分隔符模式）
-      const pageLines = lines.map(l => l.text.trim());
+      const pageLines = lines.map(l => sanitizePdfText(l.text).trim()).filter(Boolean);
       const tableDetected = detectTable(pageLines);
       
       if (tableDetected) {
-        fullText += `\n--- 第 ${i} 页（包含表格） ---\n\n`;
+        fullText += `\n## 第 ${i} 页（包含表格）\n\n`;
         fullText += formatAsTable(pageLines) + '\n\n';
       } else {
-        fullText += `\n--- 第 ${i} 页 ---\n\n`;
-        fullText += pageLines.join('\n') + '\n\n';
+        fullText += `\n## 第 ${i} 页\n\n`;
+        fullText += linesToMarkdown(lines) + '\n\n';
       }
       
       totalTextLength += pageLines.join('').length;
@@ -139,6 +145,113 @@ function detectTable(lines: string[]): boolean {
   return linesWithPattern.length >= Math.min(3, lines.length * 0.3);
 }
 
+function findClosestLineKey(lineMap: Map<number, { x: number; text: string }[]>, y: number): number {
+  for (const key of lineMap.keys()) {
+    if (Math.abs(key - y) < 5) {
+      return key;
+    }
+  }
+  return y;
+}
+
+function linesToMarkdown(lines: Array<{ y: number; text: string }>): string {
+  const cleaned = lines
+    .map(l => {
+      const text = sanitizePdfText(l.text).trim();
+      return { y: l.y, text };
+    })
+    .filter(l => l.text.length > 0);
+
+  if (cleaned.length === 0) return '';
+
+  const out: string[] = [];
+  let prevY: number | null = null;
+
+  for (const line of cleaned) {
+    // 通过 y 间距判断是否需要新段落，改善“排版 -> md”效果
+    if (prevY !== null) {
+      const gap = Math.abs(prevY - line.y);
+      if (gap > 12) out.push(''); // 空行形成段落
+    }
+
+    out.push(convertLineToMarkdown(line.text));
+    prevY = line.y;
+  }
+
+  // 避免过多空行
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function convertLineToMarkdown(text: string): string {
+  // 数字列表：1. xxx / 1、xxx / 1) xxx
+  const numbered = text.match(/^\s*(\d{1,4})[\.、\)]\s*(.+)$/);
+  if (numbered) return `${numbered[1]}. ${numbered[2].trim()}`;
+
+  // 项目符号：- xxx / * xxx / • xxx / · xxx
+  const bullet = text.match(/^\s*[-*•·◦○●▪▫]\s*(.+)$/);
+  if (bullet) return `- ${bullet[1].trim()}`;
+
+  return text;
+}
+
+function mergePdfSegments(segments: Array<{ x: number; text: string }>): string {
+  if (segments.length === 0) return '';
+
+  let merged = segments[0].text;
+
+  for (let i = 1; i < segments.length; i++) {
+    const prev = segments[i - 1].text;
+    const curr = segments[i].text;
+
+    if (shouldInsertSpace(prev, curr)) {
+      merged += ` ${curr}`;
+    } else {
+      merged += curr;
+    }
+  }
+
+  return merged;
+}
+
+function sanitizePdfChunk(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFKC')
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+}
+
+function sanitizePdfText(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFKC')
+    // 移除不可见控制字符（保留换行/制表符）
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+    // 清理零宽字符和 BOM
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    // 合并连续空白
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+function shouldInsertSpace(prev: string, curr: string): boolean {
+  const prevChar = prev.trim().slice(-1);
+  const currChar = curr.trim().charAt(0);
+
+  if (!prevChar || !currChar) return false;
+
+  // 中文/日文/韩文连续字符通常不应插入空格，避免“智 能 纪 要”这类乱码
+  if (isCjkChar(prevChar) || isCjkChar(currChar)) {
+    return false;
+  }
+
+  // 拉丁字符、数字、常见英文标识符之间保留空格可读性更好
+  return /[A-Za-z0-9]/.test(prevChar) && /[A-Za-z0-9]/.test(currChar);
+}
+
+function isCjkChar(char: string): boolean {
+  return /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/.test(char);
+}
+
 /**
  * 格式化为Markdown表格
  */
@@ -158,7 +271,7 @@ function formatAsTable(lines: string[]): string {
   const headers = rows[0];
   const separator = headers.map(() => '---').join(' | ');
   const tableRows = rows.slice(1).map(row => 
-    row.map((cell, i) => cell || '').join(' | ')
+    row.map(cell => cell || '').join(' | ')
   );
   
   return [
@@ -341,7 +454,7 @@ function convertTableToMarkdown(html: string): string {
       
       // 如果没有表头，从第一行提取
       if (headers.length === 0 && rowMatches.length > 0) {
-        const firstRowCells = rowMatches[0].match(/<t[hd][^>]*>(.*?)<\/t[hd]>/gi) || [];
+        const firstRowCells = (rowMatches[0] ?? '').match(/<t[hd][^>]*>(.*?)<\/t[hd]>/gi) || [];
         headers = firstRowCells.map(cell => 
           cell.replace(/<[^>]+>/g, '').trim()
         );
@@ -364,7 +477,7 @@ function convertTableToMarkdown(html: string): string {
         const separator = headers.map(() => '---').join(' | ');
         const headerRow = headers.join(' | ');
         const dataRows = rows.map(row => 
-          row.map((cell, i) => cell || '').join(' | ')
+          row.map(cell => cell || '').join(' | ')
         ).join('\n');
         
         return `\n\n${headerRow}\n${separator}\n${dataRows}\n\n`;

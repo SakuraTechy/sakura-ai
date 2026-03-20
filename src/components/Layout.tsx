@@ -24,6 +24,9 @@ import {
   Target,
   Database,
   Workflow,
+  FileSearch,
+  TrendingUp,
+  Newspaper,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -51,6 +54,9 @@ const navigationItems: NavigationItem[] = [
   { name: '仪表板', href: '/', icon: Home },
   { name: '用户管理', href: '/user-management', icon: Users },
   { name: '项目管理', href: '/systems', icon: FolderKanban },
+  { name: '市场洞察', href: '/market-insights', icon: TrendingUp },
+  { name: '行业资讯', href: '/industry-news', icon: Newspaper },
+  { name: '需求分析', href: '/requirement-analysis', icon: FileSearch },
   { name: '需求管理', href: '/requirement-docs', icon: FileText },
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '功能用例', href: '/functional-test-cases', icon: ClipboardList },
@@ -557,7 +563,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page content */}
         <motion.main
-          className="flex-1 pl-6 pr-6 pt-6 pb-0"
+          className="flex-1 pl-6 pr-6 pt-6 pb-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}

@@ -28,6 +28,9 @@ import KnowledgeManagement from './pages/KnowledgeManagement';
 import RequirementDocs from './pages/RequirementDocs';
 import OpenClawManagement from './pages/OpenClawManagement';
 import ExternalFrame from './pages/ExternalFrame';
+import { RequirementInsights } from './pages/RequirementInsights';
+import { RequirementAnalysis } from './pages/RequirementAnalysis';
+import { MarketInsights } from './pages/MarketInsights';
 import { TestPlans } from './pages/TestPlans';
 import { TestPlanForm } from './pages/TestPlanForm';
 import { TestPlanDetail } from './pages/TestPlanDetail';
@@ -325,6 +328,15 @@ function AppContent() {
 
                       {/* 知识库管理 */}
                       <Route path="/knowledge" element={<KnowledgeManagement />} />
+
+                      {/* 市场洞察 */}
+                      <Route path="/market-insights" element={<MarketInsights />} />
+
+                      {/* 行业资讯 */}
+                      <Route path="/industry-news" element={<RequirementInsights />} />
+
+                      {/* 需求分析 */}
+                      <Route path="/requirement-analysis" element={<RequirementAnalysis />} />
 
                       {/* 需求文档管理 */}
                       <Route path="/requirement-docs" element={<RequirementDocs />} />
