@@ -16,8 +16,10 @@ import {
   FolderKanban,
   BookOpen,
   Target,
-  Database
+  Database,
+  Workflow
 } from 'lucide-react';
+import { OpenClawIcon } from '../components/icons/OpenClawIcon';
 
 export interface Tab {
   id: string;
@@ -52,9 +54,10 @@ const routeConfig: Record<string, { title: string; icon: React.ReactNode }> = {
   '/test-runs': { title: '测试执行', icon: <Play className="h-4 w-4" /> },
   '/reports': { title: '测试报告', icon: <BarChart3 className="h-4 w-4" /> },
   '/test-factory': { title: '测试工厂', icon: <Factory className="h-4 w-4" /> },
-  '/llm-assistant': { title: 'AI 助手', icon: <Bot className="h-4 w-4" /> },
+  // '/llm-assistant': { title: 'AI 助手', icon: <Bot className="h-4 w-4" /> },
+  '/openclaw': { title: 'OpenClaw 控制面板', icon: <OpenClawIcon className="h-4 w-4" /> },
   '/systems': { title: '项目管理', icon: <FolderKanban className="h-4 w-4" /> },
-  '/requirement-docs': { title: '需求文档', icon: <FileText className="h-4 w-4" /> },
+  '/requirement-docs': { title: '需求管理', icon: <FileText className="h-4 w-4" /> },
   '/knowledge': { title: '知识库', icon: <BookOpen className="h-4 w-4" /> },
   '/user-management': { title: '用户管理', icon: <Users className="h-4 w-4" /> },
   '/settings': { title: '设置', icon: <Settings className="h-4 w-4" /> },
@@ -87,6 +90,11 @@ const getRouteConfig = (pathname: string): { title: string; icon: React.ReactNod
 
   // 🔥 测试执行详情页不创建新tab，复用 /test-runs 的tab
   if (pathname.match(/^\/test-runs\/.+\/detail$/)) {
+    return null;
+  }
+
+  // 🔥 外部页面路由 - 通过 addTab 手动创建，不自动创建
+  if (pathname.startsWith('/external')) {
     return null;
   }
 
@@ -225,7 +233,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
       return;
     }
 
-    const currentPath = location.pathname;
+    const currentPath = location.pathname + location.search; // 包含查询参数
     const existingTab = tabs.find(tab => tab.path === currentPath);
 
     if (existingTab) {
@@ -237,10 +245,11 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
     }
 
     // 🔥 特殊处理：所有测试计划相关路由（包括详情页）都使用 /test-plans 的tab，不创建新tab
-    // 检查是否是测试计划相关路由
+    // 检查是否是测试计划相关路由（只检查路径部分，不包含查询参数）
+    const pathOnly = location.pathname;
     const isTestPlanRoute = 
-      currentPath === '/test-plans/create' ||
-      currentPath.match(/^\/test-plans\/\d+/) !== null;
+      pathOnly === '/test-plans/create' ||
+      pathOnly.match(/^\/test-plans\/\d+/) !== null;
 
     if (isTestPlanRoute) {
       const parentPath = '/test-plans';
@@ -271,7 +280,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
     }
 
     // 🔥 特殊处理：测试执行详情页使用 /test-runs 的tab，不创建新tab
-    const isTestRunDetailRoute = currentPath.match(/^\/test-runs\/.+\/detail$/) !== null;
+    const isTestRunDetailRoute = pathOnly.match(/^\/test-runs\/.+\/detail$/) !== null;
 
     if (isTestRunDetailRoute) {
       const parentPath = '/test-runs';
@@ -300,7 +309,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
     }
 
     // 创建新Tab
-    const config = getRouteConfig(currentPath);
+    const config = getRouteConfig(pathOnly); // 只传递路径部分给 getRouteConfig
     if (!config) {
       return;
     }
@@ -313,7 +322,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
 
     // 创建新Tab
     const newTab: Tab = {
-      path: currentPath,
+      path: currentPath, // 使用完整路径（包含查询参数）
       title: config.title,
       icon: config.icon,
       id: generateTabId(currentPath),
@@ -332,6 +341,7 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
       const existing = prevTabs.find(t => t.path === tab.path);
       if (existing) {
         setActiveTabId(existing.id);
+        navigate(tab.path); // 导航到已存在的 Tab
         return prevTabs;
       }
 
@@ -349,9 +359,10 @@ export const TabProvider: React.FC<TabProviderProps> = ({ children }) => {
       };
 
       setActiveTabId(newTab.id);
+      navigate(tab.path); // 导航到新创建的 Tab
       return [...prevTabs, newTab];
     });
-  }, []);
+  }, [navigate]);
 
   // 移除Tab
   const removeTab = useCallback((tabId: string, targetPath?: string) => {

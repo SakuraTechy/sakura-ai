@@ -232,6 +232,7 @@ model users {
   account_name           String?                  @db.VarChar(100)
   password_hash          String                   @db.VarChar(255)
   project                String?                  @db.VarChar(100)
+  department             String?                  @db.VarChar(100)
   is_super_admin         Boolean                  @default(false)
   created_at             DateTime?                @default(now()) @db.Timestamp(0)
   ai_generation_sessions ai_generation_sessions[]

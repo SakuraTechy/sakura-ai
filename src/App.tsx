@@ -26,6 +26,8 @@ import { FunctionalTestPointEdit } from './pages/FunctionalTestPointEdit';
 import SystemManagement from './pages/SystemManagement';
 import KnowledgeManagement from './pages/KnowledgeManagement';
 import RequirementDocs from './pages/RequirementDocs';
+import OpenClawManagement from './pages/OpenClawManagement';
+import ExternalFrame from './pages/ExternalFrame';
 import { TestPlans } from './pages/TestPlans';
 import { TestPlanForm } from './pages/TestPlanForm';
 import { TestPlanDetail } from './pages/TestPlanDetail';
@@ -326,6 +328,12 @@ function AppContent() {
 
                       {/* 需求文档管理 */}
                       <Route path="/requirement-docs" element={<RequirementDocs />} />
+
+                      {/* OpenClaw 管理 */}
+                      <Route path="/openclaw" element={<OpenClawManagement />} />
+
+                      {/* 外部页面 iframe */}
+                      <Route path="/external" element={<ExternalFrame />} />
 
                       {/* 用户管理 - 仅超级管理员可访问 */}
                       <Route path="/user-management" element={

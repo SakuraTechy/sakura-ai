@@ -64,7 +64,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./mysql-init:/docker-entrypoint-initdb.d
+      - ./config/mysql-init:/docker-entrypoint-initdb.d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
       - sakura-network
@@ -74,6 +74,9 @@ services:
       timeout: 3s
       retries: 60
       start_period: 60s
+    profiles:
+      - core
+      - ""  # 空字符串表示默认 profile
 
   # Sakura AI 应用服务
   sakura-ai:
@@ -100,21 +103,15 @@ services:
     # 🔥 添加 extra_hosts 让容器通过宿主机访问内网 IP
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # 使用宿主机的 DNS 服务器
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    # 添加网络配置，允许访问所有网段
-    cap_add:
-      - NET_ADMIN
     environment:
       # 数据库配置（bridge 模式下使用服务名）
       DATABASE_URL: mysql://sakura_ai:${DB_PASSWORD}@mysql:3306/sakura_ai
       
       # 应用配置
-      # NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       SERVER_HOST: 0.0.0.0
+      BASE_URL: ${BASE_URL:-}
       
       # Vite 前端配置（确保监听所有网络接口）
       VITE_HOST: 0.0.0.0
@@ -122,22 +119,50 @@ services:
       
       # JWT 配置
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       
       # Playwright 配置
-      PLAYWRIGHT_HEADLESS: "true"
-      PLAYWRIGHT_BROWSER: chromium
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_BROWSER: ${PLAYWRIGHT_BROWSER:-chromium}
+      PLAYWRIGHT_PRE_INSTALL_BROWSER: ${PLAYWRIGHT_PRE_INSTALL_BROWSER:-true}
       # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       # Debian 系统 Chromium 路径是 /usr/bin/chromium
       # PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+
+      # 测试执行配置
+      TEST_TIMEOUT: ${TEST_TIMEOUT:-600000}
+      MAX_CONCURRENT_TESTS: ${MAX_CONCURRENT_TESTS:-6}
+      
+      # MCP 浏览器配置
+      MCP_BROWSER_FULLSCREEN: ${MCP_BROWSER_FULLSCREEN:-true}
+      MCP_BROWSER_MAXIMIZED: ${MCP_BROWSER_MAXIMIZED:-true}
+      MCP_BROWSER_WINDOW_SIZE: ${MCP_BROWSER_WINDOW_SIZE:-1920,1080}
       
       # AI 配置
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       DEFAULT_MODEL: ${DEFAULT_MODEL:-openai/gpt-4o}
+      DEFAULT_TEMPERATURE: ${DEFAULT_TEMPERATURE:-0.3}
+      DEFAULT_MAX_TOKENS: ${DEFAULT_MAX_TOKENS:-4000}
+      
+      # 本地 Gemini API 配置（可选）
+      GEMINI_LOCAL_BASE_URL: ${GEMINI_LOCAL_BASE_URL:-}
+      GEMINI_LOCAL_API_KEY: ${GEMINI_LOCAL_API_KEY:-}
+      
+      # 代理配置
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
       
       # RAG 配置（可选）
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-aliyun}
-      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_API_BASE_URL: ${EMBEDDING_API_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v4}
+      
+      # 日志配置
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FULL_PROMPT: ${LOG_FULL_PROMPT:-false}
     volumes:
       # 持久化数据
       - ./uploads:/app/uploads
@@ -154,8 +179,12 @@ services:
       timeout: 5s
       retries: 6
       start_period: 120s
+    profiles:
+      - core
+      - ""  # 空字符串表示默认 profile
 
   # Qdrant 向量数据库（可选 - RAG 功能）
+  # docker compose --profile rag up -d
   qdrant:
     image: qdrant/qdrant:latest
     container_name: sakura-ai-qdrant
@@ -169,24 +198,226 @@ services:
     profiles:
       - rag
 
+  # OpenClaw（官方版）
+  # 启动方式: docker compose --profile openclaw --profile nginx up -d
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    container_name: sakura-ai-openclaw
+    # 以 root 运行，确保对挂载卷有写入权限（生成证书、写配置等）
+    user: "0:0"
+    environment:
+      HOME: /root
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      OPENCLAW_GATEWAY_TLS_CERT: /root/.openclaw/certs/cert.pem
+      OPENCLAW_GATEWAY_TLS_KEY: /root/.openclaw/certs/key.pem
+      # 禁用 Bonjour (mDNS) 服务，Docker 容器内无法正常工作
+      OPENCLAW_GATEWAY_DISABLE_BONJOUR: "true"
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/root/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/root/.openclaw/workspace
+      # 🔧 extensions 单独用 named volume，解决 Windows Docker Desktop 下跨挂载点 rename() 失败问题
+      # 原因：openclaw 安装插件时先写 /tmp 再 rename 到 extensions，bind mount 在 Windows WSL2/virtiofs
+      #       下跨文件系统 rename 报 EACCES；Linux 下 Node.js 会自动 fallback 到 copy+unlink 不受影响
+      # 其他目录（certs/logs/devices 等）均为普通文件写入，不走 rename 流程，bind mount 无问题
+      - openclaw-extensions:/root/.openclaw/extensions
+      # 移除只读挂载，允许初始化脚本生成证书
+      # - ${OPENCLAW_CONFIG_DIR:-./.openclaw}/certs:/root/.openclaw/certs:ro
+      # 挂载初始化脚本（配置文件 + SSL 证书自动生成）
+      - ./scripts/init-openclaw.sh:/init-openclaw.sh:ro
+      ## Uncomment the lines below to enable sandbox isolation
+      ## (agents.defaults.sandbox). Requires Docker CLI in the image
+      ## (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1) or use
+      ## docker-setup.sh with OPENCLAW_SANDBOX=1 for automated setup.
+      ## Set DOCKER_GID to the host's docker group GID (run: stat -c '%g' /var/run/docker.sock).
+      # - /var/run/docker.sock:/var/run/docker.sock
+    # group_add:
+    #   - "${DOCKER_GID:-999}"
+    networks:
+      - sakura-network
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "/bin/bash",
+        "/init-openclaw.sh",
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "lan",
+        "--port",
+        "18789",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - openclaw
+
+  # openclaw-cli:
+  #   image: ${OPENCLAW_IMAGE:-openclaw:local}
+  #   container_name: sakura-ai-openclaw-cli
+  #   networks:
+  #     - sakura-network
+  #   cap_drop:
+  #     - NET_RAW
+  #     - NET_ADMIN
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   environment:
+  #     HOME: /home/node
+  #     TERM: xterm-256color
+  #     OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+  #     OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+  #     BROWSER: echo
+  #     CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+  #     CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+  #     CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+  #   volumes:
+  #     - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
+  #     - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
+  #   stdin_open: true
+  #   tty: true
+  #   init: true
+  #   entrypoint: ["node", "dist/index.js"]
+  #   profiles:
+  #     - openclaw
+
+  # OpenClaw (汉化版)
+  # 启动方式: docker compose --profile openclaw --profile nginx up -d
+  # openclaw-gateway:
+  #   # 官方本地使用 openclaw:local，海外使用 ghcr.io/openclaw/openclaw:latest
+  #   # 汉化国内使用 1186258278/openclaw-zh:latest，海外使用 ghcr.io/1186258278/openclaw-zh:latest (latest 稳定版，nightly 最新版)
+  #   image: ${OPENCLAW_IMAGE:-openclaw:local}
+  #   container_name: sakura-ai-openclaw
+  #   ports:
+  #     - "18789:18789"
+  #   networks:
+  #     - sakura-network  
+  #   volumes:
+  #     # 数据持久化（注意：容器以 root 用户运行，配置存储在 /root/.openclaw）
+  #     - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/root/.openclaw
+  #     - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/root/.openclaw/workspace
+  #     - ./scripts/init-openclaw.sh:/init-openclaw.sh:ro
+  #   environment:
+  #     # 访问令牌（推荐设置，用于 Dashboard 认证）
+  #     # 建议创建 .env 文件设置: OPENCLAW_GATEWAY_TOKEN=your-secure-token
+  #     - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+  #     # 跳过首次初始化检查（仅高级用户使用）
+  #     # - OPENCLAW_SKIP_SETUP=1
+  #     - OPENCLAW_GATEWAY_TLS_CERT=./.openclaw/certs/cert.pem
+  #     - OPENCLAW_GATEWAY_TLS_KEY:=./.openclaw/certs/key.pem
+  #   restart: unless-stopped
+  #   # 默认启动 gateway（首次需要初始化，见下方说明）
+  #   command:
+  #     [
+  #       "/bin/bash",
+  #       "/init-openclaw.sh",
+  #       "openclaw",
+  #       "gateway",
+  #       "run",
+  #       "--allow-unconfigured",
+  #     ]
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "node",
+  #         "-e",
+  #         "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+  #       ]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 20s
+  #   profiles:
+  #     - openclaw
+    # 
+    # ========== 首次使用说明 ==========
+    # 
+    # 方式 1: 一键脚本（推荐）
+    #   curl -fsSL https://cdn.jsdelivr.net/gh/1186258278/OpenClawChineseTranslation@main/docker-deploy.sh | bash
+    #
+    # 方式 2: 手动初始化
+    #   docker-compose exec openclaw openclaw setup
+    #   docker-compose exec openclaw openclaw config set gateway.mode local
+    #   docker-compose restart
+    #
+    # ========== 远程访问配置 ==========
+    # 
+    # 如果需要从其他设备访问（非 localhost）：
+    #
+    # 1. 配置绑定和认证
+    #   docker-compose exec openclaw openclaw config set gateway.bind lan
+    #   docker-compose exec openclaw openclaw config set gateway.auth.token YOUR_TOKEN
+    #   docker-compose restart
+    #
+    # 2. 访问 http://服务器IP:18789，在 Dashboard 输入 token 连接
+    #
+    # ========== 反向代理配置（Nginx 等）==========
+    #
+    # 如果使用 Nginx 反向代理，需要配置信任代理地址：
+    #   docker-compose exec openclaw openclaw config set gateway.trustedProxies '["127.0.0.1", "::1"]'
+    #   docker-compose restart
+    #
+    # 详细配置请参考 README.md 中的反向代理章节。
+    #
+    # ========== 常见错误排查 ==========
+    #
+    # 1. "Gateway auth is set to token, but no token is configured"
+    #    → 设置 token: docker-compose exec openclaw openclaw config set gateway.auth.token YOUR_TOKEN
+    #
+    # 2. "Missing config. Run openclaw setup"
+    #    → 初始化: docker-compose exec openclaw openclaw setup
+    #
+    # 3. "control ui requires HTTPS or localhost"
+    #    → 使用 Token 认证或配置 HTTPS 反向代理
+    #
+    # 4. "Proxy headers detected from untrusted address"
+    #    → 设置信任代理: docker-compose exec openclaw openclaw config set gateway.trustedProxies '["127.0.0.1"]'
+    #
+
   # Nginx 反向代理（可选）
+  # 启动方式: docker compose --profile nginx up -d
+  # 注意：Nginx 在 18790 端口提供 HTTPS 代理到 OpenClaw Gateway 的 18789 端口
   nginx:
     image: nginx:alpine
     container_name: sakura-ai-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "443:443"  # OpenClaw Gateway HTTPS 代理端口（避免与 18789 冲突）
     volumes:
-      - ./config/nginx-alpine.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./dist:/usr/share/nginx/html:ro
+      # 站点配置文件（HTTP 反向代理配置）
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # 日志目录（便于调试和监控）
       - nginx-logs:/var/log/nginx
+      # SSL 证书目录（必需，用于 HTTPS）
+      - ${OPENCLAW_CONFIG_DIR:-./.openclaw}/certs:/etc/nginx/certs:ro
     depends_on:
-      - sakura-ai
+      openclaw-gateway:
+        condition: service_healthy
     networks:
       - sakura-network
     profiles:
       - nginx
+      - openclaw  # 添加 openclaw profile，与 OpenClaw 一起启动
 
 volumes:
   mysql-data:
@@ -194,4 +425,7 @@ volumes:
   qdrant-data:
     driver: local
   nginx-logs:
+    driver: local
+  # openclaw 插件目录使用 named volume，避免 Windows bind mount 跨文件系统 rename 失败
+  openclaw-extensions:
     driver: local

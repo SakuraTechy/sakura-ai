@@ -790,6 +790,18 @@ async function startServer() {
     const midsceneReportRouter = (await import('./routes/midsceneReport.js')).default;
     app.use('/api/midscene-report', midsceneReportRouter);
 
+    // 🔥 新增：OpenClaw Gateway 管理路由
+    console.log('🔧 注册 OpenClaw Gateway 管理路由...');
+    const { createOpenClawRoutes, createOpenClawProxyRoute } = await import('./routes/openclaw.js');
+    
+    // ⚠️ 重要：路由注册顺序很关键
+    // 1. 先注册管理 API 路由（需要认证）
+    app.use('/api/openclaw', authenticate, createOpenClawRoutes());
+    
+    // 2. 再注册代理路由作为兜底（不需要认证，用于 iframe 嵌入和静态资源）
+    // 注意：这里使用 /api/openclaw-proxy 作为代理的基础路径，避免与管理 API 冲突
+    app.use('/api/openclaw-proxy', createOpenClawProxyRoute());
+
     console.log('✅ API路由注册完成');
 
     // 🔥 生产环境：提供前端静态文件（在 API 路由之后，404 之前）

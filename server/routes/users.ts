@@ -25,7 +25,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           email: true,
           username: true,
           account_name: true,
-          project: true, // 🔥 修复：使用 project 字段
+          project: true,
+          department: true,
           is_super_admin: true,
           created_at: true,
         },
@@ -40,7 +41,8 @@ export function createUserRoutes(prisma: PrismaClient) {
         email: user.email,
         username: user.username,
         accountName: user.account_name,
-        project: user.project, // 🔥 修复：返回 project 字段（前端也需要相应更新）
+        project: user.project,
+        department: user.department,
         isSuperAdmin: user.is_super_admin,
         createdAt: user.created_at,
       }));
@@ -77,7 +79,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           email: true,
           username: true,
           account_name: true,
-          project: true, // 🔥 修复：使用 project 字段
+          project: true,
+          department: true,
           is_super_admin: true,
           created_at: true,
         },
@@ -95,7 +98,8 @@ export function createUserRoutes(prisma: PrismaClient) {
         email: user.email,
         username: user.username,
         accountName: user.account_name,
-        project: user.project, // 🔥 修复：返回 project 字段（前端也需要相应更新）
+        project: user.project,
+        department: user.department,
         isSuperAdmin: user.is_super_admin,
         createdAt: user.created_at,
       });
@@ -114,7 +118,7 @@ export function createUserRoutes(prisma: PrismaClient) {
    */
   router.post('/', async (req: Request, res: Response) => {
     try {
-      const { email, username, password, accountName, department, isSuperAdmin } = req.body;
+      const { email, username, password, accountName, project, department, isSuperAdmin } = req.body;
 
       // 验证必填字段
       if (!email || !username || !password) {
@@ -166,7 +170,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           username,
           password_hash: passwordHash,
           account_name: accountName,
-          project: department, // 🔥 修复：将前端传入的 department 映射到数据库的 project 字段
+          project: project,
+          department: department,
           is_super_admin: isSuperAdmin || false,
         },
         select: {
@@ -174,7 +179,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           email: true,
           username: true,
           account_name: true,
-          project: true, // 🔥 修复：使用 project 字段
+          project: true,
+          department: true,
           is_super_admin: true,
           created_at: true,
         },
@@ -185,7 +191,8 @@ export function createUserRoutes(prisma: PrismaClient) {
         email: user.email,
         username: user.username,
         accountName: user.account_name,
-        project: user.project, // 🔥 修复：返回 project 字段（前端也需要相应更新）
+        project: user.project,
+        department: user.department,
         isSuperAdmin: user.is_super_admin,
         createdAt: user.created_at,
       });
@@ -213,7 +220,7 @@ export function createUserRoutes(prisma: PrismaClient) {
         });
       }
 
-      const { email, username, accountName, department, isSuperAdmin } = req.body;
+      const { email, username, accountName, project, department, isSuperAdmin } = req.body;
 
       // 验证必填字段
       if (!email || !username) {
@@ -270,7 +277,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           email,
           username,
           account_name: accountName,
-          project: department, // 🔥 修复：将前端传入的 department 映射到数据库的 project 字段
+          project: project,
+          department: department,
           is_super_admin: isSuperAdmin !== undefined ? isSuperAdmin : existingUser.is_super_admin,
         },
         select: {
@@ -278,7 +286,8 @@ export function createUserRoutes(prisma: PrismaClient) {
           email: true,
           username: true,
           account_name: true,
-          project: true, // 🔥 修复：使用 project 字段
+          project: true,
+          department: true,
           is_super_admin: true,
           created_at: true,
         },
@@ -289,7 +298,8 @@ export function createUserRoutes(prisma: PrismaClient) {
         email: updatedUser.email,
         username: updatedUser.username,
         accountName: updatedUser.account_name,
-        department: updatedUser.project,
+        project: updatedUser.project,
+        department: updatedUser.department,
         isSuperAdmin: updatedUser.is_super_admin,
         createdAt: updatedUser.created_at,
       });

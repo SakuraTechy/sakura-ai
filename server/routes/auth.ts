@@ -124,7 +124,7 @@ export function createAuthRoutes(prisma: PrismaClient) {
         username,
         password,
         accountName,
-        project: department, // 🔥 修复：将前端传入的 department 映射到数据库的 project 字段
+        department,
         isSuperAdmin: false // 普通注册用户不能是超级管理员
       });
 
@@ -138,6 +138,73 @@ export function createAuthRoutes(prisma: PrismaClient) {
       res.status(400).json({
         success: false,
         error: error.message || '注册失败'
+      });
+    }
+  });
+
+  /**
+   * POST /api/auth/send-reset-code
+   * 发送重置密码验证码
+   */
+  router.post('/send-reset-code', async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: '邮箱不能为空'
+        });
+      }
+
+      await authService.sendResetCode(email);
+
+      res.json({
+        success: true,
+        message: '验证码已发送'
+      });
+    } catch (error: any) {
+      console.error('发送验证码失败:', error);
+      res.status(400).json({
+        success: false,
+        error: error.message || '发送验证码失败'
+      });
+    }
+  });
+
+  /**
+   * POST /api/auth/reset-password
+   * 重置密码
+   */
+  router.post('/reset-password', async (req: Request, res: Response) => {
+    try {
+      const { email, code, newPassword } = req.body;
+
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          error: '邮箱、验证码和新密码不能为空'
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: '密码长度至少6位'
+        });
+      }
+
+      await authService.resetPassword(email, code, newPassword);
+
+      res.json({
+        success: true,
+        message: '密码重置成功'
+      });
+    } catch (error: any) {
+      console.error('重置密码失败:', error);
+      res.status(400).json({
+        success: false,
+        error: error.message || '重置密码失败'
       });
     }
   });

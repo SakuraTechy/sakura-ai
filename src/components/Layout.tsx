@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
@@ -23,6 +23,7 @@ import {
   Bot,
   Target,
   Database,
+  Workflow,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -33,6 +34,8 @@ import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import { TabBar } from './TabBar';
 import { useTabShortcuts } from '../hooks/useTabShortcuts';
+import { useTabs } from '../contexts/TabContext';
+import { OpenClawIcon } from './icons/OpenClawIcon';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -41,22 +44,23 @@ interface LayoutProps {
 interface NavigationItem {
   name: string;
   href: string;
-  icon: React.ElementType;
+  icon: React.ElementType | React.ComponentType<any>;
 }
 
 const navigationItems: NavigationItem[] = [
   { name: '仪表板', href: '/', icon: Home },
   { name: '用户管理', href: '/user-management', icon: Users },
   { name: '项目管理', href: '/systems', icon: FolderKanban },
-  { name: '需求文档', href: '/requirement-docs', icon: FileText },
+  { name: '需求管理', href: '/requirement-docs', icon: FileText },
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '功能用例', href: '/functional-test-cases', icon: ClipboardList },
   { name: 'UI自动化', href: '/test-cases', icon: FileCode },
   { name: '测试执行', href: '/test-runs', icon: Play },
   { name: '测试计划', href: '/test-plans', icon: Target },
   { name: '测试报告', href: '/reports', icon: BarChart3 },
-  { name: '测试工厂', href: '/test-factory', icon: Factory },
-  { name: 'AI 助手', href: '/llm-assistant', icon: Bot },
+  // { name: '测试工厂', href: '/test-factory', icon: Factory },
+  // { name: 'AI 助手', href: '/llm-assistant', icon: Bot },
+  { name: '小龙虾', href: '/openclaw', icon: OpenClawIcon },
   { name: '缓存统计', href: '/cache-stats', icon: Database },
   { name: '设置', href: '/settings', icon: Settings },
 ];
@@ -77,6 +81,44 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isSuperAdmin } = useAuth();
+  const { addTab } = useTabs();
+  const [gatewayToken, setGatewayToken] = useState<string>('');
+
+  // 获取 OpenClaw Gateway 令牌
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const authToken = localStorage.getItem('authToken') || '';
+        const res = await fetch('/api/openclaw/token', {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setGatewayToken(data.token || '');
+        }
+      } catch {
+        // 忽略，使用空 token
+      }
+    };
+    fetchToken();
+  }, []);
+
+  // 处理小龙虾导航点击：管理员跳管理页，普通用户用 addTab 新建 tab 打开 Web UI
+  const handleOpenClawClick = useCallback(() => {
+    if (isSuperAdmin) {
+      navigate('/openclaw');
+      return;
+    }
+    const username = user?.username || 'admin';
+    const token = gatewayToken || '';
+    const innerPath = `/api/openclaw-proxy/chat?session=agent:main:${username}#token=${token}`;
+    const externalPath = `/external?url=${encodeURIComponent(innerPath)}`;
+    addTab({
+      path: externalPath,
+      title: '小龙虾',
+      icon: <OpenClawIcon className="h-4 w-4" />,
+    });
+  }, [isSuperAdmin, user, gatewayToken, navigate, addTab]);
 
   // 保存侧边栏状态到 localStorage
   useEffect(() => {
@@ -246,6 +288,34 @@ export function Layout({ children }: LayoutProps) {
                 {filteredNavigationItems.map((item, index) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.href;
+                  const itemClass = clsx(
+                    'group flex items-center px-4 py-3 rounded-2xl text-base font-medium transition-all duration-300 relative overflow-hidden cursor-pointer',
+                    isActive
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]'
+                  );
+                  const inner = (
+                    <>
+                      {isActive && (
+                        <motion.div
+                          className="absolute inset-0 bg-purple-600 rounded-2xl"
+                          layoutId="activeBackground"
+                          transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                        />
+                      )}
+                      <motion.div
+                        className="relative flex items-center"
+                        whileHover={{ x: 4 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Icon className={clsx(
+                          'mr-4 h-5 w-5 transition-transform group-hover:scale-110',
+                          isActive ? 'text-white' : 'text-gray-500 dark:text-gray-600'
+                        )} />
+                        <span className="relative">{item.name}</span>
+                      </motion.div>
+                    </>
+                  );
                   return (
                     <motion.div
                       key={item.name}
@@ -253,37 +323,15 @@ export function Layout({ children }: LayoutProps) {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <NavLink
-                        to={item.href}
-                        onClick={() => setSidebarOpen(false)}
-                        className={clsx(
-                          'group flex items-center px-4 py-3 rounded-2xl text-base font-medium transition-all duration-300 relative overflow-hidden',
-                          isActive
-                            ? 'bg-purple-600 text-white shadow-md'
-                            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]'
-                        )}
-                      >
-                        {/* Active indicator */}
-                        {isActive && (
-                          <motion.div
-                            className="absolute inset-0 bg-purple-600 rounded-2xl"
-                            layoutId="activeBackground"
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                          />
-                        )}
-
-                        <motion.div
-                          className="relative flex items-center"
-                          whileHover={{ x: 4 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <Icon className={clsx(
-                            "mr-4 h-5 w-5 transition-transform group-hover:scale-110",
-                            isActive ? "text-white" : "text-gray-500 dark:text-gray-600"
-                          )} />
-                          <span className="relative">{item.name}</span>
-                        </motion.div>
-                      </NavLink>
+                      {item.href === '/openclaw' ? (
+                        <div className={itemClass} onClick={() => { handleOpenClawClick(); setSidebarOpen(false); }}>
+                          {inner}
+                        </div>
+                      ) : (
+                        <NavLink to={item.href} onClick={() => setSidebarOpen(false)} className={itemClass}>
+                          {inner}
+                        </NavLink>
+                      )}
                     </motion.div>
                   );
                 })}
@@ -321,7 +369,37 @@ export function Layout({ children }: LayoutProps) {
             {filteredNavigationItems.map((item, index) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
-              
+              const itemClass = clsx(
+                'group flex items-center rounded-2xl text-base font-medium transition-all duration-300 relative overflow-hidden cursor-pointer',
+                sidebarCollapsed ? 'justify-center px-3 py-3' : 'px-4 py-3',
+                isActive
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]'
+              );
+              const inner = (
+                <>
+                  {isActive && (
+                    <motion.div
+                      className="absolute inset-0 bg-purple-600 rounded-2xl"
+                      layoutId="desktopActiveBackground"
+                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  <motion.div
+                    className={clsx('relative flex items-center', sidebarCollapsed ? 'justify-center' : '')}
+                    whileHover={{ x: sidebarCollapsed ? 0 : 4 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Icon className={clsx(
+                      'h-5 w-5 transition-transform group-hover:scale-110',
+                      !sidebarCollapsed && 'mr-4',
+                      isActive ? 'text-white' : 'text-gray-500 dark:text-gray-600'
+                    )} />
+                    {!sidebarCollapsed && <span className="relative">{item.name}</span>}
+                  </motion.div>
+                </>
+              );
+
               const navItem = (
                 <motion.div
                   key={item.name}
@@ -329,54 +407,22 @@ export function Layout({ children }: LayoutProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <NavLink
-                    to={item.href}
-                    className={clsx(
-                      'group flex items-center rounded-2xl text-base font-medium transition-all duration-300 relative overflow-hidden',
-                      sidebarCollapsed ? 'justify-center px-3 py-3' : 'px-4 py-3',
-                      isActive
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]'
-                    )}
-                  >
-                    {/* Active indicator */}
-                    {isActive && (
-                      <motion.div
-                        className="absolute inset-0 bg-purple-600 rounded-2xl"
-                        layoutId="desktopActiveBackground"
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                      />
-                    )}
-
-                    <motion.div
-                      className={clsx(
-                        "relative flex items-center",
-                        sidebarCollapsed ? "justify-center" : ""
-                      )}
-                      whileHover={{ x: sidebarCollapsed ? 0 : 4 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <Icon className={clsx(
-                        "h-5 w-5 transition-transform group-hover:scale-110",
-                        !sidebarCollapsed && "mr-4",
-                        isActive ? "text-white" : "text-gray-500 dark:text-gray-600"
-                      )} />
-                      {!sidebarCollapsed && (
-                        <span className="relative">{item.name}</span>
-                      )}
-                    </motion.div>
-                  </NavLink>
+                  {item.href === '/openclaw' ? (
+                    <div className={itemClass} onClick={handleOpenClawClick}>
+                      {inner}
+                    </div>
+                  ) : (
+                    <NavLink to={item.href} className={itemClass}>
+                      {inner}
+                    </NavLink>
+                  )}
                 </motion.div>
               );
 
               // 收缩时使用 Tooltip 显示文字
               if (sidebarCollapsed) {
                 return (
-                  <Tooltip 
-                    key={item.name}
-                    title={item.name} 
-                    placement="right"
-                  >
+                  <Tooltip key={item.name} title={item.name} placement="right">
                     {navItem}
                   </Tooltip>
                 );
