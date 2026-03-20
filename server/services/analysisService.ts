@@ -56,6 +56,9 @@ export class AnalysisService {
   }
 
   async generateRequirementDoc(text: string, model?: string): Promise<string> {
+    if (!llmConfigManager.isReady()) {
+      await llmConfigManager.initialize();
+    }
     const config = llmConfigManager.getCurrentConfig();
 
     const apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || '';

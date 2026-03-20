@@ -20,6 +20,7 @@ interface MultiFileUploadProps {
   onPageModeChange?: (mode: 'new' | 'modify') => void; // 🆕 页面模式回调
   onPreviewFile?: (file: File) => void; // 🆕 预览文件回调
   onClearPreview?: () => void; // 🆕 清空预览回调
+  hidePageName?: boolean; // 🆕 是否隐藏“页面名称”输入框
   maxFiles?: number;
   maxSize?: number; // in bytes
 }
@@ -37,6 +38,7 @@ export function MultiFileUpload({
   onPageModeChange,
   onPreviewFile,
   onClearPreview,
+  hidePageName = false,
   maxFiles = MAX_FILES, // 使用统一配置
   maxSize = MAX_FILE_SIZE // 使用统一配置 (AI模型最佳处理大小)
 }: MultiFileUploadProps) {
@@ -348,22 +350,26 @@ export function MultiFileUpload({
         </div>
       </Modal>
 
-      {/* 页面名称输入框 */}
-      <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <span className="text-red-500">*</span> 页面名称
-        </label>
-        <input
-          type="text"
-          value={pageName}
-          onChange={handlePageNameChange}
-          placeholder="请输入页面名称，例如：登录页面（新增）"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
-        />
-        <p className="mt-2 text-sm text-gray-700">
-          提示：页面名称将用于标识产品需求文档页面，建议使用清晰明确的名称
-        </p>
-      </div>
+      {!hidePageName && (
+        <>
+          {/* 页面名称输入框 */}
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <span className="text-red-500">*</span> 页面名称
+            </label>
+            <input
+              type="text"
+              value={pageName}
+              onChange={handlePageNameChange}
+              placeholder="请输入页面名称，例如：登录页面（新增）"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
+            />
+            <p className="mt-2 text-sm text-gray-700">
+              提示：页面名称将用于标识产品需求文档页面，建议使用清晰明确的名称
+            </p>
+          </div>
+        </>
+      )}
 
 
       {/* 拖拽上传区 */}
@@ -413,14 +419,14 @@ export function MultiFileUpload({
           <p className="text-sm text-gray-500 mb-6">
             {isDragActive
               ? '支持批量拖拽上传'
-              : '支持 HTML / JS / PDF / DOC / DOCX / Markdown / TXT | 最多 ' + maxFiles + ' 个文件'}
+              : '支持上传多种格式文件，最多 ' + maxFiles + ' 个文件，单个文件大小不超过 ' + Math.round(maxSize / 1024 / 1024) + 'MB'}
           </p>
 
           {/* 特性标签 */}
           <div className="flex items-center justify-center gap-8 text-sm">
             <div className="flex items-center gap-2 text-gray-500">
               <FileText className="w-5 h-5 text-orange-500" />
-              <span>HTML / DOC / DOCX / PDF / TXT / MD</span>
+              <span>HTML / TXT / PDF / DOC / DOCX / Markdown</span>
             </div>
             <div className="flex items-center gap-2 text-gray-500">
               <FileCode className="w-5 h-5 text-blue-500" />
@@ -561,8 +567,7 @@ export function MultiFileUpload({
       {uploadedFiles.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-700 leading-relaxed">
-            💡 <strong>提示：</strong>您可以直接拖拽整个 Axure 导出文件夹（自动识别 HTML/JS），也可以上传 PDF / DOC / DOCX / Markdown / TXT 等需求文档。
-            支持手动选择或批量拖拽上传。
+            💡 <strong>提示：</strong>您可以直接拖拽整个 Axure 导出文件夹（自动识别 HTML/JS），也可以上传 PDF / DOC / DOCX / Markdown / TXT 等需求文档，支持手动选择或批量拖拽上传，最多上传 {maxFiles} 个文件，单个文件大小不超过 {Math.round(maxSize / 1024 / 1024)}MB
           </p>
         </div>
       )}

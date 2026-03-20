@@ -517,7 +517,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page content */}
         <motion.main
-          className="flex-1 pl-6 pr-6 pt-6 pb-0"
+          className="flex-1 pl-6 pr-6 pt-6 pb-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}
