@@ -23,6 +23,9 @@ import {
   Bot,
   Target,
   Database,
+  FileSearch,
+  TrendingUp,
+  Newspaper,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -48,7 +51,10 @@ const navigationItems: NavigationItem[] = [
   { name: '仪表板', href: '/', icon: Home },
   { name: '用户管理', href: '/user-management', icon: Users },
   { name: '项目管理', href: '/systems', icon: FolderKanban },
-  { name: '需求文档', href: '/requirement-docs', icon: FileText },
+  { name: '市场洞察', href: '/market-insights', icon: TrendingUp },
+  { name: '行业资讯', href: '/industry-news', icon: Newspaper },
+  { name: '需求分析', href: '/requirement-analysis', icon: FileSearch },
+  { name: '需求管理', href: '/requirement-docs', icon: FileText },
   { name: '知识库', href: '/knowledge', icon: BookOpen },
   { name: '功能用例', href: '/functional-test-cases', icon: ClipboardList },
   { name: 'UI自动化', href: '/test-cases', icon: FileCode },
