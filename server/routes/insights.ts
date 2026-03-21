@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { InsightsService } from '../services/insightsService.js';
+import { MarketInsightService } from '../services/marketInsightService.js';
 import multer from 'multer';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -7,6 +8,34 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 export function createInsightsRoutes(): Router {
   const router = Router();
   const getService = () => new InsightsService();
+  const getMarketService = () => new MarketInsightService();
+
+  /**
+   * POST /api/insights/deep-read-by-url
+   * 按 URL 抓取正文（报告内外链深读，不要求文章库已存在）
+   */
+  router.post('/deep-read-by-url', async (req: Request, res: Response) => {
+    try {
+      const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+      if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) {
+        return res.status(400).json({ success: false, error: '无效的 url' });
+      }
+      const fallbackTitle =
+        typeof req.body?.fallbackTitle === 'string' ? req.body.fallbackTitle.trim() : undefined;
+      const marketService = getMarketService();
+      const insightsService = getService();
+      const [detail, matchedArticleId] = await Promise.all([
+        marketService.deepReadArticleByUrl(rawUrl, { fallbackTitle }),
+        insightsService.findArticleIdByUrl(rawUrl),
+      ]);
+      res.json({
+        success: true,
+        data: { ...detail, matchedArticleId },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
   /**
    * GET /api/insights/articles
@@ -134,6 +163,92 @@ export function createInsightsRoutes(): Router {
       res.json({ success: true, message: '文章已删除' });
     } catch (error: any) {
       console.error('删除文章失败:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/insights/articles/batch-delete
+   */
+  router.post('/articles/batch-delete', async (req: Request, res: Response) => {
+    try {
+      const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map((id: unknown) => parseInt(String(id), 10)).filter((id: number) => Number.isFinite(id))
+        : [];
+      if (!ids.length) {
+        return res.status(400).json({ success: false, error: '请选择要删除的文章' });
+      }
+      const service = getService();
+      const result = await service.batchDeleteArticles(ids);
+      res.json({ success: true, message: `成功删除 ${result.deletedCount} 篇文章`, data: result });
+    } catch (error: any) {
+      console.error('批量删除文章失败:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * PATCH /api/insights/articles/:id/category
+   */
+  router.patch('/articles/:id/category', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { category } = req.body;
+      if (!category) {
+        return res.status(400).json({ success: false, error: '分类不能为空' });
+      }
+      const service = getService();
+      const article = await service.correctArticleCategory(id, category);
+      res.json({ success: true, data: article });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/insights/articles/:id/deep-read
+   */
+  router.post('/articles/:id/deep-read', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const service = getService();
+      const article = await service.getArticleById(id);
+      if (!article) {
+        return res.status(404).json({ success: false, error: '文章不存在' });
+      }
+      const marketService = getMarketService();
+      const detail = await marketService.deepReadArticleByUrl(article.url, {
+        fallbackTitle: article.title,
+        fallbackSummary: article.summary || undefined,
+        fallbackContent: article.content || undefined,
+      });
+      res.json({ success: true, data: detail });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/insights/articles/:id/generate-requirement
+   */
+  router.post('/articles/:id/generate-requirement', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { title, projectId, projectVersionId } = req.body;
+      if (!title) {
+        return res.status(400).json({ success: false, error: '需求文档标题不能为空' });
+      }
+      const userId = (req as any).user?.id || 1;
+      const marketService = getMarketService();
+      const doc = await marketService.convertArticleToRequirement({
+        articleId: id,
+        title,
+        projectId: projectId ? parseInt(projectId, 10) : undefined,
+        projectVersionId: projectVersionId ? parseInt(projectVersionId, 10) : undefined,
+        userId,
+      });
+      res.json({ success: true, data: doc });
+    } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }
   });

@@ -7,12 +7,15 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt', '.md', '.markdown'];
+    const allowedExtensions = [
+      '.pdf', '.docx', '.doc', '.txt', '.md', '.markdown',
+      '.html', '.htm', '.json', '.csv',
+    ];
     const ext = '.' + file.originalname.toLowerCase().split('.').pop();
     if (allowedExtensions.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error(`不支持的文件格式: ${ext}，支持 PDF、Word、TXT、Markdown`));
+      cb(new Error(`不支持的文件格式: ${ext}，支持 PDF、Word、TXT、Markdown、HTML、JSON、CSV`));
     }
   }
 });
@@ -32,14 +35,19 @@ export function createAnalysisRoutes(): Router {
       }
 
       const service = getAnalysisService();
-      const text = await service.extractTextFromFile(req.file);
+      const rawText = await service.extractTextFromFile(req.file);
+      const full =
+        req.query.full === '1' ||
+        req.query.full === 'true' ||
+        (Array.isArray(req.query.full) && req.query.full[0] === '1');
+      const text = full ? rawText : rawText.substring(0, 50000);
 
       res.json({
         success: true,
         data: {
           filename: req.file.originalname,
           size: req.file.size,
-          text: text.substring(0, 50000)
+          text
         }
       });
     } catch (error: any) {

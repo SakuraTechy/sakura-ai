@@ -1,8 +1,27 @@
 # Git 提交总结
 
+## 2026-03-21
+feat: 更新依赖和增强文件处理功能
+- 在 package.json 和 package-lock.json 中添加 fflate 和 unzipper 依赖，支持更广泛的文件格式处理
+- 更新 model-pricing.json 中的 lastUpdated 时间戳
+- 新增市场洞察相关路由，支持按 URL 抓取正文和批量删除文章功能
+- 添加市场洞察任务的快速创建和执行功能，支持行业、显示名称等参数配置
+- 优化分析服务，增强对多种文件格式的解析能力，包括 HTML、JSON 和 CSV
+- 添加深度读取功能，支持从 URL 抓取文章内容并生成需求文档
+- 改进文件上传逻辑，支持多种文件格式的上传和处理
+- 新增文档以支持行业资讯报告生成
+
 ## 2026-03-20
-- fix: 修复 Login.tsx JSX 结构错误，清理重复代码块
-- fix: 修复 Prisma 迁移外键重复错误，添加数据库管理脚本和命令
+- feat: 添加图片识别通用方案文档，涵盖 OCR/视觉/混合路由策略和成本控制机制
+- feat: 添加市场洞察模块（MarketInsights 页面、服务和定时任务）
+- feat: 添加需求分析模块（RequirementAnalysis、RequirementInsights 页面和服务）
+- feat: 新增后端路由（analysis.ts、insights.ts、marketInsight.ts）处理分析和洞察请求
+- feat: 增强 fileReader.ts 支持多文件上传和图片资产提取
+- feat: 添加 PDF 处理支持（pdf.worker.min.mjs）用于前端 PDF 解析
+- feat: 更新 Prisma schema 支持新的分析和洞察数据模型
+- feat: 升级 @prisma/client 从 6.11.1 到 6.19.2，版本号升级至 v2.0.0
+- fix: 修复 Prisma 迁移外键重复错误，添加数据库重置和迁移管理脚本
+- feat: 新增数据库管理命令（db:reset、db:migrate、db:generate）
 
 ## 2026-03-19
 - fix: init-openclaw.sh 全面加强错误处理和健壮性，所有 patch 操作增加文件检查、错误捕获和友好提示

@@ -26,7 +26,11 @@ const handleResponse = async (response: Response) => {
 };
 
 class AnalysisServiceClass {
-  async uploadDocument(file: File): Promise<{ filename: string; size: number; text: string }> {
+  /** full=true 时返回完整正文（与需求分析保存一致，供市场洞察导入等场景使用） */
+  async uploadDocument(
+    file: File,
+    options?: { full?: boolean }
+  ): Promise<{ filename: string; size: number; text: string }> {
     const token = localStorage.getItem(TOKEN_KEY);
     const formData = new FormData();
     formData.append('file', file);
@@ -34,7 +38,8 @@ class AnalysisServiceClass {
     const headers: HeadersInit = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(`${API_BASE_URL}/analysis/upload`, {
+    const q = options?.full ? '?full=1' : '';
+    const response = await fetch(`${API_BASE_URL}/analysis/upload${q}`, {
       method: 'POST',
       headers,
       body: formData

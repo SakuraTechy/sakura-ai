@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../config/api';
+import { readFileContent } from '../utils/fileReader';
 
 const API_BASE_URL = getApiBaseUrl('/api');
 const TOKEN_KEY = 'authToken';
@@ -42,6 +43,22 @@ export interface MarketInsightTask {
   _count?: { reports: number };
 }
 
+export interface MarketSourceConfig {
+  id: string;
+  name: string;
+  type: 'rss' | 'api' | 'web' | 'manual';
+  enabled: boolean;
+  url: string;
+  /** 报告分类提示（漏洞预警 / 攻防技术 等） */
+  categoryHint?: string;
+  /** 内置源一级领域（用于下拉分组展示） */
+  domainL1?: string;
+  /** 内置源二级领域 */
+  domainL2?: string;
+  timeoutMs?: number;
+  maxItems?: number;
+}
+
 export interface MarketInsightReport {
   id: number;
   task_id?: number;
@@ -63,6 +80,7 @@ export interface CreateTaskParams {
   trigger_time: string;
   trigger_day?: number;
   data_sources?: string[];
+  source_configs?: MarketSourceConfig[];
   is_active?: boolean;
 }
 
@@ -73,7 +91,19 @@ export interface ReportListParams {
   startDate?: string;
   endDate?: string;
   status?: string;
+  category?: string;
   search?: string;
+}
+
+export interface QuickCreateAndExecuteByIndustryParams {
+  industry: string;
+  displayName?: string;
+  maxItems?: number;
+  timeWindow?: string;
+  executeNow?: boolean;
+  fetchMode?: 'pure_ai' | 'sources_plus_ai';
+  /** default | angkai 昂楷体 | sample 固定返回项目根目录示例 MD */
+  reportOutputStyle?: 'default' | 'angkai' | 'sample';
 }
 
 // ======================== Service ========================
@@ -122,12 +152,34 @@ class MarketInsightServiceClass {
     return handleResponse(response);
   }
 
-  async executeTask(id: number) {
+  async batchDeleteTasks(ids: number[]) {
+    const response = await fetch(`${API_BASE_URL}/market-insights/tasks/batch-delete`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
+    });
+    return handleResponse(response);
+  }
+
+  async executeTask(id: number): Promise<{ reportId: number }> {
     const response = await fetch(`${API_BASE_URL}/market-insights/tasks/${id}/execute`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result.data as { reportId: number };
+  }
+
+  async quickCreateAndExecuteByIndustry(
+    params: QuickCreateAndExecuteByIndustryParams
+  ): Promise<{ taskId: number; reportId: number | null; status: 'created' | 'running' }> {
+    const response = await fetch(`${API_BASE_URL}/market-insights/tasks/quick-create-and-execute`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+    const result = await handleResponse(response);
+    return result.data as { taskId: number; reportId: number | null; status: 'created' | 'running' };
   }
 
   // ========== Reports ==========
@@ -140,6 +192,7 @@ class MarketInsightServiceClass {
     if (params.startDate) queryParams.append('startDate', params.startDate);
     if (params.endDate) queryParams.append('endDate', params.endDate);
     if (params.status) queryParams.append('status', params.status);
+    if (params.category) queryParams.append('category', params.category);
     if (params.search) queryParams.append('search', params.search);
 
     const response = await fetch(`${API_BASE_URL}/market-insights/reports?${queryParams}`, { headers: getAuthHeaders() });
@@ -152,27 +205,48 @@ class MarketInsightServiceClass {
     return result.data as MarketInsightReport;
   }
 
+  /**
+   * 与「需求分析」页一致：使用 `readFileContent`（浏览器端 mammoth/pdf.js 等）解析文件；
+   * 正文原样入库，详情页用 `normalizeReportMarkdownBody` + `marked` 与需求分析预览格式一致。
+   */
   async importReport(file: File, taskId?: number) {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const formData = new FormData();
-    formData.append('file', file);
-    if (taskId) formData.append('taskId', String(taskId));
-
-    const headers: HeadersInit = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(`${API_BASE_URL}/market-insights/reports/import`, {
+    const result = await readFileContent(file, { minContentLength: 1 });
+    if (!result.success) {
+      throw new Error(result.error || '文件解析失败');
+    }
+    const content = result.content.trim();
+    if (!content) {
+      throw new Error('解析后没有可保存的正文');
+    }
+    const response = await fetch(`${API_BASE_URL}/market-insights/reports/import-from-text`, {
       method: 'POST',
-      headers,
-      body: formData,
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        content,
+        filename: result.fileName || file.name,
+        ...(taskId != null ? { taskId } : {}),
+      }),
     });
-    return handleResponse(response);
+    const json = (await handleResponse(response)) as Record<string, unknown>;
+    if (result.formatWarnings?.length) {
+      return { ...json, parseWarnings: result.formatWarnings };
+    }
+    return json;
   }
 
   async deleteReport(id: number) {
     const response = await fetch(`${API_BASE_URL}/market-insights/reports/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  }
+
+  async batchDeleteReports(ids: number[]) {
+    const response = await fetch(`${API_BASE_URL}/market-insights/reports/batch-delete`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
     });
     return handleResponse(response);
   }

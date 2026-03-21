@@ -492,10 +492,16 @@ function convertTableToMarkdown(html: string): string {
   });
 }
 
+export interface ReadFileContentOptions {
+  /** 默认 50（与需求分析一致）；市场洞察导入可设为 1 */
+  minContentLength?: number;
+}
+
 /**
  * 根据文件类型读取文件内容（增强版）
  */
-export async function readFileContent(file: File): Promise<FileReadResult> {
+export async function readFileContent(file: File, options?: ReadFileContentOptions): Promise<FileReadResult> {
+  const minContentLength = options?.minContentLength ?? 50;
   const fileName = file.name;
   const fileSize = file.size;
   const fileExtension = fileName.toLowerCase().split('.').pop() || '';
@@ -527,8 +533,8 @@ export async function readFileContent(file: File): Promise<FileReadResult> {
       if (hasImages) {
         formatWarnings.push('📷 PDF中包含图片，图片内容无法提取');
       }
-    } else if (fileExtension === 'docx') {
-      fileType = 'DOCX';
+    } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+      fileType = fileExtension === 'docx' ? 'DOCX' : 'DOC';
       const docxResult = await readDocxFile(file);
       content = docxResult.content;
       hasImages = docxResult.hasImages;
@@ -544,6 +550,9 @@ export async function readFileContent(file: File): Promise<FileReadResult> {
       if (content.includes('<table>')) {
         formatWarnings.push('📊 文档中包含表格，已保留HTML格式');
       }
+    } else if (fileExtension === 'json' || fileExtension === 'csv') {
+      fileType = fileExtension.toUpperCase();
+      content = await readTextFile(file);
     } else if (fileExtension === 'md' || fileExtension === 'markdown') {
       fileType = 'Markdown';
       content = await readTextFile(file);
@@ -559,8 +568,8 @@ export async function readFileContent(file: File): Promise<FileReadResult> {
       throw new Error('文件内容为空');
     }
     
-    if (content.trim().length < 50 && !isScannedPdf) {
-      throw new Error(`文件内容过少（${content.length} 字符），至少需要 50 个字符`);
+    if (content.trim().length < minContentLength && !isScannedPdf) {
+      throw new Error(`文件内容过少（${content.length} 字符），至少需要 ${minContentLength} 个字符`);
     }
     
     success = true;

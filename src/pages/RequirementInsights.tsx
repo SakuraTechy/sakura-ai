@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Search, Upload, Trash2, ExternalLink, Calendar, Tag, Eye, X, FileUp
+  Search, Trash2, ExternalLink, Calendar, Eye, FileUp
 } from 'lucide-react';
 import { Modal, Input, Select, Pagination, Spin, Empty, Tag as AntTag, Upload as AntUpload, Tooltip } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import { marked } from 'marked';
-import { clsx } from 'clsx';
 import { insightsService, InsightsArticle } from '../services/insightsService';
 import { useAuth } from '../contexts/AuthContext';
 import { showToast } from '../utils/toast';
+import {
+  MarketInsightQuickCreate,
+  INDUSTRY_NEWS_QUICK_CREATE_COPY,
+} from '../components/marketInsight/MarketInsightQuickCreate';
 
 const CATEGORY_COLORS: Record<string, string> = {
   '人工智能': 'blue',
@@ -59,6 +62,7 @@ export function RequirementInsights() {
   const [currentArticle, setCurrentArticle] = useState<InsightsArticle | null>(null);
 
   const [importLoading, setImportLoading] = useState(false);
+  const [selectedArticleIds, setSelectedArticleIds] = useState<number[]>([]);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -74,6 +78,7 @@ export function RequirementInsights() {
       });
       setArticles(result.data);
       setPagination(result.pagination);
+      setSelectedArticleIds((prev) => prev.filter((id) => result.data.some((item) => item.id === id)));
     } catch (error: any) {
       showToast.error(error.message || '获取文章列表失败');
     } finally {
@@ -89,6 +94,11 @@ export function RequirementInsights() {
       // ignore
     }
   }, []);
+
+  const refreshAfterQuickCreate = useCallback(async () => {
+    await fetchArticles(1, pagination.pageSize);
+    fetchCategories();
+  }, [fetchArticles, pagination.pageSize, fetchCategories]);
 
   useEffect(() => {
     fetchArticles(pagination.page, pagination.pageSize);
@@ -168,35 +178,78 @@ export function RequirementInsights() {
     });
   };
 
+  const handleToggleArticleSelected = (id: number, checked: boolean) => {
+    setSelectedArticleIds((prev) => {
+      if (checked) return prev.includes(id) ? prev : [...prev, id];
+      return prev.filter((x) => x !== id);
+    });
+  };
+
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedArticleIds([]);
+      return;
+    }
+    setSelectedArticleIds(articles.map((item) => item.id));
+  };
+
+  const handleBatchDeleteArticles = async () => {
+    if (!selectedArticleIds.length) return;
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedArticleIds.length} 篇文章吗？`,
+      okText: '批量删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await insightsService.batchDeleteArticles(selectedArticleIds);
+          showToast.success(`已删除 ${selectedArticleIds.length} 篇文章`);
+          setSelectedArticleIds([]);
+          fetchArticles(1, pagination.pageSize);
+          fetchCategories();
+        } catch (error: any) {
+          showToast.error(error.message || '批量删除失败');
+        }
+      }
+    });
+  };
+
   const renderedMarkdown = currentArticle?.content
     ? marked(currentArticle.content, { breaks: true })
     : '';
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       {/* 页面标题和操作 */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">行业资讯</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">汇聚行业动态与技术文章，来自市场洞察自动抓取和日报导入</p>
         </div>
-        {isSuperAdmin && (
-          <AntUpload
-            accept=".md,.markdown"
-            showUploadList={false}
-            beforeUpload={(file) => { handleBatchImport(file); return false; }}
-          >
-            <motion.button
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={importLoading}
+        <div className="flex flex-wrap items-center gap-2">
+          <MarketInsightQuickCreate
+            copy={INDUSTRY_NEWS_QUICK_CREATE_COPY}
+            onSettled={refreshAfterQuickCreate}
+          />
+          {isSuperAdmin && (
+            <AntUpload
+              accept=".md,.markdown"
+              showUploadList={false}
+              beforeUpload={(file) => { handleBatchImport(file); return false; }}
             >
-              {importLoading ? <Spin size="small" /> : <FileUp className="h-4 w-4" />}
-              <span>批量导入</span>
-            </motion.button>
-          </AntUpload>
-        )}
+              <motion.button
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={importLoading}
+              >
+                {importLoading ? <Spin size="small" /> : <FileUp className="h-4 w-4" />}
+                <span>批量导入</span>
+              </motion.button>
+            </AntUpload>
+          )}
+        </div>
       </div>
 
       {/* 筛选栏 */}
@@ -233,24 +286,48 @@ export function RequirementInsights() {
               { label: '手动创建', value: 'manual' },
             ]}
           />
+          {isSuperAdmin && (
+            <motion.button
+              className="flex items-center gap-2 px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={{ scale: selectedArticleIds.length ? 1.02 : 1 }}
+              whileTap={{ scale: selectedArticleIds.length ? 0.98 : 1 }}
+              onClick={handleBatchDeleteArticles}
+              disabled={selectedArticleIds.length === 0}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>批量删除（已选 {selectedArticleIds.length}）</span>
+            </motion.button>
+          )}
         </div>
       </div>
 
-      {/* 数据列表 */}
-      <div className="bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Spin size="large" />
-          </div>
-        ) : articles.length === 0 ? (
-          <div className="py-20">
-            <Empty description="暂无文章数据" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        {/* 数据列表 */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-primary)]">
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center">
+              <Spin size="large" />
+            </div>
+          ) : articles.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center">
+              <Empty description="暂无文章数据" />
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
+                  {isSuperAdmin && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] w-14">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer"
+                        checked={articles.length > 0 && selectedArticleIds.length === articles.length}
+                        onChange={(e) => handleToggleSelectAll(e.target.checked)}
+                        aria-label="全选文章"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)]">执行时间</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)]">分类</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)]">来源</th>
@@ -269,6 +346,17 @@ export function RequirementInsights() {
                       transition={{ delay: index * 0.03 }}
                       className="border-t border-[var(--color-border)] hover:bg-[var(--color-bg-secondary)] transition-colors"
                     >
+                      {isSuperAdmin && (
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 cursor-pointer"
+                            checked={selectedArticleIds.includes(article.id)}
+                            onChange={(e) => handleToggleArticleSelected(article.id, e.target.checked)}
+                            aria-label={`选择文章-${article.id}`}
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm text-[var(--color-text-secondary)] whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5" />
@@ -333,27 +421,28 @@ export function RequirementInsights() {
                   ))}
                 </AnimatePresence>
               </tbody>
-            </table>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* 分页 */}
+        {pagination.total > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[var(--color-text-secondary)]">
+              共 {pagination.total} 条数据
+            </span>
+            <Pagination
+              current={pagination.page}
+              pageSize={pagination.pageSize}
+              total={pagination.total}
+              showSizeChanger
+              pageSizeOptions={['10', '20', '50', '100']}
+              onChange={handlePageChange}
+            />
           </div>
         )}
       </div>
-
-      {/* 分页 */}
-      {pagination.total > 0 && (
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-[var(--color-text-secondary)]">
-            共 {pagination.total} 条数据
-          </span>
-          <Pagination
-            current={pagination.page}
-            pageSize={pagination.pageSize}
-            total={pagination.total}
-            showSizeChanger
-            pageSizeOptions={['10', '20', '50']}
-            onChange={handlePageChange}
-          />
-        </div>
-      )}
 
       {/* 文章详情弹窗 */}
       <Modal
