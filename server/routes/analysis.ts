@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { AnalysisService } from '../services/analysisService.js';
+import { MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT } from '../services/aiParser1.js';
 import { RequirementDocService } from '../services/requirementDocService.js';
 import multer from 'multer';
 
@@ -68,7 +69,10 @@ export function createAnalysisRoutes(): Router {
       }
 
       const service = getAnalysisService();
-      const content = await service.generateRequirementDoc(text, model);
+      const content = await service.generateRequirementDoc(text, model, {
+        systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+        logScene: 'requirementAnalysisPage',
+      });
 
       res.json({
         success: true,

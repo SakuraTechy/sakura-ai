@@ -4,6 +4,7 @@ import { PrismaClient } from '../../src/generated/prisma/index.js';
 import { DatabaseService } from './databaseService.js';
 import { llmConfigManager } from '../../src/services/llmConfigManager.js';
 import { AnalysisService } from './analysisService.js';
+import { MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT } from './aiParser1.js';
 import { MARKET_INSIGHT_BUILTIN_SOURCES } from '../../src/constants/marketInsightBuiltinSources.js';
 import {
   getMarketInsightCategoryPromptEnum,
@@ -1794,10 +1795,21 @@ ${articleList}`;
 
     if (!report) throw new Error('报告不存在');
 
+    const requirementInput = `报告标题：${report.title}
+分类：${report.category}
+摘要：${report.summary || ''}
+正文：
+${report.content}`;
+
+    const aiContent = await this.analysisService.generateRequirementDoc(requirementInput, undefined, {
+      systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+      logScene: 'marketInsightReportToRequirement',
+    });
+
     const doc = await this.prisma.requirement_documents.create({
       data: {
         title: params.title,
-        content: report.content,
+        content: aiContent,
         summary: report.summary || '',
         source_filename: `market-insight-report-${report.id}`,
         creator_id: params.userId,
@@ -2015,7 +2027,13 @@ ${articleList}`;
     const article = await this.prisma.insights_articles.findUnique({ where: { id: params.articleId } });
     if (!article) throw new Error('文章不存在');
     const aiContent = await this.analysisService.generateRequirementDoc(
-      `文章标题：${article.title}\n来源链接：${article.url}\n分类：${article.category}\n摘要：${article.summary || ''}\n正文：\n${article.content}`
+      `文章标题：${article.title}\n来源链接：${article.url}\n分类：${article.category}\n摘要：${article.summary || ''}\n正文：\n${article.content}`,
+      undefined,
+      {
+        systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+        /** 深读「一键转需求」、行业资讯文章转需求：后台打印完整提示词与响应摘要 */
+        logScene: 'deepReadArticleToRequirement',
+      }
     );
     const doc = await this.prisma.requirement_documents.create({
       data: {
