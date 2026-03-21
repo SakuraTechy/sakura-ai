@@ -136,7 +136,7 @@ export const Login: React.FC = () => {
             className="w-full max-w-md mx-auto"
           >
             <motion.div
-              className="flex flex-col items-center mb-16 py-4"
+              className="flex flex-col items-center mb-20 py-4"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.8 }}
@@ -202,10 +202,10 @@ export const Login: React.FC = () => {
               </motion.div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }} className="mt-16 flex flex-col gap-2 text-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }} className="mt-20 flex flex-col gap-2 text-center">
               <span className="text-purple-300/50 text-sm">版本号：{packageJson.version}</span>
               <span className="text-purple-300/50 text-sm">Sakura AI. Powered by AI & Automation</span>
-              <span className="text-purple-300/50 text-sm">Copyright © 2019-2025 SakuraTech. All rights reserved.</span>
+              <span className="text-purple-300/50 text-sm">Copyright © 2025-2026 SakuraTech. All rights reserved.</span>
             </motion.div>
           </motion.div>
         )}

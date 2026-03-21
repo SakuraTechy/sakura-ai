@@ -80,6 +80,14 @@ export class InsightsService {
     return this.prisma.insights_articles.findUnique({ where: { id } });
   }
 
+  async findArticleIdByUrl(url: string): Promise<number | null> {
+    const row = await this.prisma.insights_articles.findFirst({
+      where: { url },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
   async createArticle(params: CreateArticleParams) {
     return this.prisma.insights_articles.create({
       data: {
@@ -96,6 +104,31 @@ export class InsightsService {
 
   async deleteArticle(id: number) {
     return this.prisma.insights_articles.delete({ where: { id } });
+  }
+
+  async batchDeleteArticles(ids: number[]) {
+    if (!ids.length) return { deletedCount: 0 };
+    const uniqueIds = Array.from(new Set(ids));
+    const result = await this.prisma.insights_articles.deleteMany({
+      where: { id: { in: uniqueIds } },
+    });
+    return { deletedCount: result.count };
+  }
+
+  async correctArticleCategory(id: number, category: string) {
+    const article = await this.prisma.insights_articles.update({
+      where: { id },
+      data: { category }
+    });
+    await this.prisma.audit_logs.create({
+      data: {
+        action: 'insights.correct_category',
+        target_type: 'insights_article',
+        target_id: BigInt(id),
+        meta: { category }
+      }
+    }).catch(() => undefined);
+    return article;
   }
 
   async getCategories(): Promise<string[]> {

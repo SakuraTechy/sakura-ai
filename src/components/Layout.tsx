@@ -259,7 +259,7 @@ export function Layout({ children }: LayoutProps) {
   ];
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[var(--color-bg-secondary)]">
+    <div ref={containerRef} className="h-[100dvh] min-h-screen overflow-hidden bg-[var(--color-bg-secondary)]">
       {/* Mobile sidebar overlay */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -465,7 +465,7 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <motion.div 
-        className="transition-all duration-300"
+        className="flex h-full min-h-0 flex-col transition-all duration-300"
         animate={{ 
           paddingLeft: typeof window !== 'undefined' && window.innerWidth >= 1024 && !isFullscreen 
             ? (sidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED)
@@ -563,7 +563,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page content */}
         <motion.main
-          className="flex-1 pl-6 pr-6 pt-6 pb-4"
+          className="flex-1 min-h-0 overflow-y-auto pl-6 pr-6 pt-6 pb-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}

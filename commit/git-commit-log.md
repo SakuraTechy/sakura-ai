@@ -1,5 +1,16 @@
 ﻿# Git 提交日志
 
+## 2026-03-21
+feat: 更新依赖和增强文件处理功能
+- 在 package.json 和 package-lock.json 中添加 fflate 和 unzipper 依赖，支持更广泛的文件格式处理
+- 更新 model-pricing.json 中的 lastUpdated 时间戳
+- 新增市场洞察相关路由，支持按 URL 抓取正文和批量删除文章功能
+- 添加市场洞察任务的快速创建和执行功能，支持行业、显示名称等参数配置
+- 优化分析服务，增强对多种文件格式的解析能力，包括 HTML、JSON 和 CSV
+- 添加深度读取功能，支持从 URL 抓取文章内容并生成需求文档
+- 改进文件上传逻辑，支持多种文件格式的上传和处理
+- 新增文档以支持行业资讯报告生成
+
 ## 2026-03-20
 - fix: 修复 Prisma 迁移外键重复错误，添加数据库重置和迁移管理脚本
 - chore: package.json 新增数据库管理命令（db:reset、db:migrate、db:generate）

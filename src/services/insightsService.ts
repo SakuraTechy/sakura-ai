@@ -37,12 +37,42 @@ export interface InsightsArticle {
   created_at: string;
 }
 
+export interface CreateInsightsArticleParams {
+  title: string;
+  url: string;
+  content: string;
+  category?: string;
+  summary?: string;
+  source?: string;
+  published_at?: string;
+}
+
 export interface ArticleListParams {
   page?: number;
   pageSize?: number;
   search?: string;
   category?: string;
   source?: string;
+}
+
+export interface DeepReadDetail {
+  title: string;
+  summary: string;
+  contentText: string;
+  contentMarkdown: string;
+  contentHtml: string;
+  contentRawHtml: string;
+  images: string[];
+  sourceUrl: string;
+  extractionMeta: {
+    strategy: 'readable' | 'fallback_text';
+    durationMs: number;
+    fallbackReason?: string;
+    errorCode?: string;
+    errorMessage?: string;
+  };
+  /** 仅 deepReadByUrl：文章库中存在同 URL 记录时的 id，用于一键生成需求 */
+  matchedArticleId?: number | null;
 }
 
 class InsightsServiceClass {
@@ -67,6 +97,16 @@ class InsightsServiceClass {
       `${API_BASE_URL}/insights/articles/${id}`,
       { headers: getAuthHeaders() }
     );
+    const result = await handleResponse(response);
+    return result.data;
+  }
+
+  async createArticle(params: CreateInsightsArticleParams): Promise<InsightsArticle> {
+    const response = await fetch(`${API_BASE_URL}/insights/articles`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
     const result = await handleResponse(response);
     return result.data;
   }
@@ -102,6 +142,58 @@ class InsightsServiceClass {
       headers: getAuthHeaders()
     });
     await handleResponse(response);
+  }
+
+  async batchDeleteArticles(ids: number[]): Promise<{ message?: string; data?: { deletedCount: number } }> {
+    const response = await fetch(`${API_BASE_URL}/insights/articles/batch-delete`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
+    });
+    return handleResponse(response);
+  }
+
+  async deepReadArticle(id: number): Promise<DeepReadDetail> {
+    const response = await fetch(`${API_BASE_URL}/insights/articles/${id}/deep-read`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+  }
+
+  async deepReadByUrl(url: string, fallbackTitle?: string): Promise<DeepReadDetail> {
+    const response = await fetch(`${API_BASE_URL}/insights/deep-read-by-url`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url, fallbackTitle }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+  }
+
+  async generateRequirementFromArticle(
+    id: number,
+    params: { title: string; projectId?: number; projectVersionId?: number }
+  ) {
+    const response = await fetch(`${API_BASE_URL}/insights/articles/${id}/generate-requirement`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(params)
+    });
+    return handleResponse(response);
+  }
+
+  async correctArticleCategory(id: number, category: string) {
+    const response = await fetch(`${API_BASE_URL}/insights/articles/${id}/category`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ category })
+    });
+    return handleResponse(response);
   }
 }
 

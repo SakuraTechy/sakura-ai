@@ -321,7 +321,7 @@ export function RequirementAnalysis() {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {/* 页面标题 */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">需求分析</h1>
@@ -339,6 +339,7 @@ export function RequirementAnalysis() {
 
       {/* Step 内容 */}
       <motion.div
+        className="min-h-0 flex-1"
         key={currentStep}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -568,7 +569,7 @@ export function RequirementAnalysis() {
 
                       <div
                         className="bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-auto select-text"
-                        style={{ maxHeight: '400px' }}
+                        style={{ maxHeight: 'min(40dvh, 400px)' }}
                       >
                         {filePreviewMode === 'preview' ? (
                           (filePreviewResult.fileType === 'Markdown' ||
@@ -712,7 +713,7 @@ export function RequirementAnalysis() {
                   />
                 ) : (
                   <div
-                    className="prose prose-sm max-w-none dark:prose-invert p-6 max-h-[600px] overflow-y-auto"
+                    className="prose prose-sm max-w-none dark:prose-invert p-6 overflow-y-auto max-h-[min(60dvh,600px)]"
                     dangerouslySetInnerHTML={{ __html: renderedMarkdown as string }}
                   />
                 )}
@@ -788,7 +789,7 @@ export function RequirementAnalysis() {
                 文档内容预览
               </label>
               <div
-                className="prose prose-sm max-w-none dark:prose-invert p-5 border border-[var(--color-border)] rounded-lg max-h-[450px] overflow-y-auto bg-[var(--color-bg-secondary)]"
+                className="prose prose-sm max-w-none dark:prose-invert p-5 border border-[var(--color-border)] rounded-lg overflow-y-auto bg-[var(--color-bg-secondary)] max-h-[min(45dvh,450px)]"
                 dangerouslySetInnerHTML={{ __html: renderedMarkdown as string }}
               />
             </div>
