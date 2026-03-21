@@ -253,7 +253,7 @@ export function MarketInsightQuickCreate({ copy, onSettled, onPollTick, switchTo
               options={[
                 { label: '默认（提示词）', value: 'default' },
                 { label: '昂楷团队资讯体', value: 'angkai' },
-                { label: '样本示例（固定模版）', value: 'sample' },
+                { label: '固定模版', value: 'sample' },
               ]}
             />
           </Form.Item>
