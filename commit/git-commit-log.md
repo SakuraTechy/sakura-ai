@@ -1,5 +1,12 @@
 ﻿# Git 提交日志
 
+## 2026-03-23
+fix: 修复 Docker 容器中市场洞察样本报告文件找不到的问题
+- Dockerfile.debian 添加 `COPY --from=builder /app/docs ./docs`，确保镜像包含默认文档
+- docker-compose.yml 添加 `./docs:/app/docs` volume 挂载，支持运行时更新文档
+- 解决 "[MarketInsight] 样本报告文件均未找到，cwd= /app" 错误
+- 确保 `docs/2026年数据安全领域最新资讯.md` 样本文件在容器中可用
+
 ## 2026-03-21
 feat: 更新依赖和增强文件处理功能
 - 在 package.json 和 package-lock.json 中添加 fflate 和 unzipper 依赖，支持更广泛的文件格式处理

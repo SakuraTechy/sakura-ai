@@ -165,11 +165,12 @@ services:
       LOG_FULL_PROMPT: ${LOG_FULL_PROMPT:-false}
     volumes:
       # 持久化数据
+      - ./logs:/app/logs
+      - ./docs:/app/docs
       - ./uploads:/app/uploads
       - ./artifacts:/app/artifacts
       - ./screenshots:/app/screenshots
       - ./midscene_run:/app/midscene_run
-      - ./logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
