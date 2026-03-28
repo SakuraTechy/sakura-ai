@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
   Table, Button, Input, Select, DatePicker, Space, Modal, Form, Switch,
-  Tag, message, Popconfirm, Card, Descriptions, Upload, Spin, InputNumber, Tabs, Empty, Segmented
+  Tag, message, Popconfirm, Card, Descriptions, Upload, Spin, InputNumber, Tabs, Empty, Segmented, Tooltip
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
@@ -1220,6 +1220,7 @@ function ReportDetailView({
     setDeepReadOpen(true);
     setIsDeepReadFullscreen(false);
     setDeepReadLoading(true);
+    setDeepReadContent(null);
     setGenerateState('idle');
     setGenerateMessage('');
     try {
@@ -1418,37 +1419,34 @@ function ReportDetailView({
         }}
         footer={
           <div className="flex items-center w-full gap-4 text-left">
-            <div className="flex-1 min-w-0 text-left">
-              {generateState === 'generating' && (
-                <div className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700">
-                  需求生成中：AI正在进行需求分析，生成规范化需求文档...
-                </div>
-              )}
-              {generateState === 'success' && (
-                <div className="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-sm text-green-700">
-                  需求生成完成：需求文档已生成成功，可前往需求文档管理查看
-                </div>
-              )}
-              {generateState === 'failed' && (
-                <div className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-700">
-                  需求生成失败：{generateMessage || '生成失败，请稍后重试'}
-                </div>
-              )}
-              {generateState === 'success' && (
-                <Button
-                  className="ml-3"
-                  size="middle"
-                  type="default"
-                  onClick={() => {
-                    window.open('/requirement-docs', '_blank', 'noopener,noreferrer');
-                  }}
-                >
-                  点击前往需求文档管理
-                </Button>
-              )}
+            <div className="flex-1 min-w-0 text-left pl-3">
+              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg pb-2">
+                抓取策略：{deepReadContent?.extractionMeta?.strategy || '-'}
+                {' · '}
+                耗时：{deepReadContent?.extractionMeta?.durationMs ?? '-'}ms
+                {deepReadContent?.sourceUrl && (
+                  <>
+                    {' · '}
+                    来源：
+                    <a
+                      href={deepReadContent.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {deepReadContent.sourceUrl}
+                    </a>
+                  </>
+                )}
+                {deepReadContent?.extractionMeta?.errorMessage && (
+                  <>
+                    {' · '}
+                    错误：{deepReadContent.extractionMeta.errorMessage}
+                  </>
+                )}
+              </div>
             </div>
             <Space className="ml-auto pl-3" size="middle">
-              
               <Button
                 key="close"
                 onClick={() => {
@@ -1473,31 +1471,75 @@ function ReportDetailView({
           </div>
         }
         centered
-        width={isDeepReadFullscreen ? '96vw' : 'min(96vw, 960px)'}
+        width={isDeepReadFullscreen ? '96vw' : 'min(96vw, 1200px)'}
         style={{ paddingBottom: 0 }}
         styles={{
           body: {
             maxHeight: isDeepReadFullscreen ? 'calc(100vh - 120px)' : 'calc(100vh - 150px)',
             overflow: 'hidden',
           },
+          footer: {
+            marginTop: 5,
+            paddingLeft: 5,
+            paddingRight: 20,
+          },
         }}
       >
         <Spin spinning={deepReadLoading}>
-          {!deepReadContent ? (
+          {deepReadLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-5" style={{ minHeight: 240 }}>
+              {/* 主图标 + 标题 */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-2xl">🤖</span>
+                </div>
+                <div className="text-base font-semibold text-gray-800">AI 正在抓取并分析文章内容</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+              {/* 骨架屏 */}
+              <div className="w-full max-w-lg space-y-2.5 px-6">
+                <div className="h-3.5 bg-blue-100 rounded-full animate-pulse w-full" />
+                <div className="h-3.5 bg-blue-100 rounded-full animate-pulse w-5/6" />
+                <div className="h-3.5 bg-blue-100 rounded-full animate-pulse w-4/6" />
+                <div className="h-3.5 bg-gray-100 rounded-full animate-pulse w-3/4 mt-4" />
+                <div className="h-3.5 bg-gray-100 rounded-full animate-pulse w-full" />
+                <div className="h-3.5 bg-gray-100 rounded-full animate-pulse w-2/3" />
+              </div>
+              {/* 底部说明 */}
+              <div className="text-sm text-blue-500 font-medium">AI 正在智能提炼文章摘要，请稍候...</div>
+            </div>
+          ) : !deepReadContent ? (
             <Empty description="暂无深读内容" />
           ) : (
-            <div className="space-y-3 flex flex-col" style={{ height: deepReadLayoutHeight }}>
-              <div className="bg-gray-50 rounded-lg p-3">
+            <div className="space-y-3 flex flex-col p-3" style={{ height: deepReadLayoutHeight }}>
+              <div className="bg-gray-50 rounded-lg">
                 <div className="text-lg font-semibold text-gray-900">{deepReadContent.title}</div>
-                <div className="text-sm text-gray-600 mt-1">{deepReadContent.summary}</div>
+                {deepReadLoading ? (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-blue-500">
+                      <span className="inline-flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                      AI 正在分析总结...
+                    </div>
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-full" />
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-5/6" />
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-4/6" />
+                    <div className="mt-1 text-xs text-gray-400">AI 正在智能提炼文章摘要，请稍候...</div>
+                  </div>
+                ) : (
+                  <Tooltip title={deepReadContent.summary} placement="bottom" overlayStyle={{ maxWidth: 600 }}>
+                    <div className="text-sm text-gray-600 mt-1 line-clamp-5 cursor-help">{deepReadContent.summary}</div>
+                  </Tooltip>
+                )}
               </div>
               <div className="flex items-center justify-between gap-2">
-                <Button
-                  icon={isDeepReadFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                  onClick={() => setIsDeepReadFullscreen((prev) => !prev)}
-                >
-                  {isDeepReadFullscreen ? '退出全屏' : '全屏阅读'}
-                </Button>
                 <Segmented
                   value={previewMode}
                   onChange={(value) => {
@@ -1509,6 +1551,12 @@ function ReportDetailView({
                   }}
                   options={PREVIEW_MODE_OPTIONS}
                 />
+                <Button
+                  icon={isDeepReadFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                  onClick={() => setIsDeepReadFullscreen((prev) => !prev)}
+                >
+                  {isDeepReadFullscreen ? '退出全屏' : '全屏阅读'}
+                </Button>
               </div>
               <div
                 className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm overflow-y-auto"
@@ -1571,14 +1619,7 @@ function ReportDetailView({
                   />
                 )}
               </div>
-              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-                抓取策略：{deepReadContent.extractionMeta?.strategy || '-'}
-                {' · '}
-                耗时：{deepReadContent.extractionMeta?.durationMs ?? '-'}ms
-                {' · '}
-                来源：{deepReadContent.sourceUrl || '-'}
-                {deepReadContent.extractionMeta?.errorMessage ? ` · 错误：${deepReadContent.extractionMeta.errorMessage}` : ''}
-              </div>
+              
             </div>
           )}
         </Spin>
@@ -1612,6 +1653,33 @@ function ReportDetailView({
           ]}
         />
       </Modal>
+      {/* 生成成功提示弹窗 */}
+      <Modal
+        open={generateState === 'success'}
+        title="需求文档生成成功"
+        onCancel={() => setGenerateState('idle')}
+        onOk={() => {
+          setGenerateState('idle');
+          window.open('/requirement-docs', '_blank', 'noopener,noreferrer');
+        }}
+        okText="前往需求管理"
+        cancelText="关闭"
+        centered
+      >
+        <p className="text-gray-600">需求文档已生成成功，可前往需求文档管理查看。</p>
+      </Modal>
+      {/* 生成失败提示弹窗 */}
+      <Modal
+        open={generateState === 'failed'}
+        title="需求文档生成失败"
+        onCancel={() => setGenerateState('idle')}
+        footer={[
+          <Button key="close" onClick={() => setGenerateState('idle')}>关闭</Button>,
+        ]}
+        centered
+      >
+        <p className="text-red-500">{generateMessage || '生成失败，请稍后重试'}</p>
+      </Modal>
     </Spin>
   );
 }
@@ -1642,7 +1710,7 @@ function ConvertToRequirementModal({
 
   useEffect(() => {
     if (open) {
-      form.setFieldsValue({ title: `需求文档 - ${reportTitle}` });
+      form.setFieldsValue({ title: `${reportTitle}` });
       loadProjects();
     } else {
       form.resetFields(['projectId', 'projectVersionId']);

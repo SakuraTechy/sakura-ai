@@ -12,6 +12,10 @@ export interface LLMSettings {
     maxTokens?: number;
     topP?: number;
   };
+  timeout?: {
+    default?: number;  // 默认超时（毫秒），用于长时间任务
+    short?: number;    // 短超时（毫秒），用于快速分析
+  };
 }
 
 // 验证结果接口

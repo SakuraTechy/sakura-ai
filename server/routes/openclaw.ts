@@ -10,6 +10,20 @@ const execAsync = promisify(exec);
 export function createOpenClawProxyRoute() {
   const router = Router();
 
+  // Canvas 画布：直接返回本地静态文件，不需要认证
+  router.get('/canvas', async (req, res) => {
+    try {
+      const canvasPath = path.join(process.cwd(), '.openclaw', 'canvas', 'index.html');
+      const html = await fs.readFile(canvasPath, 'utf-8');
+      res.removeHeader('X-Frame-Options');
+      res.removeHeader('Content-Security-Policy');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch (error: any) {
+      res.status(404).json({ error: 'Canvas 页面不存在', message: error.message });
+    }
+  });
+
   // 代理路由用于绕过 CSP 限制，让 OpenClaw 可以在 iframe 中显示
   router.get('/*', async (req, res) => {
     try {

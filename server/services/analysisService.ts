@@ -1,4 +1,5 @@
 import { llmConfigManager } from '../../src/services/llmConfigManager.js';
+import { createAIAbortController, formatTimeoutError } from '../utils/aiTimeout.js';
 import AdmZip from 'adm-zip';
 import { unzipSync, strFromU8 } from 'fflate';
 
@@ -340,14 +341,19 @@ export class AnalysisService {
     const baseUrl = config.baseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
     const selectedModel = model || config.model || 'openai/gpt-4o';
 
+    // 从系统设置中获取模型的 max_tokens 配置
+    const modelInfo = llmConfigManager.getModelInfo();
+    const maxTokens = config.maxTokens || modelInfo.defaultConfig.maxTokens || 8000;
+
     if (!apiKey) {
       throw new Error('AI 服务未配置 API Key，请在设置中配置');
     }
 
     const apiEndpoint = baseUrl + '/chat/completions';
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
+    // 使用统一的超时配置（长超时，适用于需求文档生成）
+    // 优先使用用户自定义的超时配置
+    const { controller, timeout, timeoutMs } = createAIAbortController('long', config.timeout);
 
     const systemPrompt = options?.systemPrompt ?? REQUIREMENT_GENERATION_PROMPT;
     const userMessage = `请根据以下内容生成结构化需求文档：\n\n${text}`;
@@ -378,7 +384,8 @@ export class AnalysisService {
             { role: 'user', content: userMessage }
           ],
           temperature: 0.3,
-          max_tokens: 4000
+          // 从系统设置中读取模型的 max_tokens 配置，默认 8000
+          max_tokens: maxTokens
         }),
         signal: controller.signal
       });
@@ -424,7 +431,7 @@ export class AnalysisService {
         console.error(`[RequirementDoc][LLM][${logScene}] failed:`, error?.message || error);
       }
       if (error.name === 'AbortError') {
-        throw new Error('AI 服务响应超时（60秒），请稍后重试');
+        throw new Error(formatTimeoutError(timeoutMs));
       }
       throw error;
     } finally {

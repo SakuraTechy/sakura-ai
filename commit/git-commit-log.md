@@ -1,6 +1,209 @@
 ﻿# Git 提交日志
 
+## 2026-03-24
+
+fix: 修复 Canvas 画布打开后显示与 OpenClaw Gateway 控制面板相同页面的问题
+- 后端新增 GET /api/openclaw/canvas 路由，直接返回本地 .openclaw/canvas/index.html
+- 前端 Canvas 画布按钮改为指向本地静态路由，不再通过 OpenClaw Gateway 代理
+- Canvas 画布按钮移除对服务运行状态的依赖（本地文件无需服务运行）
+
+fix: 修复文件预览编辑后 AI 生成未使用编辑内容的问题
+- 文件预览编辑区域 onChange 同步更新 inputText
+- 确保 AI 生成时使用用户编辑后的文件内容
+
+style: 文件预览按钮根据预览状态切换睁眼/闭眼图标
+- MultiFileUpload 接口新增 previewingFileName 可选字段
+- 导入 EyeOff 图标
+- 预览按钮根据 previewingFileName === item.file.name 切换 Eye/EyeOff 图标
+- title 提示文字同步切换"预览文件内容"/"关闭预览"
+- RequirementAnalysis 传入 previewingFileName={showFilePreview ? filePreviewResult?.fileName : undefined}
+
+feat: 需求分析页面文件预览支持点击切换开关
+- handlePreviewFile 函数增加状态检测逻辑
+- 如果已经在预览状态且点击同一个文件，则关闭预览
+- 通过比对 filePreviewResult.fileName 判断是否为同一文件
+- 提升用户体验，支持快速切换预览状态
+
+fix: 修复需求分析页面 Step 1 无法滚动到文件预览区域的问题
+- Step 1 外层容器从 overflow-hidden 改为 overflow-y-auto，允许整体滚动
+- 文件预览区域从 flex-1 min-h-0 改为 flex-shrink-0，作为固定高度区域
+- 文件预览内层容器移除 overflow-hidden 和 height: 100%
+- 文件内容白色卡片移除 flex-1 min-h-0，恢复为普通 flex flex-col
+- 文件内容滚动区域恢复 maxHeight: 400px 限制
+- 确保可以滚动到底部查看完整的文件预览内容
+
+fix: 修复需求分析页面 Step 1 文件预览区域内容无法滚动的问题
+- 文件预览外层容器改为 flex flex-col overflow-hidden + height: 100%
+- 文件预览内层容器改为 flex flex-col overflow-hidden h-full
+- 标题、文件信息、警告提示等区域添加 flex-shrink-0 防止被压缩
+- 文件内容白色卡片改为 flex flex-col flex-1 min-h-0
+- 文件内容滚动区域移除 maxHeight 限制，改为 flex-1 min-h-0
+- 确保文件内容区域可以正常滚动查看
+
+fix: 修复需求分析页面 Step 1 文件预览区域布局异常问题
+- 文件预览区域从 grid 内部移到外部，作为独立区域显示
+- 未预览时 grid 使用 flex-1 撑满高度，预览时 grid 改为 flex-shrink-0
+- 文件预览区域使用 flex-1 min-h-0 overflow-y-auto 自适应剩余空间
+- 修复文件预览内容与右侧输入文本区域重叠的问题
+- 预览区域高度自适应，内容可独立滚动
+
+fix: 修复需求分析页面 Step 1 和 Step 3 布局问题
+- Step 1: 移除外层滚动容器，grid 改为 flex-1 min-h-0 自适应撑满高度
+- Step 1: 标题添加 flex-shrink-0 防止被压缩，文件上传区域添加滚动容器
+- Step 1: 文件预览区域改为 flex-shrink-0 + max-h-[50vh]，避免撑开页面
+- Step 3: 关联项目和关联版本宽度比例调整为 25% + 25%（原 30% + 20%）
+- Step 3: 关联项目移除 allowClear 属性，设为必填项
+- Step 3: 关联版本移除 allowClear 属性，保持必填
+- 修复未上传文件时中间区域自适应撑满高度问题（包括全屏模式）
+- 修复已上传文件时底部显示不完整问题
+
+fix: 修复需求分析页面底部按钮显示问题，使用 JS 动态计算容器高度，监听全屏和窗口变化实时调整
+- 添加 containerRef 和 containerHeight state
+- useEffect 监听 resize、fullscreenchange、app-fullscreen 类变化
+- 普通模式：vh - 168px，全屏模式：vh - 40px
+- Step 内容区 overflow-y-auto，底部按钮 flex-shrink-0
+- 所有 Step 容器添加 h-full flex flex-col 撑满高度
+- Step 1: grid 和文件预览包在滚动容器里，添加 flex-1 min-h-0 overflow-y-auto
+- Step 2: 生成结果容器和预览/编辑区域添加 flex-1 min-h-0，TextArea 改 autoSize=false
+- Step 3: 文档预览容器和内容区域添加 flex-1 min-h-0，移除 max-h 限制
+- 不修改 Layout.tsx，避免影响其他页面
+
+fix: 修复需求分析模块AI生成需求文档超时未使用系统设置配置的问题
+- LLMConfig 接口新增 timeout 字段（default/short 毫秒配置）
+- llmConfigManager.updateConfig() 构建 newConfig 时将 settings.timeout 写入
+- 修复后 analysisService 和 marketInsightService 中 config.timeout 可正确读取用户自定义超时
+- 之前始终回退到环境变量硬编码值（AI_REQUEST_TIMEOUT=180000ms）
+
 ## 2026-03-23
+style: 摘要超出省略时 hover 显示完整内容（Tooltip）
+- ContentViewerModal 和 MarketInsights 深读弹窗摘要区域加 Tooltip 包裹
+- 鼠标悬停时展示完整摘要，最大宽度 600px，cursor 改为 help 提示可交互
+- 两个文件同步补充 Tooltip 导入
+
+style: 加强加载动画视觉效果，增大图标/字号/点大小，骨架屏改为蓝色调，底部提示文字加深
+- ContentViewerModal 和 MarketInsights 深读弹窗统一更新
+- 🤖 图标 + 加粗标题 + 更大跳动点（2.5px）+ 蓝色骨架屏 + 蓝色提示文字
+
+fix: 修复深读/行业资讯加载动画不显示的问题
+- handleDeepRead 开始时增加 setDeepReadContent(null)，确保每次打开都重置内容
+- ContentViewerModal 和 MarketInsights 深读弹窗将加载判断提到最外层
+- loading=true 且 content=null 时优先显示加载动画，不再走 Empty 空状态
+- 骨架屏下方增加"AI 正在智能提炼文章摘要，请稍候..."提示文字
+
+style: 摘要加载动画骨架屏下方增加提示文字"AI 正在智能提炼文章摘要，请稍候..."
+- ContentViewerModal 和 MarketInsights 深读弹窗同步更新
+- 两处加载动画效果保持一致
+
+feat: 深读/行业资讯查看时摘要区域加入 AI 分析加载动画
+- ContentViewerModal 新增 summaryLoading prop，加载时显示跳动点 + 骨架屏
+- RequirementInsights 传入 summaryLoading={detailLoading}，内容加载期间显示动画
+- MarketInsights 深读弹窗摘要区域同步加入相同加载动画效果
+- 加载完成后自动切换为正式摘要文本展示
+
+fix: 优化深读摘要 AI 失败时的降级方案
+- 新增 extractFallbackSummary 方法，按中英文句末标点断句取前 3-5 句
+- 最多保留 500 字符，避免硬截断导致语义不完整
+- 英文文章降级到最近空格处截断，保证词语完整
+- 替换原来粗暴的 text.slice(0, 240) 截取方式
+
+style: 优化 generateArticleSummary 提示词，提升摘要完整性
+- system prompt 改为要求 3-5 句高质量摘要（原 2-3 句）
+- 新增摘要要求：保留关键数据/政策/公司名称、说明影响意义
+- 正文截取从 3000 字符扩展到 5000 字符，提供更多上下文
+- max_tokens 从 200 提升到 400，支持更完整的摘要输出
+
+feat: 深读摘要改为 AI 提炼，提升摘要质量
+- marketInsightService.ts 新增 generateArticleSummary 私有方法
+- 调用 AI（短超时）用 2-3 句中文提炼文章核心内容
+- 失败时自动降级到截取正文前 240 字符，保证可用性
+- deepReadArticleByUrl 已调用该方法，摘要质量显著提升
+
+## 2026-03-23
+style: 市场洞察深读生成成功/失败改为弹窗提示
+- 移除 footer 内联的生成状态提示（generating/success/failed div）
+- 新增生成成功弹窗（含"前往需求管理"按钮）和生成失败弹窗
+- 与行业资讯页面保持一致的交互体验
+
+## 2026-03-23
+feat: 行业资讯一键转需求文档添加 AI 进度弹窗
+- 点击"一键转需求文档"先弹出选项弹窗（标题、关联项目、关联版本）
+- 确认后显示 AIThinking 进度弹窗，与市场洞察深读体验一致
+- 生成成功弹窗提示并支持跳转需求管理页面
+- 生成失败弹窗提示错误信息
+- 复用 ConvertToRequirementModal 逻辑，支持选择项目和版本
+
+style: 优化 ContentViewerModal 布局，将元信息移至顶部
+- 将 extraFooter 内容从底部移到标题下方，紧跟摘要区域
+- 优化视觉层次：标题/摘要 → 元信息（分类/来源/时间/链接）→ 工具栏 → 内容 → 抓取信息
+- 底部 footer 只保留操作按钮（关闭、转换），更简洁
+- 提升用户体验，重要信息更容易看到
+
+feat: 行业资讯添加一键转需求文档功能
+- 启用 ContentViewerModal 的转换按钮，支持将文章转换为需求文档
+- 调用 generateRequirementFromArticle API 生成需求文档
+- 转换成功后自动打开需求管理页面
+- 显示转换加载状态和友好的错误提示
+- 与市场洞察保持一致的用户体验
+
+feat: 行业资讯查看时通过深度阅读 API 实时抓取文章内容
+- 点击查看文章时调用 deepReadByUrl API，从原始 URL 抓取完整内容
+- 支持多种内容格式（Markdown、HTML、纯文本）的智能提取
+- 抓取失败时自动降级到数据库缓存内容，确保用户体验
+- 显示抓取策略和耗时等元信息
+- 提供更准确、更完整的文章内容展示
+
+feat: 行业资讯页面集成统一的 ContentViewerModal 组件
+- 替换原有的简单 Modal 弹窗为功能完整的 ContentViewerModal
+- 支持多种预览模式（Markdown、纯文本、HTML清洗、HTML原貌）
+- 支持全屏阅读和预览模式切换
+- 在底部显示文章分类、来源、发布时间和原文链接
+- 移除 marked 依赖，统一使用 ContentViewerModal 的渲染逻辑
+- 优化用户体验，提供更专业的内容查看界面
+
+feat: 创建统一的内容查看弹窗组件 ContentViewerModal
+- 新增 src/components/common/ContentViewerModal.tsx 组件，支持多种预览模式（Markdown、纯文本、HTML清洗、HTML原貌）
+- 支持全屏阅读、预览模式切换、内容转换等功能
+- 提供统一的接口和样式，可复用于行业资讯、市场洞察等场景
+- 新增使用示例文件 ContentViewerModal.example.tsx，展示在不同场景下的使用方法
+- 组件特性：自动保存预览模式偏好、HTML 安全清洗、iframe 沙箱隔离、响应式布局
+
+## 2026-03-23
+refactor: 优化 LLM 配置管理器日志输出
+- 移除重复的初始化日志，只在关键节点打印
+- 合并配置更新日志到一次输出，提高可读性
+- 超时配置显示具体的秒数值（如"默认=180秒, 快速=30秒"）
+- 移除后端设置服务和数据库加载的冗余日志
+- 简化配置保存成功的日志输出
+
+fix: 修复系统设置页面超时配置无法保存的问题
+- Settings.tsx 的 handleFieldChange 函数新增对 timeout. 开头字段的处理逻辑
+- 支持正确处理 timeout.default 和 timeout.short 嵌套字段的更新
+- 确保超时配置能正确保存到 formData 状态中
+
+feat: 系统设置页面添加 AI 超时配置界面
+- Settings.tsx 添加超时配置表单，支持配置默认超时（长时间任务）和快速超时（快速分析）
+- LLMSettings 接口新增 timeout 字段 { default?: number; short?: number }
+- 用户可在系统设置中自定义 AI 请求超时时间（秒为单位，自动转换为毫秒）
+- 支持分别配置长时间任务（默认 180 秒）和快速分析任务（默认 30 秒）的超时
+
+feat: 统一 AI 服务超时配置管理
+- 创建 server/utils/aiTimeout.ts 工具模块，统一管理所有 AI 调用的超时时间
+- 新增环境变量 AI_REQUEST_TIMEOUT（默认 180 秒）和 AI_SHORT_TIMEOUT（默认 30 秒）
+- 提供 createAIAbortController 和 formatTimeoutError 工具函数
+- 支持优先级：用户设置 > 环境变量 > 默认值
+- analysisService.ts 和 marketInsightService.ts 改用统一的超时配置
+
+fix: 修复深度阅读文章转需求文档超时问题
+- 将 AI 服务超时时间从 60 秒增加到 180 秒（3 分钟），适应深度阅读文章转需求的场景
+- max_tokens 改为从系统设置中的模型配置读取，支持不同模型的最大 token 限制
+- 优化超时错误提示，建议用户缩短文章内容或稍后重试
+- 根本原因：深度阅读的文章内容较长，AI 分析和生成需求文档需要更多时间
+
+feat: llmConfigManager 打印超时配置信息
+- updateConfig 方法新增超时配置日志输出
+- 显示默认超时和快速超时的具体秒数
+- 未配置时提示"使用环境变量或默认值"
+
 fix: 修复 Docker 容器中市场洞察样本报告文件找不到的问题
 - Dockerfile.debian 添加 `COPY --from=builder /app/docs ./docs`，确保镜像包含默认文档
 - docker-compose.yml 添加 `./docs:/app/docs` volume 挂载，支持运行时更新文档

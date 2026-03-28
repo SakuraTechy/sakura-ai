@@ -7,5 +7,9 @@ export interface LLMConfig {
   temperature: number;
   maxTokens: number;
   apiFormat?: 'openai' | 'ollama'; // API 格式：openai（默认）或 ollama
+  timeout?: {
+    default?: number; // 默认超时（毫秒），用于长时间任务
+    short?: number;   // 短超时（毫秒），用于快速分析
+  };
 }
 

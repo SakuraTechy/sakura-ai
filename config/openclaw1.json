@@ -22,24 +22,9 @@
     "providers": {
       "zcheap": {
         "baseUrl": "https://zcheap.ai/v1",
-        "apiKey": "sk-bggqRWY2Y2dOqncIslkd7JaRhT4rHm5s8Gnw1Tsr5cVdUcEk",
+        "apiKey": "xxxx",
         "api": "openai-completions",
         "models": [
-          {
-            "id": "claude-sonnet-4-6",
-            "name": "Claude Sonnet 4",
-            "api": "openai-completions",
-            "reasoning": true,
-            "input": ["text"],
-            "cost": {
-              "input": 0,
-              "output": 0,
-              "cacheRead": 0,
-              "cacheWrite": 0
-            },
-            "contextWindow": 204800,
-            "maxTokens": 131072
-          },
           {
             "id": "glm-4-7-251222",
             "name": "GLM-4.7",
@@ -67,9 +52,6 @@
       "models": {
         "zcheap/glm-4-7-251222": {
           "alias": "GLM"
-        },
-        "zcheap/claude-sonnet-4-6": {
-          "alias": "Claude"
         }
       },
       "workspace": "/home/node/.openclaw/workspace",
@@ -102,12 +84,14 @@
     "mode": "local",
     "bind": "lan",
     "controlUi": {
+      "allowedOrigins": ["*"],
       "dangerouslyAllowHostHeaderOriginFallback": true,
-      "allowInsecureAuth": true
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
     },
     "auth": {
       "mode": "token",
-      "token": "cd7c696a75f6966c3e79334ff709952ae576f5b2633435eef4092c38bb801da7"
+      "token": "xxxxxxx"
     },
     "tailscale": {
       "mode": "off",

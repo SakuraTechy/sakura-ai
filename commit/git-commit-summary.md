@@ -1,6 +1,82 @@
 # Git 提交总结
 
+## 2026-03-24
+fix: 修复文件预览编辑后 AI 生成未使用编辑内容，onChange 同步更新 inputText
+
+style: 文件预览按钮根据预览状态切换睁眼/闭眼图标，MultiFileUpload 新增 previewingFileName prop，RequirementAnalysis 传入当前预览文件名
+
+feat: 需求分析页面文件预览支持点击切换开关，已预览状态下点击同一文件可关闭预览
+
+fix: 修复需求分析页面 Step 1 无法滚动到文件预览区域，外层容器改为 overflow-y-auto，预览区域改为 flex-shrink-0，确保可以滚动查看完整内容
+
+fix: 修复需求分析页面 Step 1 文件预览区域内容无法滚动，外层容器 flex + overflow-hidden，内容区域 flex-1 min-h-0，标题等区域 flex-shrink-0
+
+fix: 修复需求分析页面 Step 1 文件预览区域布局异常，预览区域从 grid 内移到外部独立显示，自适应剩余空间，解决与右侧输入区域重叠问题
+
+fix: 修复需求分析页面 Step 1 和 Step 3 布局问题，Step 1 自适应撑满高度（包括全屏），文件预览区域限高避免撑开页面，Step 3 关联项目和版本宽度调整为 25%+25%，关联项目设为必填
+
+fix: 修复需求分析页面底部按钮显示，JS 动态计算容器高度，监听全屏和窗口变化，所有 Step 内容区 flex-1 撑满
+
+fix: 修复需求分析AI生成超时未使用系统设置配置，LLMConfig 新增 timeout 字段，updateConfig 写入 timeout
+
 ## 2026-03-23
+style: 摘要超出省略时 hover 显示完整内容（Tooltip），两处同步更新并补充导入
+
+style: 加强加载动画视觉效果，🤖图标+加粗标题+蓝色骨架屏+蓝色提示文字，两处统一更新
+
+fix: 修复深读/行业资讯加载动画不显示，handleDeepRead 增加 setDeepReadContent(null)，加载判断提到最外层
+
+feat: 深读/行业资讯查看摘要区域加入 AI 分析加载动画（跳动点+骨架屏），ContentViewerModal 新增 summaryLoading prop
+
+fix: 优化深读摘要降级方案，新增 extractFallbackSummary 按句截断，最多 500 字符，替换原 slice(0,240) 硬截断
+
+style: 优化 generateArticleSummary 提示词，3-5 句摘要、保留关键信息、扩展输入至 5000 字符、max_tokens 提升至 400
+
+feat: 深读摘要改为 AI 提炼，新增 generateArticleSummary 方法，失败时降级截取文本
+
+style: 市场洞察深读生成成功/失败改为弹窗提示，与行业资讯保持一致
+
+feat: 行业资讯一键转需求文档添加 AI 进度弹窗，复用市场洞察深读体验
+
+style: ContentViewerModal 优化：摘要 line-clamp、元信息移顶部、footer 间距收紧、抓取信息与按钮同行
+
+feat: 行业资讯页面集成 ContentViewerModal，支持深度阅读、多预览模式、一键转需求文档
+
+feat: 创建统一内容查看弹窗组件 ContentViewerModal，支持 Markdown/纯文本/HTML 多模式预览
+
+
+- 移除重复的初始化日志，只在关键节点打印
+- 合并配置更新日志到一次输出，提高可读性
+- 超时配置显示具体的秒数值（如"默认=180秒, 快速=30秒"）
+- 移除后端设置服务和数据库加载的冗余日志
+
+fix: 修复系统设置页面超时配置无法保存的问题
+- Settings.tsx 的 handleFieldChange 函数新增对 timeout. 开头字段的处理逻辑
+- 支持正确处理 timeout.default 和 timeout.short 嵌套字段的更新
+- 确保超时配置能正确保存到 formData 状态中
+
+feat: 系统设置页面添加 AI 超时配置界面
+- Settings.tsx 添加超时配置表单（默认超时和快速超时）
+- LLMSettings 接口新增 timeout 字段支持超时配置
+- 用户可在系统设置中自定义 AI 请求超时时间
+- 支持分别配置长时间任务和快速分析任务的超时
+
+feat: 统一 AI 服务超时配置管理
+- 创建 aiTimeout.ts 工具模块，统一管理所有 AI 调用的超时时间
+- 新增环境变量 AI_REQUEST_TIMEOUT 和 AI_SHORT_TIMEOUT
+- 支持通过环境变量和用户设置灵活调整超时时间
+- marketInsightService.ts 改用统一的超时配置
+
+feat: llmConfigManager 打印超时配置信息
+- updateConfig 方法新增超时配置日志输出
+- 显示默认超时和快速超时的具体秒数
+- 未配置时提示"使用环境变量或默认值"
+
+fix: 修复深度阅读文章转需求文档超时问题
+- 将 AI 服务超时时间从 60 秒增加到 180 秒（3 分钟）
+- max_tokens 改为从系统设置中的模型配置读取，支持不同模型的最大 token 限制
+- 优化超时错误提示，建议用户缩短文章内容或稍后重试
+
 fix: 修复 Docker 容器中市场洞察样本报告文件找不到的问题
 - Dockerfile.debian 添加 `COPY --from=builder /app/docs ./docs`，确保镜像包含默认文档
 - docker-compose.yml 添加 `./docs:/app/docs` volume 挂载，支持运行时更新文档

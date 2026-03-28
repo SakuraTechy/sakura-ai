@@ -54,7 +54,6 @@ export class LLMConfigManager {
       try {
         const module = await import('../../server/services/settingsService.js');
         this.backendSettingsService = module.BackendSettingsService.getInstance();
-        console.log('✅ 后端设置服务已加载');
       } catch (error) {
         console.warn('⚠️ 无法加载后端设置服务，回退到前端服务:', error);
         return settingsService;
@@ -69,8 +68,6 @@ export class LLMConfigManager {
     if (this.isInitialized) return;
 
     try {
-      console.log('🔧 初始化LLM配置管理器...');
-      
       // 🔥 根据环境获取正确的设置服务
       const service = await this.getSettingsService();
       const settings = await service.getLLMSettings();
@@ -172,7 +169,8 @@ export class LLMConfigManager {
         model: settings.customModelName || modelInfo.openRouterModel, // 优先使用自定义模型名称
         temperature: settings.customConfig?.temperature ?? modelInfo.defaultConfig.temperature,
         maxTokens: settings.customConfig?.maxTokens ?? modelInfo.defaultConfig.maxTokens,
-        apiFormat: modelInfo.apiFormat || 'openai' // 🔥 API 格式（默认 openai）
+        apiFormat: modelInfo.apiFormat || 'openai', // 🔥 API 格式（默认 openai）
+        timeout: settings.timeout // 🔥 保存用户自定义超时配置
       };
 
       // 更新当前配置
@@ -189,12 +187,16 @@ export class LLMConfigManager {
         timestamp: new Date()
       });
 
+      // 打印配置更新成功的日志（合并所有信息到一次输出）
+      const timeoutInfo = settings.timeout 
+        ? `默认=${Math.round(settings.timeout.default! / 1000)}秒, 快速=${Math.round(settings.timeout.short! / 1000)}秒`
+        : '使用环境变量或默认值';
+      
       console.log(`✅ LLM配置更新成功: ${modelInfo.name}`);
-      console.log(`   API端点: ${newConfig.baseUrl} (来源: ${settings.baseUrl ? 'settings' : 'modelInfo'})`);
-      console.log(`   模型: ${newConfig.model} (来源: ${settings.customModelName ? 'customModelName' : 'openRouterModel'})`);
-      console.log(`   温度: ${newConfig.temperature}`);
-      console.log(`   最大令牌: ${newConfig.maxTokens}`);
-      console.log(`   API密钥: ${newConfig.apiKey ? '已设置' : '未设置（本地模型）'}`);
+      console.log(`   API端点: ${newConfig.baseUrl}`);
+      console.log(`   模型: ${newConfig.model}`);
+      console.log(`   温度: ${newConfig.temperature}, 最大令牌: ${newConfig.maxTokens}`);
+      console.log(`   超时配置: ${timeoutInfo}`);
       
     } catch (error) {
       console.error('❌ 更新LLM配置失败:', error);

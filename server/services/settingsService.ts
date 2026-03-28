@@ -15,8 +15,6 @@ export class BackendSettingsService {
     // 🔥 使用依赖注入的数据库服务
     this.databaseService = databaseService || DatabaseService.getInstance();
     this.prisma = this.databaseService.getClient();
-
-    console.log(`🗄️ BackendSettingsService已连接到数据库服务`);
   }
 
   // 单例模式（支持依赖注入）
@@ -36,12 +34,6 @@ export class BackendSettingsService {
   public async getLLMSettings(): Promise<LLMSettings> {
     try {
       const settings = await this.loadSettingsFromDB();
-      console.log('📖 [后端] 从数据库加载LLM设置:', {
-        selectedModelId: settings.llm.selectedModelId,
-        baseUrl: settings.llm.baseUrl,
-        customModelName: settings.llm.customModelName,
-        hasApiKey: !!settings.llm.apiKey
-      });
       return settings.llm;
     } catch (error) {
       console.warn('Failed to load LLM settings from database, using defaults:', error);
@@ -80,11 +72,8 @@ export class BackendSettingsService {
       // 保存到数据库
       await this.saveSettingsToDB(currentSettings);
       
-      console.log('✅ LLM settings saved successfully to database:', {
-        modelId: settingsWithBaseUrl.selectedModelId,
-        baseUrl: settingsWithBaseUrl.baseUrl,
-        hasApiKey: !!settingsWithBaseUrl.apiKey
-      });
+      // 只在保存成功后打印一次简洁的日志
+      console.log('✅ [后端] LLM配置已保存');
     } catch (error: any) {
       console.error('❌ Failed to save LLM settings:', error);
       
@@ -187,16 +176,12 @@ export class BackendSettingsService {
 
       if (settingsRecord && settingsRecord.value) {
         const parsed = JSON.parse(settingsRecord.value);
-        console.log('🗄️ [后端] 数据库原始数据:', JSON.stringify(parsed.llm, null, 2));
-        const merged = this.mergeWithDefaults(parsed);
-        console.log('🔀 [后端] 合并后数据:', JSON.stringify(merged.llm, null, 2));
-        return merged;
+        return this.mergeWithDefaults(parsed);
       }
     } catch (error) {
       console.warn('Failed to load settings from database:', error);
     }
 
-    console.log('⚠️ [后端] 使用默认设置');
     return this.getDefaultSettings();
   }
 

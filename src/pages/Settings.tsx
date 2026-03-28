@@ -242,6 +242,16 @@ export function Settings() {
           [configField]: value
         }
       }));
+    } else if (field.startsWith('timeout.')) {
+      // 处理 timeout 嵌套字段
+      const timeoutField = field.replace('timeout.', '');
+      setFormData(prev => ({
+        ...prev,
+        timeout: {
+          ...prev.timeout,
+          [timeoutField]: value
+        }
+      }));
     } else {
       setFormData(prev => ({
         ...prev,
@@ -977,6 +987,39 @@ export function Settings() {
                 <p className="mt-1 text-sm text-red-600">{getFieldError('maxTokens')}</p>
               )}
               <p className="mt-1 text-sm text-gray-500">控制AI响应的最大长度</p>
+            </div>
+          </div>
+
+          {/* AI 请求超时配置 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                默认超时 (秒)
+              </label>
+              <input
+                type="number"
+                min="30"
+                max="600"
+                value={Math.round((formData.timeout?.default || 180000) / 1000)}
+                onChange={(e) => handleFieldChange('timeout.default', parseInt(e.target.value) * 1000)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">用于需求文档生成等长时间任务（默认 180 秒）</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                快速超时 (秒)
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="120"
+                value={Math.round((formData.timeout?.short || 30000) / 1000)}
+                onChange={(e) => handleFieldChange('timeout.short', parseInt(e.target.value) * 1000)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">用于快速分析任务（默认 30 秒）</p>
             </div>
           </div>
 

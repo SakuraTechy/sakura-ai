@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload as UploadIcon, FileText, Bot, Save, ArrowRight, ArrowLeft,
@@ -61,6 +61,46 @@ export function RequirementAnalysis() {
   const [selectedProjectVersionId, setSelectedProjectVersionId] = useState<number | undefined>();
   const [projects, setProjects] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // 动态计算容器高度
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState('calc(100vh - 180px)');
+
+  useEffect(() => {
+    const calculateHeight = () => {
+      // 获取视口高度
+      const vh = window.innerHeight;
+      // 检查是否全屏
+      const isFullscreen = document.fullscreenElement !== null || document.querySelector('.app-fullscreen') !== null;
+      
+      let height;
+      if (isFullscreen) {
+        // 全屏模式：100vh - main的padding (24px + 16px) = vh - 40
+        // 但实际上全屏时顶栏和TabBar隐藏，main占满整个视口
+        height = vh - 40;
+      } else {
+        // 普通模式：100vh - 顶栏(80px) - TabBar(48px) - main的padding(24px + 16px) = vh - 168
+        height = vh - 168;
+      }
+      
+      console.log(`[RequirementAnalysis] 高度计算: vh=${vh}, isFullscreen=${isFullscreen}, height=${height}`);
+      setContainerHeight(`${height}px`);
+    };
+
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    document.addEventListener('fullscreenchange', calculateHeight);
+    
+    // 监听 app-fullscreen 类变化
+    const observer = new MutationObserver(calculateHeight);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      window.removeEventListener('resize', calculateHeight);
+      document.removeEventListener('fullscreenchange', calculateHeight);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     loadProjects();
@@ -179,6 +219,12 @@ export function RequirementAnalysis() {
 
   // 上传后文件预览（复用 AI 生成需求页面的交互）
   const handlePreviewFile = async (file?: File) => {
+    // 如果已经在预览状态，点击同一个文件则关闭预览
+    if (showFilePreview && file && filePreviewResult?.fileName === file.name) {
+      handleClearPreview();
+      return;
+    }
+
     let targetFile = file;
 
     if (!targetFile) {
@@ -321,7 +367,7 @@ export function RequirementAnalysis() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div ref={containerRef} className="flex flex-col gap-3" style={{ height: containerHeight, maxHeight: containerHeight }}>
       {/* 页面标题 */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">需求分析</h1>
@@ -339,7 +385,7 @@ export function RequirementAnalysis() {
 
       {/* Step 内容 */}
       <motion.div
-        className="min-h-0 flex-1"
+        className="flex-1 min-h-0 max-h-full overflow-y-auto"
         key={currentStep}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -347,29 +393,38 @@ export function RequirementAnalysis() {
       >
         {/* Step 1: 上传/输入 */}
         {currentStep === 0 && (
-          <div className="bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-5">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-full bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-6 flex flex-col overflow-y-auto">
+            {/* 上传和输入区域 */}
+            <div className={clsx(
+              "grid grid-cols-1 lg:grid-cols-2 gap-6",
+              (previewLoading || showFilePreview) ? "flex-shrink-0" : "flex-1 min-h-0"
+            )}>
               {/* 文件上传 */}
-              <div className="flex flex-col">
-                <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
+              <div className="flex flex-col min-h-0">
+                <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2 flex-shrink-0">
                   <UploadIcon className="h-4 w-4 text-purple-500" />
                   上传文档
                 </h3>
-                <MultiFileUpload
-                  onFilesChange={handleFilesChange}
-                  onPreviewFile={handlePreviewFile}
-                  onClearPreview={handleClearPreview}
-                  hidePageName
-                  maxFiles={MAX_FILES}
-                  maxSize={MAX_FILE_SIZE}
-                />
+                <div className={clsx(
+                  (previewLoading || showFilePreview) ? "" : "flex-1 min-h-0 overflow-y-auto"
+                )}>
+                  <MultiFileUpload
+                    onFilesChange={handleFilesChange}
+                    onPreviewFile={handlePreviewFile}
+                    onClearPreview={handleClearPreview}
+                    hidePageName
+                    previewingFileName={showFilePreview ? filePreviewResult?.fileName : undefined}
+                    maxFiles={MAX_FILES}
+                    maxSize={MAX_FILE_SIZE}
+                  />
+                </div>
               </div>
 
               {/* 分隔线 */}
               <div className="hidden lg:flex items-stretch relative">
                 {/* <div className="absolute left-0 top-0 w-px h-full bg-[var(--color-border)]" /> */}
-                <div className="flex flex-col flex-1 h-full pb-1">
-                  <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
+                <div className="flex flex-col flex-1 min-h-0">
+                  <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2 flex-shrink-0">
                     <Edit3 className="h-4 w-4 text-purple-500" />
                     直接输入文本
                   </h3>
@@ -402,29 +457,30 @@ export function RequirementAnalysis() {
               </div>
             </div>
 
-            {previewLoading && (
-              <div className="mt-3">
-                <AIThinking
-                  title="正在读取文件内容..."
-                  subtitle="正在提取文件中的文本内容，请稍候"
-                  progressItems={[
-                    { label: '读取文件数据...', status: 'processing' },
-                    { label: '解析文件格式', status: 'pending' },
-                    { label: '提取文本内容', status: 'pending' }
-                  ]}
-                />
-              </div>
-            )}
+            {/* 文件预览区域 - 独立区域，在 grid 之外 */}
+            {(previewLoading || (showFilePreview && filePreviewResult && !previewLoading)) && (
+              <div className="mt-6 flex-shrink-0">
+                {previewLoading && (
+                  <AIThinking
+                    title="正在读取文件内容..."
+                    subtitle="正在提取文件中的文本内容，请稍候"
+                    progressItems={[
+                      { label: '读取文件数据...', status: 'processing' },
+                      { label: '解析文件格式', status: 'pending' },
+                      { label: '提取文本内容', status: 'pending' }
+                    ]}
+                  />
+                )}
 
-            {showFilePreview && filePreviewResult && !previewLoading && (
-              <motion.div
-                className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-200/60 shadow-lg mt-6"
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                  <div className="mb-0">
-                    <h4 className="flex items-center gap-3 text-xl font-bold text-blue-900 mb-2">
+                {showFilePreview && filePreviewResult && !previewLoading && (
+                  <motion.div
+                    className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-200/60 shadow-lg flex flex-col"
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                  <div className="flex flex-col">
+                    <h4 className="flex items-center gap-3 text-xl font-bold text-blue-900 mb-2 flex-shrink-0">
                       <span className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-lg flex-shrink-0">
                         {filePreviewResult.isScannedPdf ? (
                           <AlertTriangle className="w-7 h-7 text-white" />
@@ -438,7 +494,7 @@ export function RequirementAnalysis() {
                           : '文件读取成功！'}
                       </span>
                     </h4>
-                    <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="grid grid-cols-3 gap-3 mb-3 flex-shrink-0">
                       <div className="text-center bg-white/60 rounded-lg p-3 border border-blue-200/40">
                         <div className="text-sm text-blue-600 font-medium mb-1">文件名</div>
                         <div className="text-xs text-gray-700 font-semibold truncate">{filePreviewResult.fileName}</div>
@@ -456,7 +512,7 @@ export function RequirementAnalysis() {
                     {filePreviewResult.formatWarnings && filePreviewResult.formatWarnings.length > 0 && (
                       <div
                       className={clsx(
-                          'rounded-lg p-3 mb-3 border-2',
+                          'rounded-lg p-3 mb-3 border-2 flex-shrink-0',
                           filePreviewResult.isScannedPdf
                             ? 'bg-red-50 border-red-300'
                             : 'bg-orange-50 border-orange-300'
@@ -488,7 +544,7 @@ export function RequirementAnalysis() {
                     )}
 
                     {(filePreviewResult.hasImages || filePreviewResult.fileType === 'DOCX') && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 flex-shrink-0">
                         <p className="text-xs text-blue-800 font-medium flex items-start gap-2">
                           <span className="text-blue-500 mt-0.5">💡</span>
                           <span>
@@ -499,7 +555,7 @@ export function RequirementAnalysis() {
                       </div>
                     )}
 
-                    <div className="bg-white rounded-lg border border-blue-200 p-4 mb-0">
+                    <div className="bg-white rounded-lg border border-blue-200 p-4 flex flex-col">
                       <div className="flex items-center justify-between mb-3 flex-shrink-0">
                         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                           <FileText className="w-4 h-4 text-blue-600" />
@@ -569,7 +625,7 @@ export function RequirementAnalysis() {
 
                       <div
                         className="bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-auto select-text"
-                        style={{ maxHeight: 'min(40dvh, 400px)' }}
+                        style={{ maxHeight: '400px' }}
                       >
                         {filePreviewMode === 'preview' ? (
                           (filePreviewResult.fileType === 'Markdown' ||
@@ -604,14 +660,12 @@ export function RequirementAnalysis() {
                           <textarea
                             value={filePreviewResult.content}
                             onChange={(e) => {
+                              const newContent = e.target.value;
                               setFilePreviewResult(prev =>
-                                prev
-                                  ? {
-                                      ...prev,
-                                      content: e.target.value
-                                    }
-                                  : null
+                                prev ? { ...prev, content: newContent } : null
                               );
+                              // 同步更新 inputText，确保 AI 生成使用编辑后的内容
+                              setInputText(newContent);
                             }}
                             className="w-full h-full min-h-[350px] bg-white border border-gray-300 rounded-lg p-3 text-xs text-gray-700 font-mono resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                             placeholder="在此编辑文件内容..."
@@ -621,27 +675,16 @@ export function RequirementAnalysis() {
                       </div>
                     </div>
                   </div>
-              </motion.div>
-            )}
-
-            {/* 预览 */}
-            {/* {inputText && (
-              <div className="mt-5 p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border)]">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-[var(--color-text-secondary)]">内容预览</h4>
-                  <span className="text-xs text-[var(--color-text-secondary)]">{inputText.length.toLocaleString()} 字</span>
-                </div>
-                <p className="text-sm text-[var(--color-text-primary)] whitespace-pre-wrap leading-relaxed">
-                  {inputText.substring(0, 500)}{inputText.length > 500 ? '...' : ''}
-                </p>
+                  </motion.div>
+                )}
               </div>
-            )} */}
+            )}
           </div>
         )}
 
         {/* Step 2: AI 生成 */}
         {currentStep === 1 && (
-          <div className="bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3 space-y-2">
+          <div className="h-full bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3 space-y-2 flex flex-col">
             {/* 右侧：当前模型 */}
             <div className="w-full flex items-center justify-end">
               <Tooltip title="在系统设置中更改 AI 模型">
@@ -671,7 +714,7 @@ export function RequirementAnalysis() {
 
             {/* 生成结果 */}
             {generatedContent && !generating && (
-              <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col border border-[var(--color-border)] rounded-lg overflow-hidden">
                 {/* 右上角：预览/编辑切换 */}
                 <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]">
                   <div className="text-sm font-medium text-[var(--color-text-primary)]">
@@ -708,12 +751,12 @@ export function RequirementAnalysis() {
                   <TextArea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="!border-0 !rounded-none"
-                    autoSize={{ minRows: 16, maxRows: 30 }}
+                    className="!border-0 !rounded-none flex-1 min-h-0"
+                    autoSize={false}
                   />
                 ) : (
                   <div
-                    className="prose prose-sm max-w-none dark:prose-invert p-6 overflow-y-auto max-h-[min(60dvh,600px)]"
+                    className="flex-1 min-h-0 prose prose-sm max-w-none dark:prose-invert p-6 overflow-y-auto"
                     dangerouslySetInnerHTML={{ __html: renderedMarkdown as string }}
                   />
                 )}
@@ -735,9 +778,10 @@ export function RequirementAnalysis() {
 
         {/* Step 3: 保存 */}
         {currentStep === 2 && (
-          <div className="bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div>
+          <div className="h-full bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-4 space-y-3 flex flex-col">
+            <div className="flex items-end gap-4">
+              {/* 需求文档标题 */}
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   需求文档标题 <span className="text-red-500">*</span>
                 </label>
@@ -748,22 +792,24 @@ export function RequirementAnalysis() {
                   style={{ height: '40px' }}
                 />
               </div>
-              <div>
+              
+              {/* 关联项目 */}
+              <div style={{ width: '25%' }}>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  关联项目
+                  关联项目 <span className="text-red-500">*</span>
                 </label>
                 <Select
                   value={selectedProject}
                   onChange={(value) => handleProjectChange(value !== undefined ? Number(value) : undefined)}
                   placeholder="选择关联项目"
-                  allowClear
                   size="large"
                   style={{ width: '100%' }}
                   options={projects.map(p => ({ label: p.name, value: p.id }))}
                 />
               </div>
 
-              <div>
+              {/* 关联版本 */}
+              <div style={{ width: '25%' }}>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   关联版本 <span className="text-red-500">*</span>
                 </label>
@@ -774,7 +820,6 @@ export function RequirementAnalysis() {
                   size="large"
                   style={{ width: '100%' }}
                   disabled={!selectedProject || selectedProjectVersions.length === 0}
-                  allowClear
                   options={selectedProjectVersions.map(v => ({
                     label: `${v.version_name ?? ''}${v.version_code ? ` (${v.version_code})` : ''}`,
                     value: v.id
@@ -784,12 +829,12 @@ export function RequirementAnalysis() {
             </div>
 
             {/* 预览生成的内容 */}
-            <div>
+            <div className="flex-1 min-h-0 flex flex-col">
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 文档内容预览
               </label>
               <div
-                className="prose prose-sm max-w-none dark:prose-invert p-5 border border-[var(--color-border)] rounded-lg overflow-y-auto bg-[var(--color-bg-secondary)] max-h-[min(45dvh,450px)]"
+                className="flex-1 min-h-0 prose prose-sm max-w-none dark:prose-invert p-5 border border-[var(--color-border)] rounded-lg overflow-y-auto bg-[var(--color-bg-secondary)]"
                 dangerouslySetInnerHTML={{ __html: renderedMarkdown as string }}
               />
             </div>
@@ -798,7 +843,7 @@ export function RequirementAnalysis() {
       </motion.div>
 
       {/* 底部导航 */}
-      <div className="flex flex-wrap justify-between items-center gap-3 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3">
+      <div className="flex-shrink-0 flex flex-wrap justify-between items-center gap-3 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3">
         <motion.button
           onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
           disabled={currentStep === 0}
@@ -870,7 +915,7 @@ export function RequirementAnalysis() {
         ) : (
           <motion.button
             onClick={handleSave}
-            disabled={saving || !title.trim() || !selectedProjectVersionId}
+            disabled={saving || !title.trim() || !selectedProject || !selectedProjectVersionId}
             className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             whileHover={{ scale: saving ? 1 : 1.02 }}
             whileTap={{ scale: 0.98 }}

@@ -1,8 +1,8 @@
-import React, { useCallback, useState } from 'react';
+﻿import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Modal } from 'antd';
-import { Upload, FileText, FileCode, Folder, X, CheckCircle, AlertCircle, Eye } from 'lucide-react';
+import { Upload, FileText, FileCode, Folder, X, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MAX_FILE_SIZE, MAX_FILES } from '../../config/upload';
 
@@ -21,6 +21,7 @@ interface MultiFileUploadProps {
   onPreviewFile?: (file: File) => void; // 🆕 预览文件回调
   onClearPreview?: () => void; // 🆕 清空预览回调
   hidePageName?: boolean; // 🆕 是否隐藏“页面名称”输入框
+  previewingFileName?: string; // 当前正在预览的文件名（用于切换睁眼/闭眼图标）
   maxFiles?: number;
   maxSize?: number; // in bytes
 }
@@ -39,6 +40,7 @@ export function MultiFileUpload({
   onPreviewFile,
   onClearPreview,
   hidePageName = false,
+  previewingFileName, // 🆕 接收当前预览的文件名
   maxFiles = MAX_FILES, // 使用统一配置
   maxSize = MAX_FILE_SIZE // 使用统一配置 (AI模型最佳处理大小)
 }: MultiFileUploadProps) {
@@ -376,7 +378,7 @@ export function MultiFileUpload({
       <div
         {...getRootProps()}
         className={clsx(
-          "relative border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer",
+          "relative border-2 border-dashed rounded-2xl p-9 transition-all duration-300 cursor-pointer",
           "bg-gradient-to-br hover:shadow-xl",
           isDragActive
             ? "border-blue-500 bg-blue-50 shadow-lg scale-[1.02]"
@@ -542,9 +544,13 @@ export function MultiFileUpload({
                         onPreviewFile(item.file);
                       }}
                       className="p-1.5 rounded-md text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-all"
-                      title="预览文件内容"
+                      title={previewingFileName === item.file.name ? "关闭预览" : "预览文件内容"}
                     >
-                      <Eye className="w-5 h-5" />
+                      {previewingFileName === item.file.name ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
                     </button>
                   )}
                   {/* 删除按钮 */}

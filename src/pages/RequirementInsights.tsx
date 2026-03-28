@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, Trash2, ExternalLink, Calendar, Eye, FileUp
 } from 'lucide-react';
-import { Modal, Input, Select, Pagination, Spin, Empty, Tag as AntTag, Upload as AntUpload, Tooltip } from 'antd';
+import { Modal, Form, Input, Select, Pagination, Spin, Empty, Tag as AntTag, Upload as AntUpload, Tooltip, message } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
-import { marked } from 'marked';
 import { insightsService, InsightsArticle } from '../services/insightsService';
 import { useAuth } from '../contexts/AuthContext';
 import { showToast } from '../utils/toast';
@@ -12,6 +11,10 @@ import {
   MarketInsightQuickCreate,
   INDUSTRY_NEWS_QUICK_CREATE_COPY,
 } from '../components/marketInsight/MarketInsightQuickCreate';
+import { ContentViewerModal, ContentDetail } from '../components/common/ContentViewerModal';
+import { AIThinking } from '../components/ai-generator/AIThinking';
+import { getApiBaseUrl } from '../config/api';
+import { getProjectVersions } from '../services/systemService';
 
 const CATEGORY_COLORS: Record<string, string> = {
   '人工智能': 'blue',
@@ -60,6 +63,10 @@ export function RequirementInsights() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [currentArticle, setCurrentArticle] = useState<InsightsArticle | null>(null);
+  const [viewerContent, setViewerContent] = useState<ContentDetail | null>(null);
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [generateState, setGenerateState] = useState<'idle' | 'generating' | 'success' | 'failed'>('idle');
 
   const [importLoading, setImportLoading] = useState(false);
   const [selectedArticleIds, setSelectedArticleIds] = useState<number[]>([]);
@@ -134,11 +141,50 @@ export function RequirementInsights() {
   const handleViewArticle = async (article: InsightsArticle) => {
     setDetailModalOpen(true);
     setDetailLoading(true);
+    setCurrentArticle(article);
+    setViewerContent(null);
+    
     try {
-      const detail = await insightsService.getArticleDetail(article.id);
-      setCurrentArticle(detail);
+      // 使用深度阅读 API 获取文章完整内容
+      const deepReadResult = await insightsService.deepReadByUrl(article.url, article.title);
+      
+      // 更新当前文章信息
+      setCurrentArticle(article);
+      
+      // 转换为 ContentDetail 格式
+      setViewerContent({
+        title: deepReadResult.title || article.title,
+        summary: deepReadResult.summary || article.summary || undefined,
+        sourceUrl: deepReadResult.sourceUrl || article.url,
+        contentText: deepReadResult.contentText,
+        contentMarkdown: deepReadResult.contentMarkdown,
+        contentHtml: deepReadResult.contentHtml,
+        contentRawHtml: deepReadResult.contentRawHtml,
+        extractionMeta: deepReadResult.extractionMeta,
+      });
     } catch (error: any) {
-      showToast.error('获取文章详情失败');
+      showToast.error('获取文章内容失败：' + (error.message || '未知错误'));
+      
+      // 失败时使用数据库中的内容作为后备
+      try {
+        const detail = await insightsService.getArticleDetail(article.id);
+        setCurrentArticle(detail);
+        
+        setViewerContent({
+          title: detail.title,
+          summary: detail.summary || undefined,
+          sourceUrl: detail.url,
+          contentText: detail.content,
+          contentMarkdown: detail.content,
+          extractionMeta: {
+            strategy: getSourceConfig(detail.source).label + '（数据库缓存）',
+            durationMs: undefined,
+            errorMessage: '深度阅读失败，显示数据库缓存内容',
+          },
+        });
+      } catch (fallbackError: any) {
+        showToast.error('获取文章详情失败');
+      }
     } finally {
       setDetailLoading(false);
     }
@@ -215,9 +261,33 @@ export function RequirementInsights() {
     });
   };
 
-  const renderedMarkdown = currentArticle?.content
-    ? marked(currentArticle.content, { breaks: true })
-    : '';
+  const handleCloseViewer = () => {
+    setDetailModalOpen(false);
+    setCurrentArticle(null);
+    setViewerContent(null);
+    setConvertLoading(false);
+    setGenerateState('idle');
+  };
+
+  // 点击"一键转需求文档"按钮，先弹出选项弹窗
+  const handleConvertToRequirement = () => {
+    setConvertModalOpen(true);
+  };
+
+  // 确认转换，执行 AI 生成
+  const handleDoGenerate = async (params: { title: string; projectId?: number; projectVersionId?: number }) => {
+    if (!currentArticle) return;
+    setConvertModalOpen(false);
+    setGenerateState('generating');
+    try {
+      await insightsService.generateRequirementFromArticle(currentArticle.id, params);
+      setGenerateState('success');
+      message.success('已一键生成需求文档');
+    } catch (err: any) {
+      setGenerateState('failed');
+      message.error(err.message || '生成失败，请稍后重试');
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
@@ -444,45 +514,221 @@ export function RequirementInsights() {
         )}
       </div>
 
-      {/* 文章详情弹窗 */}
-      <Modal
+      {/* 文章详情弹窗 - 使用统一的 ContentViewerModal 组件 */}
+      <ContentViewerModal
         open={detailModalOpen}
-        onCancel={() => { setDetailModalOpen(false); setCurrentArticle(null); }}
-        footer={null}
-        width={800}
-        title={
-          currentArticle ? (
-            <div className="pr-8">
-              <h3 className="text-lg font-semibold">{currentArticle.title}</h3>
-              <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
-                <AntTag color={getCategoryColor(currentArticle.category)}>{currentArticle.category}</AntTag>
-                <span>{formatDate(currentArticle.published_at)}</span>
-                <a
-                  href={currentArticle.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600 flex items-center gap-1"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  原文链接
-                </a>
-              </div>
+        loading={detailLoading}
+        summaryLoading={detailLoading}
+        content={viewerContent}
+        onClose={handleCloseViewer}
+        showConvertButton={true}
+        convertButtonText="一键转需求文档"
+        convertLoading={convertLoading}
+        convertDisabled={!currentArticle || detailLoading}
+        onConvert={handleConvertToRequirement}
+        extraFooter={
+          currentArticle && (
+            <div className="flex items-center gap-3 text-sm text-gray-500">
+              <AntTag color={getCategoryColor(currentArticle.category)}>
+                {currentArticle.category}
+              </AntTag>
+              <AntTag color={getSourceConfig(currentArticle.source).color}>
+                {getSourceConfig(currentArticle.source).label}
+              </AntTag>
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5" />
+                {formatDate(currentArticle.published_at)}
+              </span>
+              <a
+                href={currentArticle.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-600 flex items-center gap-1"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                原文链接
+              </a>
             </div>
-          ) : '文章详情'
+          )
         }
+      />
+
+      {/* 转需求文档选项弹窗 */}
+      <ConvertToRequirementModal
+        open={convertModalOpen}
+        articleTitle={currentArticle?.title || ''}
+        onClose={() => setConvertModalOpen(false)}
+        onConvert={handleDoGenerate}
+      />
+
+      {/* AI 生成进度弹窗 */}
+      <Modal
+        open={generateState === 'generating'}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        keyboard={false}
+        centered
+        width={720}
+        onCancel={() => undefined}
       >
-        {detailLoading ? (
-          <div className="flex justify-center py-12">
-            <Spin size="large" />
-          </div>
-        ) : currentArticle ? (
-          <div
-            className="prose prose-sm max-w-none dark:prose-invert mt-4"
-            dangerouslySetInnerHTML={{ __html: renderedMarkdown as string }}
-          />
-        ) : null}
+        <AIThinking
+          title="AI 正在分析并生成需求文档"
+          subtitle="预计需要 30-90 秒，请耐心等待..."
+          progressItems={[
+            { label: '读取原始文本内容', status: 'processing' },
+            { label: 'AI分析结构和元素', status: 'pending' },
+            { label: '生成结构化的文档', status: 'pending' },
+          ]}
+        />
+      </Modal>
+
+      {/* 生成成功提示弹窗 */}
+      <Modal
+        open={generateState === 'success'}
+        title="需求文档生成成功"
+        onCancel={() => setGenerateState('idle')}
+        onOk={() => {
+          setGenerateState('idle');
+          window.open('/requirement-docs', '_blank', 'noopener,noreferrer');
+        }}
+        okText="前往需求管理"
+        cancelText="关闭"
+        centered
+      >
+        <p className="text-gray-600">需求文档已生成成功，可前往需求文档管理查看。</p>
+      </Modal>
+
+      {/* 生成失败提示弹窗 */}
+      <Modal
+        open={generateState === 'failed'}
+        title="需求文档生成失败"
+        onCancel={() => setGenerateState('idle')}
+        footer={[
+          <button key="close" onClick={() => setGenerateState('idle')} className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">
+            关闭
+          </button>,
+        ]}
+        centered
+      >
+        <p className="text-red-500">生成失败，请稍后重试。</p>
       </Modal>
     </div>
+  );
+}
+
+// ======================== 转需求文档弹窗 ========================
+
+function ConvertToRequirementModal({
+  open,
+  articleTitle,
+  onClose,
+  onConvert,
+}: {
+  open: boolean;
+  articleTitle: string;
+  onClose: () => void;
+  onConvert: (values: { title: string; projectId?: number; projectVersionId?: number }) => Promise<void>;
+}) {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectVersionsMap, setProjectVersionsMap] = useState<Record<number, Array<any>>>({});
+  const [versionLoading, setVersionLoading] = useState(false);
+  const selectedProjectId = Form.useWatch('projectId', form) as number | undefined;
+  const projectVersions: Array<any> = selectedProjectId
+    ? (projectVersionsMap[selectedProjectId] ?? [])
+    : [];
+
+  useEffect(() => {
+    if (open) {
+      form.setFieldsValue({ title: articleTitle });
+      loadProjects();
+    } else {
+      form.resetFields(['projectId', 'projectVersionId']);
+    }
+  }, [open, articleTitle, form]);
+
+  const loadProjects = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${getApiBaseUrl('/api')}/v1/systems`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data.data || []);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleProjectChange = async (projectId?: number) => {
+    form.setFieldsValue({ projectId, projectVersionId: undefined });
+    if (!projectId) return;
+    try {
+      setVersionLoading(true);
+      const versions = await getProjectVersions(projectId);
+      setProjectVersionsMap((prev) => ({ ...prev, [projectId]: versions || [] }));
+      const mainVersion = (versions || []).find((v: any) => v.is_main) ?? (versions || [])[0];
+      form.setFieldValue('projectVersionId', mainVersion?.id);
+    } catch {
+      setProjectVersionsMap((prev) => ({ ...prev, [projectId]: [] }));
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  const handleOk = async () => {
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+      await onConvert({ title: values.title, projectId: values.projectId, projectVersionId: values.projectVersionId });
+      onClose();
+    } catch (err: any) {
+      if (err.errorFields) return;
+      message.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="转化为需求文档"
+      open={open}
+      onCancel={onClose}
+      onOk={handleOk}
+      confirmLoading={loading}
+      okText="确认转化"
+      cancelText="取消"
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item label="需求文档标题" name="title" rules={[{ required: true, message: '请输入标题' }]}>
+          <Input />
+        </Form.Item>
+        <Form.Item label="关联项目" name="projectId">
+          <Select
+            placeholder="选择项目（可选）"
+            allowClear
+            options={projects.map((p: any) => ({ label: p.name, value: p.id }))}
+            onChange={(value) => handleProjectChange(value as number | undefined)}
+          />
+        </Form.Item>
+        <Form.Item label="关联版本" name="projectVersionId">
+          <Select
+            placeholder={selectedProjectId ? '选择版本（默认主线）' : '请先选择项目'}
+            allowClear
+            disabled={!selectedProjectId}
+            loading={versionLoading}
+            notFoundContent={selectedProjectId ? '暂无版本数据' : '请先选择项目'}
+            options={projectVersions.map((v: any) => ({
+              label: `${v.version_name}${v.is_main ? '（主线）' : ''}`,
+              value: v.id,
+            }))}
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 }
 

@@ -905,7 +905,7 @@ export function RequirementDocs() {
           }
         }}
         footer={null}
-        width={1200}
+        width={1300}
         centered
         styles={{
           content: {

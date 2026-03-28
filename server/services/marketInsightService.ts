@@ -1405,8 +1405,10 @@ ${articleList}`;
     ];
     logMarketInsightLLMPrompts('generateAIHighlights', model, messagesHighlights);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    // 使用统一的超时配置（短超时，适用于快速分析）
+    const { controller, timeout } = await import('../utils/aiTimeout.js').then(m => 
+      m.createAIAbortController('short', config.timeout)
+    );
 
     try {
       const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -1430,6 +1432,95 @@ ${articleList}`;
       return data.choices?.[0]?.message?.content?.trim() || '';
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * AI 摘要降级方案：按句截断，取前 3-5 句，最多 500 字符
+   * 优先按中文句号/问号/感叹号断句，避免硬截断导致语义不完整
+   */
+  private extractFallbackSummary(text: string, maxChars = 500): string {
+    if (!text) return '';
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    // 按中英文句末标点断句
+    const sentenceEnds = /[。！？!?]/g;
+    const sentences: string[] = [];
+    let last = 0;
+    let match: RegExpExecArray | null;
+    while ((match = sentenceEnds.exec(cleaned)) !== null) {
+      const sentence = cleaned.slice(last, match.index + 1).trim();
+      if (sentence) sentences.push(sentence);
+      last = match.index + 1;
+      if (sentences.join('').length >= maxChars) break;
+    }
+    // 若断句结果太少（如英文文章），直接按字符截断到最近空格
+    if (sentences.length === 0 || sentences.join('').length < 30) {
+      const raw = cleaned.slice(0, maxChars);
+      const lastSpace = raw.lastIndexOf(' ');
+      return lastSpace > maxChars * 0.7 ? raw.slice(0, lastSpace) : raw;
+    }
+    let result = '';
+    for (const s of sentences) {
+      if (result.length + s.length > maxChars) break;
+      result += s;
+    }
+    return result || sentences[0].slice(0, maxChars);
+  }
+
+  private async generateArticleSummary(title: string, text: string): Promise<string> {
+    try {
+      const config = await this.getSafeLLMConfig();
+      const { baseUrl, apiKey, model } = config;
+      if (!baseUrl || !apiKey) return '';
+
+      const snippet = text.slice(0, 5000);
+      const messages = [
+        {
+          role: 'system' as const,
+          content: `你是专业的行业资讯摘要助手。请根据文章标题和正文，用3-5句流畅的中文生成一段高质量摘要。
+
+【摘要要求】
+- 提炼文章最核心的观点、事件或结论
+- 如涉及具体数据、政策名称、产品/公司名称，应保留关键信息
+- 如有明确的影响或意义，简要说明
+- 语言简洁专业，避免口语化表达
+- 不要重复标题内容，不要使用"本文"、"文章"等指代词
+- 直接输出摘要正文，不要任何前缀、标签或解释`,
+        },
+        {
+          role: 'user' as const,
+          content: `文章标题：${title}\n\n正文节选：\n${snippet}`,
+        },
+      ];
+
+      const { controller, timeout } = await import('../utils/aiTimeout.js').then(m =>
+        m.createAIAbortController('short', config.timeout)
+      );
+
+      try {
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.3,
+            max_tokens: 600,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return '';
+        const data = await response.json() as any;
+        return data.choices?.[0]?.message?.content?.trim() || '';
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      return '';
     }
   }
 
@@ -1830,9 +1921,19 @@ ${report.content}`;
       const contentMarkdown = this.toMarkdown(extracted.html);
       const images = this.collectImages(extracted.html, url);
 
+      const title = extracted.title || fallback?.fallbackTitle || '未命名文章';
+      // 用 AI 提炼摘要，失败时降级到按句截断的正文前段
+      let summary = fallback?.fallbackSummary || this.extractFallbackSummary(extracted.text);
+      try {
+        const aiSummary = await this.generateArticleSummary(title, extracted.text);
+        if (aiSummary) summary = aiSummary;
+      } catch {
+        // 降级，保持按句截断的摘要
+      }
+
       return {
-        title: extracted.title || fallback?.fallbackTitle || '未命名文章',
-        summary: extracted.summary || fallback?.fallbackSummary || extracted.text.slice(0, 240),
+        title,
+        summary,
         contentText: extracted.text.slice(0, 24000),
         contentMarkdown: contentMarkdown.slice(0, 30000),
         contentHtml: extracted.html.slice(0, 120000),
@@ -1939,6 +2040,14 @@ ${report.content}`;
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     const pageTitle = (titleMatch?.[1] || '').replace(/\s+/g, ' ').trim();
 
+    // 优先从 meta description / og:description 提取摘要
+    const metaDescMatch =
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{10,})["'][^>]*>/i) ||
+      html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+name=["']description["'][^>]*>/i) ||
+      html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']{10,})["'][^>]*>/i) ||
+      html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+property=["']og:description["'][^>]*>/i);
+    const metaSummary = metaDescMatch?.[1]?.replace(/\s+/g, ' ').trim() || '';
+
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     const body = bodyMatch?.[1] || html;
     const mainMatch = body.match(/<(article|main)[^>]*>([\s\S]*?)<\/\1>/i);
@@ -1964,7 +2073,7 @@ ${report.content}`;
 
     return {
       title: pageTitle,
-      summary: text.slice(0, 240),
+      summary: metaSummary || text.slice(0, 240),
       text,
       html: this.rewriteRelativeUrls(readableHtml, url),
     };

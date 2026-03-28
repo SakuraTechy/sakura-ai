@@ -554,7 +554,7 @@ export default function OpenClawManagement() {
               />
               <Alert
                 message="Canvas 画布"
-                description="访问 OpenClaw 的可视化画布界面"
+                description="访问 OpenClaw 的可视化画布界面（本地交互测试页面）"
                 type="success"
                 showIcon
                 className="flex items-center"
@@ -565,8 +565,14 @@ export default function OpenClawManagement() {
                         type="default"
                         size="middle"
                         icon={<LayoutIcon className="h-4 w-4" />}
-                        onClick={() => openInTab('/canvas', 'OpenClaw Canvas')}
-                        disabled={!status?.running}
+                        onClick={() => {
+                          const canvasUrl = '/api/openclaw-proxy/canvas';
+                          addTab({
+                            path: `/external?url=${encodeURIComponent(canvasUrl)}`,
+                            title: 'OpenClaw Canvas',
+                            icon: <Bot className="h-4 w-4" />
+                          });
+                        }}
                         className="flex items-center gap-2 px-4 py-2 hover:border-green-400 hover:text-green-600"
                       >
                         在 Tab 中打开
@@ -575,8 +581,7 @@ export default function OpenClawManagement() {
                         type="primary"
                         size="middle"
                         icon={<ExternalLink className="h-4 w-4" />}
-                        onClick={() => window.open(getOpenClawUrlWithToken('/canvas'), '_blank')}
-                        disabled={!status?.running}
+                        onClick={() => window.open('/api/openclaw-proxy/canvas', '_blank')}
                         className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 border-green-500 hover:border-green-600"
                       >
                         新窗口打开
