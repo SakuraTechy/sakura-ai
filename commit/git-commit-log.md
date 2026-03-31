@@ -1,5 +1,35 @@
 ﻿# Git 提交日志
 
+## 2026-03-31
+
+style: 市场洞察报告列表改为行业资讯风格自定义表格，中间区域固定高度可滚动，底部独立分页
+- 替换 Ant Design Table 为自定义 table，与行业资讯页面风格一致
+- 表格区域 maxHeight calc(100vh - 420px) 固定高度，内容溢出时滚动
+- 分页移至表格外底部，使用 Ant Design Pagination 组件
+- 删除废弃的 reportColumns 定义
+- 文件：src/pages/MarketInsights.tsx
+
+fix: 修复市场洞察模块分页重复请求问题
+- loadReports 的 useCallback 依赖移除 pagination.pageSize，改为参数传入
+- 分页 onChange 不再同时调用 setPagination + loadReports，避免 pageSize 变化触发 useEffect 二次请求
+- 文件：src/pages/MarketInsights.tsx
+
+fix: 修复 Docker 构建失败 - 替换 fonts-noto-cjk-extra 为 fonts-noto-cjk
+- Dockerfile.debian 运行阶段将 fonts-noto-cjk-extra 替换为 fonts-noto-cjk
+- fonts-noto-cjk-extra 体积约 140MB，从阿里云镜像源下载超时导致构建失败
+- fonts-noto-cjk 基础版体积更小，中文截图显示效果足够
+
+fix: 修复 push 时提示本地镜像不存在的问题
+- sakura.sh 和 docker/Debian Linux/sakura.sh 的 docker build 命令新增 --load 参数
+- Docker BuildKit 默认只缓存不导出，--load 强制将镜像导出到本地 Docker 镜像列表
+
+fix: 修复构建失败仍显示成功的问题
+- sakura.sh 和 docker/Debian Linux/sakura.sh 的 docker build 管道前加 set -o pipefail
+- tee 管道会吞掉 docker build 的退出码，pipefail 确保管道中任意命令失败都能被捕获
+
+fix: 修复 Docker 缓存导致旧 apt 层被复用的问题
+- Dockerfile.debian 运行阶段新增 ARG CACHE_BUST=20260331，强制使 apt 安装层缓存失效
+
 ## 2026-03-30
 
 fix: 修复 sakura-ai 容器读取 openclaw.json 报 ENOENT 的问题

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
   Table, Button, Input, Select, DatePicker, Space, Modal, Form, Switch,
-  Tag, message, Popconfirm, Card, Descriptions, Upload, Spin, InputNumber, Tabs, Empty, Segmented, Tooltip
+  Tag, message, Popconfirm, Card, Descriptions, Upload, Spin, InputNumber, Tabs, Empty, Segmented, Tooltip, Pagination
 } from 'antd';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   DeleteOutlined, EyeOutlined, PlayCircleOutlined, FileTextOutlined,
@@ -91,7 +92,7 @@ export function MarketInsights() {
   const [reportListTab, setReportListTab] = useState<'reports' | 'tasks'>('reports');
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
+    <div className="flex h-full min-h-0 flex-col gap-0">
       {currentView === 'reportList' && (
         <ReportListView
           defaultTab={reportListTab}
@@ -158,12 +159,12 @@ function ReportListView({
   const [selectedReportIds, setSelectedReportIds] = useState<number[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
 
-  const loadReports = useCallback(async (page = 1) => {
+  const loadReports = useCallback(async (page = 1, pageSize?: number) => {
     setLoading(true);
     try {
       const result = await marketInsightService.getReportList({
         page,
-        pageSize: pagination.pageSize,
+        pageSize: pageSize ?? pagination.pageSize,
         search: searchText || undefined,
         status: statusFilter || undefined,
         category: categoryFilter || undefined,
@@ -178,7 +179,8 @@ function ReportListView({
     } finally {
       setLoading(false);
     }
-  }, [pagination.pageSize, searchText, statusFilter, categoryFilter, dateRange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchText, statusFilter, categoryFilter, dateRange]);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -325,76 +327,6 @@ function ReportListView({
       setImportingReport(false);
     }
   };
-
-  const reportColumns = [
-    {
-      title: '任务名称',
-      dataIndex: 'task',
-      key: 'task',
-      ellipsis: true,
-      width: 200,
-      render: (task: any) => task?.title || '-',
-    },
-    {
-      title: '报告标题',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true,
-      width: 250,
-    },
-    {
-      title: '摘要',
-      dataIndex: 'summary',
-      key: 'summary',
-      ellipsis: true,
-      width: 500,
-      render: (v: string) => v || '-',
-    },
-    {
-      title: '分类',
-      dataIndex: 'category',
-      key: 'category',
-      width: 110,
-      render: (v: string) => <Tag>{v || '其他'}</Tag>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: string) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          success: { color: 'green', text: '成功' },
-          failed: { color: 'red', text: '失败' },
-          running: { color: 'blue', text: '执行中' },
-        };
-        const info = statusMap[status] || { color: 'default', text: status };
-        return <Tag color={info.color}>{info.text}</Tag>;
-      },
-    },
-    {
-      title: '执行时间',
-      dataIndex: 'executed_at',
-      key: 'executed_at',
-      width: 160,
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 150,
-      render: (_: any, record: MarketInsightReport) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewReport(record)}>
-            查看
-          </Button>
-          <Popconfirm title="确定删除此报告？" onConfirm={() => handleDeleteReport(record.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
 
   const triggerTypeMap: Record<string, string> = {
     daily: '每日',
@@ -629,29 +561,135 @@ function ReportListView({
                     </Popconfirm>
                   </div>
                 </Card>
-                <Card bodyStyle={{ padding: 0 }}>
-                  <Table
-                    columns={reportColumns}
-                    dataSource={reports}
-                    rowKey="id"
-                    loading={loading}
-                    rowSelection={{
-                      selectedRowKeys: selectedReportIds,
-                      onChange: (keys) => setSelectedReportIds(keys.map((k) => Number(k)).filter((n) => Number.isFinite(n))),
-                    }}
-                    pagination={{
-                      current: pagination.page,
-                      pageSize: pagination.pageSize,
-                      total: pagination.total,
-                      showSizeChanger: true,
-                      showTotal: (total) => `共 ${total} 条`,
-                      onChange: (page, pageSize) => {
-                        setPagination(prev => ({ ...prev, page, pageSize }));
-                        loadReports(page);
-                      },
-                    }}
-                  />
-                </Card>
+                <div className="flex min-h-0 flex-1 flex-col gap-4">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-primary)]">
+                    {loading ? (
+                      <div className="flex flex-1 items-center justify-center py-16">
+                        <Spin size="large" />
+                      </div>
+                    ) : reports.length === 0 ? (
+                      <div className="flex flex-1 items-center justify-center py-16">
+                        <Empty description="暂无报告数据" />
+                      </div>
+                    ) : (
+                      <div className="min-h-0 flex-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 420px)' }}>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-[var(--color-bg-secondary)]">
+                              <th className="px-4 py-1 text-left text-sm font-semibold text-[var(--color-text-secondary)] w-10">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 cursor-pointer"
+                                  checked={reports.length > 0 && selectedReportIds.length === reports.length}
+                                  onChange={(e) => setSelectedReportIds(e.target.checked ? reports.map((r) => r.id) : [])}
+                                  aria-label="全选报告"
+                                />
+                              </th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">执行时间</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">任务名称</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">分类</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">状态</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)]">报告标题</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)]">摘要</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <AnimatePresence>
+                              {reports.map((report, index) => {
+                                const statusMap: Record<string, { color: string; text: string }> = {
+                                  success: { color: 'green', text: '成功' },
+                                  failed: { color: 'red', text: '失败' },
+                                  running: { color: 'blue', text: '执行中' },
+                                };
+                                const statusInfo = statusMap[report.status] || { color: 'default', text: report.status };
+                                return (
+                                  <motion.tr
+                                    key={report.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.02 }}
+                                    className="border-t border-[var(--color-border)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                                  >
+                                    <td className="px-4 py-3">
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 cursor-pointer"
+                                        checked={selectedReportIds.includes(report.id)}
+                                        onChange={(e) => setSelectedReportIds((prev) =>
+                                          e.target.checked ? [...prev, report.id] : prev.filter((id) => id !== report.id)
+                                        )}
+                                        aria-label={`选择报告-${report.id}`}
+                                      />
+                                    </td>
+                                    <td className="px-4 py-1 text-sm text-[var(--color-text-secondary)] whitespace-nowrap">
+                                      {dayjs(report.executed_at).format('YYYY-MM-DD HH:mm')}
+                                    </td>
+                                    <td className="px-4 py-1 text-sm text-[var(--color-text-secondary)] whitespace-nowrap max-w-[160px] truncate">
+                                      {report.task?.title || '-'}
+                                    </td>
+                                    <td className="px-4 py-1">
+                                      <Tag>{report.category || '其他'}</Tag>
+                                    </td>
+                                    <td className="px-4 py-1">
+                                      <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
+                                    </td>
+                                    <td className="px-4 py-1 text-sm text-[var(--color-text-primary)] max-w-[240px] truncate">
+                                      {report.title}
+                                    </td>
+                                    <td className="px-4 py-1 text-sm text-[var(--color-text-secondary)] max-w-xs truncate">
+                                      {report.summary || '—'}
+                                    </td>
+                                    <td className="px-4 py-1">
+                                      <div className="flex items-center gap-1">
+                                        <Tooltip title="查看报告">
+                                          <motion.button
+                                            onClick={() => onViewReport(report)}
+                                            className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                                            whileHover={{ scale: 1.1 }}
+                                            whileTap={{ scale: 0.95 }}
+                                          >
+                                            <EyeOutlined />
+                                          </motion.button>
+                                        </Tooltip>
+                                        <Tooltip title="删除">
+                                          <Popconfirm title="确定删除此报告？" onConfirm={() => handleDeleteReport(report.id)}>
+                                            <motion.button
+                                              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                              whileHover={{ scale: 1.1 }}
+                                              whileTap={{ scale: 0.95 }}
+                                            >
+                                              <DeleteOutlined />
+                                            </motion.button>
+                                          </Popconfirm>
+                                        </Tooltip>
+                                      </div>
+                                    </td>
+                                  </motion.tr>
+                                );
+                              })}
+                            </AnimatePresence>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  {pagination.total > 0 && (
+                    <div className="flex items-center justify-between pb-4">
+                      <span className="text-sm text-[var(--color-text-secondary)]">
+                        共 {pagination.total} 条数据
+                      </span>
+                      <Pagination
+                        current={pagination.page}
+                        pageSize={pagination.pageSize}
+                        total={pagination.total}
+                        showSizeChanger
+                        pageSizeOptions={['10', '20', '50', '100']}
+                        onChange={(page, pageSize) => loadReports(page, pageSize)}
+                      />
+                    </div>
+                  )}
+                </div>
               </>
             ),
           },

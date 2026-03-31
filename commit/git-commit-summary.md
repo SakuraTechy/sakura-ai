@@ -1,5 +1,9 @@
 # Git 提交总结
 
+## 2026-03-31
+- fix: Dockerfile.debian 运行阶段 fonts-noto-cjk-extra 替换为 fonts-noto-cjk，修复阿里云镜像源下载超时导致构建失败
+- fix: sakura.sh docker build 新增 --load 参数，修复 BuildKit 构建后本地镜像不存在导致 push 失败
+
 ## 2026-03-30
 - fix: sakura-ai 容器新增挂载+环境变量 OPENCLAW_CONFIG_DIR=/app/.openclaw，configPath 支持环境变量覆盖，修复读取 openclaw.json 报 ENOENT
 - fix: 改用 tr+sed 输出到 /tmp 临时文件执行，解决 bind mount 文件 sed -i 报 Device or resource busy 问题；新增 .gitattributes 强制 sh 文件 LF

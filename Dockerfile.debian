@@ -164,7 +164,7 @@ RUN sed -i "s/deb.debian.org/${DEBIAN_MIRROR}/g" /etc/apt/sources.list.d/debian.
     xvfb \
     # 字体支持（包含中文字体以正确显示截图中的文字）
     fonts-liberation fonts-noto-color-emoji \
-    fonts-noto-cjk-extra \
+    fonts-noto-cjk \
     # 网络诊断工具
     iputils-ping \
     # 工具

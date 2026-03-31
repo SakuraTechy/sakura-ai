@@ -226,7 +226,9 @@ cmd_build() {
     echo "💡 提示: 如需完全重建，请使用: ./sakura.sh rebuild"
     echo ""
     
+    set -o pipefail
     if docker build \
+        --load \
         -f "docker/Debian Linux/Dockerfile.debian" \
         -t "${LOCAL_IMAGE}" \
         -t "${FULL_IMAGE}" \
@@ -234,9 +236,11 @@ cmd_build() {
         print_success "Docker 镜像构建成功"
     else
         print_error "Docker 镜像构建失败"
+        echo "--- 最后 50 行日志 ---"
         tail -50 /tmp/docker-build.log
         exit 1
     fi
+    set +o pipefail
     
     IMAGE_SIZE=$(docker images "${LOCAL_IMAGE}" --format "{{.Size}}")
     echo "  镜像大小: ${IMAGE_SIZE}"
