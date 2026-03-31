@@ -1,0 +1,12 @@
+# 强制 shell 脚本始终使用 LF 换行（避免 Windows CRLF 导致 Linux 容器执行失败）
+*.sh text eol=lf
+
+# 其他文本文件自动处理
+*.ts text=auto
+*.tsx text=auto
+*.js text=auto
+*.json text=auto
+*.md text=auto
+*.yml text=auto
+*.yaml text=auto
+*.env text=auto

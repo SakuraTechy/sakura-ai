@@ -1,5 +1,36 @@
 ﻿# Git 提交日志
 
+## 2026-03-30
+
+fix: 修复 sakura-ai 容器读取 openclaw.json 报 ENOENT 的问题
+- docker-compose.yml sakura-ai 服务新增挂载 OPENCLAW_CONFIG_DIR -> /app/.openclaw
+- docker-compose.yml sakura-ai 服务新增环境变量 OPENCLAW_CONFIG_DIR=/app/.openclaw
+- server/routes/openclaw.ts configPath 改为优先读取 OPENCLAW_CONFIG_DIR 环境变量
+- sakura-ai 和 openclaw-gateway 共享同一份宿主机配置目录，路径不同但文件一致
+
+fix: 修复 sed -i 在 bind mount 文件上报 Device or resource busy 的问题
+- 改用 tr + sed 输出到 /tmp 临时文件再执行，避免原地修改挂载文件
+
+fix: 修复 init-openclaw.sh CRLF/BOM 问题，docker-compose.yml 启动命令中用 tr+sed 动态清除
+- 新增 .gitattributes，强制 *.sh 文件提交时保持 LF
+
+fix: 修复 Linux 容器部署时代理请求 ECONNREFUSED 127.0.0.1:18789 的问题
+- server/routes/openclaw.ts 代理路由改用 OPENCLAW_INTERNAL_HOST 环境变量指定目标地址
+- docker-compose.yml sakura-ai 服务新增 OPENCLAW_INTERNAL_HOST=openclaw-gateway（Docker 服务名）
+- .env.example 新增 OPENCLAW_INTERNAL_HOST 配置说明
+- 宿主机直接运行时不设置该变量，默认 fallback 到 localhost
+
+fix: 修复点击启动时报 No such container 错误
+- /start 接口改为先检查容器是否存在（GET /containers/{name}/json）
+- 容器不存在时返回 needInit: true 和初始化命令提示，而非直接报错
+- 前端 handleStart 处理 needInit 场景，弹出 Modal 显示宿主机初始化命令
+
+fix: 改用 Docker socket HTTP API 替代 docker CLI，无需重建镜像即可在 Linux 容器内管理 OpenClaw 容器
+- server/routes/openclaw.ts 新增 dockerSocketRequest() / isSocketAvailable()
+- /status /start /stop /restart /logs /update 全部改用 socket API，保留 CLI fallback
+- docker-compose.yml 挂载 /var/run/docker.sock
+- 前端新增 dockerAvailable 字段，Docker 不可用时显示警告并禁用操作按钮
+
 ## 2026-03-24
 
 fix: 修复 Canvas 画布打开后显示与 OpenClaw Gateway 控制面板相同页面的问题

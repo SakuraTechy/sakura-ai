@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.24",
+    "lastTouchedAt": "2026-03-30T11:13:51.519Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-30T08:57:59.000Z",
+    "lastRunVersion": "2026.3.24",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "models": {
+    "providers": {
+      "zcheap": {
+        "baseUrl": "https://zcheap.ai/v1",
+        "apiKey": "xxxx",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "glm-4-7-251222",
+            "name": "GLM-4.7",
+            "api": "openai-completions",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/root/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      }
+    }
+  },
+  "tools": {
+    "alsoAllow": [
+      "wecom_mcp"
+    ]
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "channels": {
+    "wecom": {
+      "enabled": true,
+      "botId": "xxxx",
+      "secret": "xxxx"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": ["*"],
+      "dangerouslyAllowHostHeaderOriginFallback": true,
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
+    }
+  },
+  "plugins": {
+    "allow": [
+      "wecom-openclaw-plugin"
+    ],
+    "load": {
+      "paths": [
+        "/root/.openclaw/extensions"
+      ]
+    },
+    "entries": {
+      "wecom-openclaw-plugin": {
+        "enabled": true
+      }
+    },
+    "installs": {
+      "wecom-openclaw-plugin": {
+        "source": "npm",
+        "spec": "@wecom/wecom-openclaw-plugin@latest",
+        "installPath": "/root/.openclaw/extensions/wecom-openclaw-plugin",
+        "version": "2026.3.30",
+        "resolvedName": "@wecom/wecom-openclaw-plugin",
+        "resolvedVersion": "2026.3.30",
+        "resolvedSpec": "@wecom/wecom-openclaw-plugin@2026.3.30",
+        "integrity": "sha512-nEFEliWjQhoBwiSuMniC4P6U8kSLTlGu3EV+jojIVMeL/z1m2PSu17w0u33YwYDvpJH/59GwipEQGmle+VO4aQ==",
+        "shasum": "a67e756f8bbb5cf778254b480608b4dd12691d64",
+        "resolvedAt": "2026-03-30T11:13:32.846Z",
+        "installedAt": "2026-03-30T11:13:51.455Z"
+      }
+    }
+  }
+}

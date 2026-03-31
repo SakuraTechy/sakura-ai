@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, Tabs, Space, Tag, Descriptions, Alert, Spin, message, Input, Select, Switch, Form, Popconfirm } from 'antd';
+import { Card, Button, Tabs, Space, Tag, Descriptions, Alert, Spin, message, Input, Select, Switch, Form, Popconfirm, Modal } from 'antd';
 import { 
   PlayCircle, 
   StopCircle, 
@@ -30,6 +30,7 @@ interface OpenClawStatus {
   workspace: string;
   uptime?: number;
   deploymentType?: string;
+  dockerAvailable?: boolean;
 }
 
 interface OpenClawConfig {
@@ -229,7 +230,24 @@ export default function OpenClawManagement() {
         setTimeout(() => fetchStatus(), 3000);
       } else {
         const data = await response.json();
-        message.error(`启动失败: ${data.message || '未知错误'}`);
+        if (data.needInit) {
+          Modal.info({
+            title: 'OpenClaw 容器尚未初始化',
+            content: (
+              <div>
+                <p>容器尚未创建，请在宿主机执行以下命令完成首次初始化：</p>
+                <pre style={{ background: '#1e1e1e', color: '#4ec9b0', padding: '12px', borderRadius: '6px', marginTop: '8px', fontSize: '13px' }}>
+                  docker compose --profile openclaw up -d
+                </pre>
+                <p style={{ marginTop: '8px', color: '#888' }}>初始化完成后刷新页面即可正常使用。</p>
+              </div>
+            ),
+            okText: '知道了',
+            width: 520,
+          });
+        } else {
+          message.error(`启动失败: ${data.message || '未知错误'}`);
+        }
       }
     } catch (error) {
       message.error('启动失败');
@@ -430,6 +448,15 @@ export default function OpenClawManagement() {
           <Card title="服务状态" className="shadow-sm">
             <Spin spinning={loading} tip="加载中...">
               <div className="min-h-[200px]">
+                {status && status.dockerAvailable === false && (
+                  <Alert
+                    message="Docker 未安装"
+                    description="当前环境未检测到 Docker，容器管理功能不可用。如需使用容器部署，请先安装 Docker。OpenClaw 进程若已独立运行，可直接通过下方快速访问入口使用。"
+                    type="warning"
+                    showIcon
+                    className="mb-4"
+                  />
+                )}
                 <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
                   <div className={`h-3 w-3 rounded-full ${status?.running ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
@@ -445,7 +472,7 @@ export default function OpenClawManagement() {
                     type="primary"
                     icon={<PlayCircle className="h-4 w-4" />}
                     onClick={handleStart}
-                    disabled={status?.running || loading}
+                    disabled={status?.running || loading || status?.dockerAvailable === false}
                   >
                     启动
                   </Button>
@@ -453,14 +480,14 @@ export default function OpenClawManagement() {
                     danger
                     icon={<StopCircle className="h-4 w-4" />}
                     onClick={handleStop}
-                    disabled={!status?.running || loading}
+                    disabled={!status?.running || loading || status?.dockerAvailable === false}
                   >
                     停止
                   </Button>
                   <Button
                     icon={<RefreshCw className="h-4 w-4" />}
                     onClick={handleRestart}
-                    disabled={loading}
+                    disabled={loading || status?.dockerAvailable === false}
                   >
                     重启
                   </Button>
@@ -473,7 +500,7 @@ export default function OpenClawManagement() {
                   >
                     <Button
                       icon={<Download className="h-4 w-4" />}
-                      disabled={loading}
+                      disabled={loading || status?.dockerAvailable === false}
                     >
                       更新
                     </Button>

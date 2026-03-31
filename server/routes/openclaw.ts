@@ -3,8 +3,65 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
+import http from 'http';
 
 const execAsync = promisify(exec);
+
+// 通过 Docker socket 发送 HTTP 请求
+function dockerSocketRequest(method: string, path: string, body?: any): Promise<{ statusCode: number; data: any }> {
+  return new Promise((resolve, reject) => {
+    const bodyStr = body ? JSON.stringify(body) : '';
+    const options: http.RequestOptions = {
+      socketPath: '/var/run/docker.sock',
+      path,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(bodyStr),
+      },
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve({ statusCode: res.statusCode || 0, data: data ? JSON.parse(data) : {} });
+        } catch {
+          resolve({ statusCode: res.statusCode || 0, data });
+        }
+      });
+    });
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
+}
+
+// 检测 Docker socket 是否可用
+async function isDockerAvailable(): Promise<boolean> {
+  try {
+    await dockerSocketRequest('GET', '/version');
+    return true;
+  } catch {
+    // fallback: 尝试 CLI（宿主机直接运行时）
+    try {
+      await execAsync('docker --version');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// 判断是否通过 socket 可用（容器内场景）
+async function isSocketAvailable(): Promise<boolean> {
+  try {
+    await dockerSocketRequest('GET', '/version');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // 🔥 创建代理路由（不需要认证）
 export function createOpenClawProxyRoute() {
@@ -30,7 +87,10 @@ export function createOpenClawProxyRoute() {
       // 获取通配符路径（使用类型断言）
       const targetPath = (req.params as any)[0] || '';
       const queryString = req.url.split('?')[1] || '';
-      const openclawUrl = `http://localhost:18789/${targetPath}${queryString ? '?' + queryString : ''}`;
+      // 容器内用服务名访问，宿主机直接运行时用 localhost
+      const openclawHost = process.env.OPENCLAW_INTERNAL_HOST || 'localhost';
+      const openclawPort = process.env.OPENCLAW_GATEWAY_PORT || '18789';
+      const openclawUrl = `http://${openclawHost}:${openclawPort}/${targetPath}${queryString ? '?' + queryString : ''}`;
       
       console.log('代理请求:', openclawUrl);
       
@@ -122,8 +182,11 @@ export function createOpenClawProxyRoute() {
 export function createOpenClawRoutes() {
   const router = Router();
 
-  // OpenClaw 配置文件路径
-  const configPath = path.join(process.cwd(), '.openclaw', 'openclaw.json');
+  // OpenClaw 配置文件路径（支持环境变量覆盖，默认读取挂载的 .openclaw 目录）
+  const openclawConfigDir = process.env.OPENCLAW_CONFIG_DIR
+    ? path.join(process.env.OPENCLAW_CONFIG_DIR, 'openclaw.json')
+    : path.join(process.cwd(), '.openclaw', 'openclaw.json');
+  const configPath = openclawConfigDir;
   
   // Docker 容器名称
   const OPENCLAW_CONTAINER = 'sakura-ai-openclaw';
@@ -154,33 +217,44 @@ export function createOpenClawRoutes() {
       let uptime = 0;
       let containerStatus = 'not found';
 
-      try {
-        // 检查 Docker 容器状态
-        const { stdout } = await execAsync(`docker ps -a --filter "name=${OPENCLAW_CONTAINER}" --format "{{.Status}}"`);
-        const status = stdout.trim();
-        
-        if (status) {
-          containerStatus = status;
-          running = status.toLowerCase().includes('up');
-          
-          // 尝试获取运行时长
-          if (running) {
-            const uptimeMatch = status.match(/Up\s+(.+?)(?:\s+\(|$)/i);
-            if (uptimeMatch) {
-              // 简单转换为秒数（这里只是示例，实际可能需要更复杂的解析）
-              const uptimeStr = uptimeMatch[1];
-              if (uptimeStr.includes('minute')) {
-                uptime = parseInt(uptimeStr) * 60;
-              } else if (uptimeStr.includes('hour')) {
-                uptime = parseInt(uptimeStr) * 3600;
-              } else if (uptimeStr.includes('day')) {
-                uptime = parseInt(uptimeStr) * 86400;
+      const dockerAvailable = await isDockerAvailable();
+      if (dockerAvailable) {
+        try {
+          // 优先用 socket API，fallback 到 CLI
+          if (await isSocketAvailable()) {
+            // Docker socket API：GET /containers/{name}/json
+            const result = await dockerSocketRequest('GET', `/containers/${OPENCLAW_CONTAINER}/json`);
+            if (result.statusCode === 200 && result.data?.State) {
+              const state = result.data.State;
+              running = state.Running === true;
+              containerStatus = running ? `Up` : (state.Status || 'stopped');
+              if (running && state.StartedAt) {
+                const startedAt = new Date(state.StartedAt).getTime();
+                uptime = Math.floor((Date.now() - startedAt) / 1000);
+              }
+            }
+          } else {
+            const { stdout } = await execAsync(`docker ps -a --filter "name=${OPENCLAW_CONTAINER}" --format "{{.Status}}"`);
+            const status = stdout.trim();
+            if (status) {
+              containerStatus = status;
+              running = status.toLowerCase().includes('up');
+              if (running) {
+                const uptimeMatch = status.match(/Up\s+(.+?)(?:\s+\(|$)/i);
+                if (uptimeMatch) {
+                  const uptimeStr = uptimeMatch[1];
+                  if (uptimeStr.includes('minute')) uptime = parseInt(uptimeStr) * 60;
+                  else if (uptimeStr.includes('hour')) uptime = parseInt(uptimeStr) * 3600;
+                  else if (uptimeStr.includes('day')) uptime = parseInt(uptimeStr) * 86400;
+                }
               }
             }
           }
+        } catch (error) {
+          console.warn('检查 Docker 容器状态失败:', error);
         }
-      } catch (error) {
-        console.warn('检查 Docker 容器状态失败:', error);
+      } else {
+        containerStatus = 'docker not available';
       }
 
       // 读取配置文件
@@ -206,6 +280,7 @@ export function createOpenClawRoutes() {
         workspace: config.agents?.defaults?.workspace || '/home/node/.openclaw/workspace',
         uptime,
         deploymentType: 'docker',
+        dockerAvailable,
       });
     } catch (error: any) {
       console.error('获取 OpenClaw 状态失败:', error);
@@ -249,146 +324,179 @@ export function createOpenClawRoutes() {
   // 启动 OpenClaw（通过 Docker Compose）
   router.post('/start', async (req, res) => {
     try {
-      // 使用 docker compose 启动 OpenClaw 服务
-      const command = 'docker compose --profile openclaw up -d';
-      const { stdout, stderr } = await execAsync(command, { cwd: process.cwd() });
-
-      console.log('OpenClaw 启动输出:', stdout);
+      if (!await isDockerAvailable()) {
+        return res.status(400).json({ error: '启动失败', message: '当前环境未检测到 Docker，无法启动 OpenClaw 容器' });
+      }
+      if (await isSocketAvailable()) {
+        // 先检查容器是否存在
+        const inspect = await dockerSocketRequest('GET', `/containers/${OPENCLAW_CONTAINER}/json`);
+        if (inspect.statusCode === 404) {
+          // 容器不存在，需要通过 docker compose 创建
+          return res.status(400).json({
+            error: '启动失败',
+            message: `OpenClaw 容器尚未创建，请在宿主机执行以下命令初始化：\ndocker compose --profile openclaw up -d`,
+            needInit: true,
+          });
+        }
+        // 容器存在，直接启动
+        const result = await dockerSocketRequest('POST', `/containers/${OPENCLAW_CONTAINER}/start`);
+        if (result.statusCode === 204 || result.statusCode === 304) {
+          return res.json({ success: true, message: 'OpenClaw 容器已启动' });
+        }
+        return res.status(500).json({ error: '启动失败', message: JSON.stringify(result.data) });
+      }
+      // fallback CLI
+      const { stdout, stderr } = await execAsync('docker compose --profile openclaw up -d', { cwd: process.cwd() });
       if (stderr) console.warn('OpenClaw 启动警告:', stderr);
-
-      res.json({
-        success: true,
-        message: 'OpenClaw 容器启动命令已执行',
-        output: stdout,
-      });
+      res.json({ success: true, message: 'OpenClaw 容器启动命令已执行', output: stdout });
     } catch (error: any) {
       console.error('启动 OpenClaw 失败:', error);
-      res.status(500).json({
-        error: '启动失败',
-        message: error.message,
-        stderr: error.stderr,
-      });
+      res.status(500).json({ error: '启动失败', message: error.message });
     }
   });
 
   // 停止 OpenClaw（通过 Docker Compose）
   router.post('/stop', async (req, res) => {
     try {
-      // 使用 docker compose 停止 OpenClaw 服务
-      const command = 'docker compose --profile openclaw down';
-      const { stdout, stderr } = await execAsync(command, { cwd: process.cwd() });
-
-      console.log('OpenClaw 停止输出:', stdout);
+      if (!await isDockerAvailable()) {
+        return res.status(400).json({ error: '停止失败', message: '当前环境未检测到 Docker，无法停止 OpenClaw 容器' });
+      }
+      if (await isSocketAvailable()) {
+        const result = await dockerSocketRequest('POST', `/containers/${OPENCLAW_CONTAINER}/stop`);
+        if (result.statusCode === 204 || result.statusCode === 304) {
+          return res.json({ success: true, message: 'OpenClaw 容器已停止' });
+        }
+        return res.status(500).json({ error: '停止失败', message: JSON.stringify(result.data) });
+      }
+      const { stdout, stderr } = await execAsync('docker compose --profile openclaw down', { cwd: process.cwd() });
       if (stderr) console.warn('OpenClaw 停止警告:', stderr);
-
-      res.json({
-        success: true,
-        message: 'OpenClaw 容器停止命令已执行',
-        output: stdout,
-      });
+      res.json({ success: true, message: 'OpenClaw 容器停止命令已执行', output: stdout });
     } catch (error: any) {
       console.error('停止 OpenClaw 失败:', error);
-      res.status(500).json({
-        error: '停止失败',
-        message: error.message,
-        stderr: error.stderr,
-      });
+      res.status(500).json({ error: '停止失败', message: error.message });
     }
   });
 
   // 重启 OpenClaw
   router.post('/restart', async (req, res) => {
     try {
-      // 使用 docker compose 重启 OpenClaw 服务
-      const command = 'docker compose --profile openclaw restart';
-      const { stdout, stderr } = await execAsync(command, { cwd: process.cwd() });
-
-      console.log('OpenClaw 重启输出:', stdout);
+      if (!await isDockerAvailable()) {
+        return res.status(400).json({ error: '重启失败', message: '当前环境未检测到 Docker，无法重启 OpenClaw 容器' });
+      }
+      if (await isSocketAvailable()) {
+        const result = await dockerSocketRequest('POST', `/containers/${OPENCLAW_CONTAINER}/restart`);
+        if (result.statusCode === 204) {
+          return res.json({ success: true, message: 'OpenClaw 容器已重启' });
+        }
+        return res.status(500).json({ error: '重启失败', message: JSON.stringify(result.data) });
+      }
+      const { stdout, stderr } = await execAsync('docker compose --profile openclaw restart', { cwd: process.cwd() });
       if (stderr) console.warn('OpenClaw 重启警告:', stderr);
-
-      res.json({
-        success: true,
-        message: 'OpenClaw 容器重启命令已执行',
-        output: stdout,
-      });
+      res.json({ success: true, message: 'OpenClaw 容器重启命令已执行', output: stdout });
     } catch (error: any) {
       console.error('重启 OpenClaw 失败:', error);
-      res.status(500).json({
-        error: '重启失败',
-        message: error.message,
-        stderr: error.stderr,
-      });
+      res.status(500).json({ error: '重启失败', message: error.message });
     }
   });
 
   // 获取容器日志
   router.get('/logs', async (req, res) => {
     try {
-      const lines = req.query.lines || '100';
-      const command = `docker logs --tail ${lines} ${OPENCLAW_CONTAINER}`;
-      const { stdout } = await execAsync(command);
-
-      res.json({
-        success: true,
-        logs: stdout,
-      });
+      if (!await isDockerAvailable()) {
+        return res.json({ success: true, logs: '当前环境未检测到 Docker，无法获取容器日志。\n请直接查看应用日志文件。' });
+      }
+      const lines = parseInt(String(req.query.lines || '100'));
+      if (await isSocketAvailable()) {
+        // Docker socket API：GET /containers/{name}/logs
+        const result = await new Promise<string>((resolve, reject) => {
+          const options: http.RequestOptions = {
+            socketPath: '/var/run/docker.sock',
+            path: `/containers/${OPENCLAW_CONTAINER}/logs?stdout=1&stderr=1&tail=${lines}`,
+            method: 'GET',
+          };
+          const req = http.request(options, (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () => {
+              // Docker log stream 每行有 8 字节 header，需要去掉
+              const raw = Buffer.concat(chunks);
+              let text = '';
+              let i = 0;
+              while (i + 8 <= raw.length) {
+                const size = raw.readUInt32BE(i + 4);
+                text += raw.slice(i + 8, i + 8 + size).toString('utf8');
+                i += 8 + size;
+              }
+              resolve(text || '暂无日志');
+            });
+          });
+          req.on('error', reject);
+          req.end();
+        });
+        return res.json({ success: true, logs: result });
+      }
+      // fallback CLI
+      const { stdout } = await execAsync(`docker logs --tail ${lines} ${OPENCLAW_CONTAINER}`);
+      res.json({ success: true, logs: stdout });
     } catch (error: any) {
       console.error('获取日志失败:', error);
-      res.status(500).json({
-        error: '获取日志失败',
-        message: error.message,
-      });
+      res.status(500).json({ error: '获取日志失败', message: error.message });
     }
   });
 
   // 更新 OpenClaw（拉取最新镜像并重新启动）
   router.post('/update', async (req, res) => {
     try {
-      // 1. 获取当前镜像 digest
-      let oldDigest = '';
-      try {
-        const { stdout } = await execAsync(`docker inspect --format='{{index .RepoDigests 0}}' $(docker compose --profile openclaw images -q openclaw-gateway 2>/dev/null) 2>/dev/null || echo ""`);
-        oldDigest = stdout.trim();
-      } catch {
-        // 可能容器不存在，忽略
+      if (!await isDockerAvailable()) {
+        return res.status(400).json({ error: '更新失败', message: '当前环境未检测到 Docker，无法更新 OpenClaw 容器' });
       }
+      if (await isSocketAvailable()) {
+        // 1. 获取当前容器使用的镜像名
+        let imageName = process.env.OPENCLAW_IMAGE || 'openclaw:local';
+        try {
+          const inspect = await dockerSocketRequest('GET', `/containers/${OPENCLAW_CONTAINER}/json`);
+          if (inspect.statusCode === 200) {
+            imageName = inspect.data?.Config?.Image || imageName;
+          }
+        } catch { /* 容器不存在时忽略 */ }
 
-      // 2. 拉取最新镜像
+        // 2. 拉取最新镜像（POST /images/create?fromImage=...）
+        console.log(`正在拉取最新镜像: ${imageName}`);
+        const [imgRepo, imgTag = 'latest'] = imageName.split(':');
+        await new Promise<void>((resolve, reject) => {
+          const options: http.RequestOptions = {
+            socketPath: '/var/run/docker.sock',
+            path: `/images/create?fromImage=${encodeURIComponent(imgRepo)}&tag=${encodeURIComponent(imgTag)}`,
+            method: 'POST',
+          };
+          const req = http.request(options, (res) => {
+            res.resume(); // 消费响应体
+            res.on('end', resolve);
+          });
+          req.on('error', reject);
+          req.end();
+        });
+
+        // 3. 重启容器使其使用新镜像
+        const restartResult = await dockerSocketRequest('POST', `/containers/${OPENCLAW_CONTAINER}/restart`);
+        if (restartResult.statusCode === 204) {
+          return res.json({ success: true, updated: true, message: '已拉取最新镜像并重启容器' });
+        }
+        return res.json({ success: true, updated: true, message: '镜像已拉取，容器重启请手动操作' });
+      }
+      // fallback CLI
       const pullCommand = 'docker compose --profile openclaw pull';
-      console.log('正在拉取最新 OpenClaw 镜像...');
       const { stdout: pullOut, stderr: pullErr } = await execAsync(pullCommand, { cwd: process.cwd(), timeout: 300000 });
       const pullOutput = (pullOut || '') + (pullErr || '');
-      console.log('镜像拉取输出:', pullOutput);
-
-      // 3. 判断是否有新版本（检查 pull 输出中是否包含 "Already up to date" 或 "Image is up to date"）
       const alreadyUpToDate = /already up to date|image is up to date|已是最新/i.test(pullOutput);
-
       if (alreadyUpToDate) {
-        return res.json({
-          success: true,
-          updated: false,
-          message: '当前已是最新版本，无需更新',
-        });
+        return res.json({ success: true, updated: false, message: '当前已是最新版本，无需更新' });
       }
-
-      // 4. 有新版本，重新创建并启动容器
-      const upCommand = 'docker compose --profile openclaw up -d --force-recreate';
-      const { stdout: upOut, stderr: upErr } = await execAsync(upCommand, { cwd: process.cwd() });
-      console.log('容器重建输出:', upOut);
-      if (upErr) console.warn('容器重建警告:', upErr);
-
-      res.json({
-        success: true,
-        updated: true,
-        message: '已拉取最新镜像并重新启动容器',
-      });
+      await execAsync('docker compose --profile openclaw up -d --force-recreate', { cwd: process.cwd() });
+      res.json({ success: true, updated: true, message: '已拉取最新镜像并重新启动容器' });
     } catch (error: any) {
       console.error('更新 OpenClaw 失败:', error);
-      res.status(500).json({
-        error: '更新失败',
-        message: error.message,
-        stderr: error.stderr,
-      });
+      res.status(500).json({ error: '更新失败', message: error.message });
     }
   });
 
