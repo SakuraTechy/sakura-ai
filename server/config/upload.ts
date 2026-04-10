@@ -10,12 +10,12 @@ export const UPLOAD_CONFIG = {
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB - AI 模型最佳处理大小
   
   // 最大文件数量
-  MAX_FILES: 20,
+  MAX_FILES: 50,
   
   // 支持的文件扩展名
   SUPPORTED_EXTENSIONS: {
-    SINGLE_UPLOAD: ['.html', '.htm', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt'],
-    MULTI_UPLOAD: ['.html', '.htm', '.js', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt']
+    SINGLE_UPLOAD: ['.html', '.htm', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt', '.zip'],
+    MULTI_UPLOAD: ['.html', '.htm', '.js', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt', '.zip']
   }
 } as const;
 

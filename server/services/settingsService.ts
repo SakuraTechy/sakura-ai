@@ -34,10 +34,10 @@ export class BackendSettingsService {
   public async getLLMSettings(): Promise<LLMSettings> {
     try {
       const settings = await this.loadSettingsFromDB();
-      return settings.llm;
+      return this.migrateLegacyLLMSettings(settings.llm);
     } catch (error) {
       console.warn('Failed to load LLM settings from database, using defaults:', error);
-      return this.getDefaultLLMSettings();
+      return this.migrateLegacyLLMSettings(this.getDefaultLLMSettings());
     }
   }
 
@@ -54,7 +54,7 @@ export class BackendSettingsService {
       }
 
       // 🔥 如果 baseUrl 未提供，根据模型信息自动填充
-      const settingsWithBaseUrl = { ...llmSettings };
+      const settingsWithBaseUrl = this.migrateLegacyLLMSettings({ ...llmSettings });
       if (!settingsWithBaseUrl.baseUrl) {
         const modelInfo = modelRegistry.getModelById(llmSettings.selectedModelId);
         if (modelInfo) {
@@ -217,6 +217,11 @@ export class BackendSettingsService {
       baseUrl: defaultModel.customBaseUrl || 'https://openrouter.ai/api/v1', // 🔥 添加 baseUrl
       customConfig: {
         ...defaultModel.defaultConfig
+      },
+      inputLimits: {
+        maxInputTokensOverride: undefined,
+        modelContextWindowsJson: '',
+        inputSafetyMarginTokens: 1500,
       }
     };
   }
@@ -240,13 +245,25 @@ export class BackendSettingsService {
     return {
       llm: {
         ...defaults.llm,
-        ...stored.llm
+        ...this.migrateLegacyLLMSettings(stored.llm as LLMSettings)
       },
       system: {
         ...defaults.system,
         ...stored.system
       }
     };
+  }
+
+  private migrateLegacyLLMSettings(settings: LLMSettings): LLMSettings {
+    if (!settings) return settings;
+    if (settings.inputLimits) return settings;
+    if (settings.requirementDoc) {
+      return {
+        ...settings,
+        inputLimits: { ...settings.requirementDoc },
+      };
+    }
+    return settings;
   }
 
   // 清理资源

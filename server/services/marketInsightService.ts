@@ -4,7 +4,7 @@ import { PrismaClient } from '../../src/generated/prisma/index.js';
 import { DatabaseService } from './databaseService.js';
 import { llmConfigManager } from '../../src/services/llmConfigManager.js';
 import { AnalysisService } from './analysisService.js';
-import { MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT } from './aiParser1.js';
+import { MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT_V2 } from './ankkiPrompt.js';
 import { MARKET_INSIGHT_BUILTIN_SOURCES } from '../../src/constants/marketInsightBuiltinSources.js';
 import {
   getMarketInsightCategoryPromptEnum,
@@ -1892,8 +1892,8 @@ ${articleList}`;
 正文：
 ${report.content}`;
 
-    const aiContent = await this.analysisService.generateRequirementDoc(requirementInput, undefined, {
-      systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+    const { content: aiContent } = await this.analysisService.generateRequirementDoc(requirementInput, undefined, {
+      systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT_V2,
       logScene: 'marketInsightReportToRequirement',
     });
 
@@ -2135,11 +2135,11 @@ ${report.content}`;
   async convertArticleToRequirement(params: ConvertArticleToRequirementParams) {
     const article = await this.prisma.insights_articles.findUnique({ where: { id: params.articleId } });
     if (!article) throw new Error('文章不存在');
-    const aiContent = await this.analysisService.generateRequirementDoc(
+    const { content: aiContent } = await this.analysisService.generateRequirementDoc(
       `文章标题：${article.title}\n来源链接：${article.url}\n分类：${article.category}\n摘要：${article.summary || ''}\n正文：\n${article.content}`,
       undefined,
       {
-        systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+        systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT_V2,
         /** 深读「一键转需求」、行业资讯文章转需求：后台打印完整提示词与响应摘要 */
         logScene: 'deepReadArticleToRequirement',
       }

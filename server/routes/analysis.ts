@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { AnalysisService } from '../services/analysisService.js';
-import { MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT } from '../services/aiParser1.js';
+import { REQUIREMENT_ANALYSIS_SYSTEM_PROMPT_V2 } from '../services/ankkiPrompt.js';
 import { RequirementDocService } from '../services/requirementDocService.js';
 import multer from 'multer';
 
@@ -25,6 +25,9 @@ export function createAnalysisRoutes(): Router {
   const router = Router();
   const getAnalysisService = () => new AnalysisService();
   const getDocService = () => new RequirementDocService();
+  const writeNdjson = (res: Response, payload: Record<string, unknown>) => {
+    res.write(`${JSON.stringify(payload)}\n`);
+  };
 
   /**
    * POST /api/analysis/upload
@@ -69,18 +72,58 @@ export function createAnalysisRoutes(): Router {
       }
 
       const service = getAnalysisService();
-      const content = await service.generateRequirementDoc(text, model, {
-        systemPrompt: MARKET_INSIGHT_REQUIREMENT_DOC_SYSTEM_PROMPT,
+
+      // 轻量日志：用于确认当前使用的系统提示词常量（默认不打印全文，避免泄露与刷屏）
+      if (process.env.REQUIREMENT_DOC_LLM_LOG_PROMPTS === 'true') {
+        console.log('🧩 [requirementAnalysisPage] systemPromptKey=REQUIREMENT_ANALYSIS_SYSTEM_PROMPT_V2');
+        console.log(`   - systemPromptLength=${REQUIREMENT_ANALYSIS_SYSTEM_PROMPT_V2.length}`);
+      }
+      const { content, inputTruncated } = await service.generateRequirementDoc(text, model, {
+        systemPrompt: REQUIREMENT_ANALYSIS_SYSTEM_PROMPT_V2,
         logScene: 'requirementAnalysisPage',
       });
 
       res.json({
         success: true,
-        data: { content }
+        data: { content, inputTruncated }
       });
     } catch (error: any) {
       console.error('AI 生成需求文档失败:', error);
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/analysis/generate-stream
+   * 以 NDJSON 流式返回生成进度与最终结果
+   */
+  router.post('/generate-stream', async (req: Request, res: Response) => {
+    try {
+      const { text, model } = req.body;
+      if (!text || text.trim().length === 0) {
+        return res.status(400).json({ success: false, error: '请提供需求文本内容' });
+      }
+
+      res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const service = getAnalysisService();
+      writeNdjson(res, { type: 'progress', phase: 'start', message: '开始生成需求文档' });
+
+      const { content, inputTruncated } = await service.generateRequirementDoc(text, model, {
+        systemPrompt: REQUIREMENT_ANALYSIS_SYSTEM_PROMPT_V2,
+        logScene: 'requirementAnalysisPage',
+        onProgress: (event) => writeNdjson(res, { type: 'progress', ...event }),
+      });
+
+      writeNdjson(res, { type: 'result', success: true, data: { content, inputTruncated } });
+      res.end();
+    } catch (error: any) {
+      console.error('AI 流式生成需求文档失败:', error);
+      writeNdjson(res, { type: 'error', success: false, error: error.message || '生成失败' });
+      res.end();
     }
   });
 

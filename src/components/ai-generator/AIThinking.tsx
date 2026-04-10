@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { Brain, CheckCircle, Loader2 } from 'lucide-react';
 
@@ -19,7 +18,7 @@ export function AIThinking({
   progressItems = []
 }: AIThinkingProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16">
+    <div className="flex flex-col items-center justify-center mb-10">
       {/* 主动画区 */}
       <div className="relative w-32 h-32 mb-8">
         {/* 背景光晕 */}
@@ -83,7 +82,7 @@ export function AIThinking({
         <div className="mt-8 space-y-3">
           {progressItems.map((item, index) => (
             <motion.div
-              key={index}
+              key={`${item.label}-${index}`}
               className="flex items-center gap-3 text-sm"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}

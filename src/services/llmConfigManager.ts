@@ -113,7 +113,9 @@ export class LLMConfigManager {
         model: 'openai/gpt-4o',
         temperature: 0.3,
         maxTokens: 1500,
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        inputLimits: undefined,
+        requirementDoc: undefined
       };
     }
     return { ...this.currentConfig };
@@ -157,7 +159,7 @@ export class LLMConfigManager {
       // 验证设置
       const validation = await service.validateLLMSettings(settings);
       if (!validation.isValid) {
-        throw new Error(`配置验证失败: ${validation.errors.map(e => e.message).join(', ')}`);
+        throw new Error(`配置验证失败: ${validation.errors.map((e: any) => e.message).join(', ')}`);
       }
 
       // 构建新配置
@@ -170,6 +172,8 @@ export class LLMConfigManager {
         temperature: settings.customConfig?.temperature ?? modelInfo.defaultConfig.temperature,
         maxTokens: settings.customConfig?.maxTokens ?? modelInfo.defaultConfig.maxTokens,
         apiFormat: modelInfo.apiFormat || 'openai', // 🔥 API 格式（默认 openai）
+        inputLimits: settings.inputLimits ?? settings.requirementDoc,
+        requirementDoc: settings.requirementDoc,
         timeout: settings.timeout // 🔥 保存用户自定义超时配置
       };
 
@@ -191,12 +195,17 @@ export class LLMConfigManager {
       const timeoutInfo = settings.timeout 
         ? `默认=${Math.round(settings.timeout.default! / 1000)}秒, 快速=${Math.round(settings.timeout.short! / 1000)}秒`
         : '使用环境变量或默认值';
+      const resolvedInputLimits = newConfig.inputLimits ?? newConfig.requirementDoc;
+      const inputLimitInfo = resolvedInputLimits
+        ? `override=${resolvedInputLimits.maxInputTokensOverride ?? '未设置'}, safetyMargin=${resolvedInputLimits.inputSafetyMarginTokens ?? '未设置'}, modelContextMap=${resolvedInputLimits.modelContextWindowsJson ? '已配置' : '未配置'}`
+        : '未配置（将回退 requirementDoc/.env/默认估算）';
       
       console.log(`✅ LLM配置更新成功: ${modelInfo.name}`);
       console.log(`   API端点: ${newConfig.baseUrl}`);
       console.log(`   模型: ${newConfig.model}`);
       console.log(`   温度: ${newConfig.temperature}, 最大令牌: ${newConfig.maxTokens}`);
       console.log(`   超时配置: ${timeoutInfo}`);
+      console.log(`   输入长度策略: ${inputLimitInfo}`);
       
     } catch (error) {
       console.error('❌ 更新LLM配置失败:', error);
@@ -355,7 +364,8 @@ export class LLMConfigManager {
         customConfig: {
           temperature: this.currentConfig.temperature,
           maxTokens: this.currentConfig.maxTokens
-        }
+        },
+        inputLimits: this.currentConfig.inputLimits ?? this.currentConfig.requirementDoc
       };
 
       // 🔥 根据环境获取正确的设置服务

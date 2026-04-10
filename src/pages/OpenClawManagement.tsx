@@ -71,6 +71,59 @@ interface OpenClawConfig {
   };
 }
 
+// 独立子组件，避免父组件重渲染导致输入框失焦
+function UnknownFieldsEditor({
+  config,
+  onUpdate,
+  collectUnknownFields,
+}: {
+  config: OpenClawConfig;
+  onUpdate: (path: string[], value: any) => void;
+  collectUnknownFields: (obj: any, prefix?: string) => { path: string[]; key: string; value: any }[];
+}) {
+  const unknowns = collectUnknownFields(config);
+  if (unknowns.length === 0) return null;
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Settings className="h-4 w-4" />其他配置</span>} size="small" className="shadow-sm">
+      <Form layout="vertical">
+        {unknowns.map(({ path, key, value }) => (
+          <Form.Item key={key} label={key} className="mb-2">
+            {typeof value === 'object' ? (
+              <Input.TextArea
+                rows={3}
+                defaultValue={JSON.stringify(value, null, 2)}
+                onBlur={(e) => {
+                  try { onUpdate(path, JSON.parse(e.target.value)); } catch { /* 格式不正确时忽略 */ }
+                }}
+                className="font-mono text-sm"
+              />
+            ) : typeof value === 'boolean' ? (
+              <Switch
+                defaultChecked={value}
+                onChange={(v) => onUpdate(path, v)}
+                checkedChildren="启用"
+                unCheckedChildren="禁用"
+              />
+            ) : (
+              <Input
+                defaultValue={String(value)}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v === 'true') onUpdate(path, true);
+                  else if (v === 'false') onUpdate(path, false);
+                  else if (!isNaN(Number(v)) && v !== '') onUpdate(path, Number(v));
+                  else onUpdate(path, v);
+                }}
+              />
+            )}
+          </Form.Item>
+        ))}
+      </Form>
+    </Card>
+  );
+}
+
 export default function OpenClawManagement() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<OpenClawStatus | null>(null);
@@ -634,6 +687,11 @@ export default function OpenClawManagement() {
         <div className="space-y-4">
           {configEditing && editConfig ? (
             <>
+              <Alert
+                message="保存配置后需要重启容器才能生效"
+                type="warning"
+                showIcon
+              />
               {/* Agent 设置 */}
               <Card title={<span className="flex items-center gap-2"><Bot className="h-4 w-4" />Agent 设置</span>} size="small" className="shadow-sm">
                 <Form layout="vertical">
@@ -794,57 +852,9 @@ export default function OpenClawManagement() {
               </Card>
 
               {/* 动态渲染未知配置字段 - 编辑 */}
-              {(() => {
-                const unknowns = collectUnknownFields(editConfig);
-                if (unknowns.length === 0) return null;
-                return (
-                  <Card title={<span className="flex items-center gap-2"><Settings className="h-4 w-4" />其他配置</span>} size="small" className="shadow-sm">
-                    <Form layout="vertical">
-                      {unknowns.map(({ path, key, value }) => (
-                        <Form.Item key={key} label={key} className="mb-2">
-                          {typeof value === 'object' ? (
-                            <Input.TextArea
-                              rows={3}
-                              value={JSON.stringify(value, null, 2)}
-                              onChange={(e) => {
-                                try {
-                                  updateEditField(path, JSON.parse(e.target.value));
-                                } catch { /* JSON 格式不正确时暂不更新 */ }
-                              }}
-                              className="font-mono text-sm"
-                            />
-                          ) : typeof value === 'boolean' ? (
-                            <Switch
-                              checked={value}
-                              onChange={(v) => updateEditField(path, v)}
-                              checkedChildren="启用"
-                              unCheckedChildren="禁用"
-                            />
-                          ) : (
-                            <Input
-                              value={String(value)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                // 尝试保持原始类型
-                                if (v === 'true') updateEditField(path, true);
-                                else if (v === 'false') updateEditField(path, false);
-                                else if (!isNaN(Number(v)) && v !== '') updateEditField(path, Number(v));
-                                else updateEditField(path, v);
-                              }}
-                            />
-                          )}
-                        </Form.Item>
-                      ))}
-                    </Form>
-                  </Card>
-                );
-              })()}
+              <UnknownFieldsEditor config={editConfig} onUpdate={updateEditField} collectUnknownFields={collectUnknownFields} />
 
-              <Alert
-                message="保存配置后需要重启容器才能生效"
-                type="warning"
-                showIcon
-              />
+              
             </>
           ) : config ? (
             <>

@@ -12,6 +12,26 @@ export interface LLMSettings {
     maxTokens?: number;
     topP?: number;
   };
+  /**
+   * 通用输入长度策略（用于避免输入被写死截断/不同模型上限不一致）
+   * - maxInputTokensOverride: 强制覆盖“最大输入 tokens”（最高优先级）
+   * - modelContextWindowsJson: 按模型名映射 context window（tokens），JSON 对象字符串
+   * - inputSafetyMarginTokens: 动态计算时的安全余量（tokens）
+   */
+  inputLimits?: {
+    maxInputTokensOverride?: number;
+    modelContextWindowsJson?: string;
+    inputSafetyMarginTokens?: number;
+  };
+  /**
+   * 兼容旧字段（已废弃）：requirementDoc
+   * 未来将被 inputLimits 替代，但会在读取时自动迁移。
+   */
+  requirementDoc?: {
+    maxInputTokensOverride?: number;
+    modelContextWindowsJson?: string;
+    inputSafetyMarginTokens?: number;
+  };
   timeout?: {
     default?: number;  // 默认超时（毫秒），用于长时间任务
     short?: number;    // 短超时（毫秒），用于快速分析
@@ -70,21 +90,21 @@ export class SettingsService {
               customModelName: result.data.customModelName,
               hasApiKey: !!result.data.apiKey
             });
-            return result.data;
+            return this.migrateLegacyLLMSettings(result.data);
           }
         }
         // API失败时回退到localStorage
         console.warn('API获取配置失败，使用localStorage');
         const settings = this.loadSettings();
-        return settings.llm;
+        return this.migrateLegacyLLMSettings(settings.llm);
       } else {
         // 🔥 后端版本：从数据库加载
         const settings = await this.loadSettingsFromDB();
-        return settings.llm;
+        return this.migrateLegacyLLMSettings(settings.llm);
       }
     } catch (error) {
       console.warn('Failed to load LLM settings, using defaults:', error);
-      return this.getDefaultLLMSettings();
+      return this.migrateLegacyLLMSettings(this.getDefaultLLMSettings());
     }
   }
 
@@ -101,7 +121,7 @@ export class SettingsService {
       }
 
       // 🔥 如果 baseUrl 未提供，根据模型信息自动填充
-      const settingsWithBaseUrl = { ...llmSettings };
+      const settingsWithBaseUrl = this.migrateLegacyLLMSettings({ ...llmSettings });
       if (!settingsWithBaseUrl.baseUrl) {
         const modelInfo = modelRegistry.getModelById(llmSettings.selectedModelId);
         if (modelInfo) {
@@ -317,6 +337,11 @@ export class SettingsService {
       baseUrl: defaultModel.customBaseUrl || 'https://openrouter.ai/api/v1', // 🔥 添加 baseUrl
       customConfig: {
         ...defaultModel.defaultConfig
+      },
+      inputLimits: {
+        maxInputTokensOverride: undefined,
+        modelContextWindowsJson: '',
+        inputSafetyMarginTokens: 1500,
       }
     };
   }
@@ -340,13 +365,25 @@ export class SettingsService {
     return {
       llm: {
         ...defaults.llm,
-        ...stored.llm
+        ...this.migrateLegacyLLMSettings(stored.llm as LLMSettings)
       },
       system: {
         ...defaults.system,
         ...stored.system
       }
     };
+  }
+
+  private migrateLegacyLLMSettings(settings: LLMSettings): LLMSettings {
+    if (!settings) return settings;
+    if (settings.inputLimits) return settings;
+    if (settings.requirementDoc) {
+      return {
+        ...settings,
+        inputLimits: { ...settings.requirementDoc },
+      };
+    }
+    return settings;
   }
 
   // 🔥 新增：从数据库加载设置

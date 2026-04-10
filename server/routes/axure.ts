@@ -16,6 +16,60 @@ import mammoth from 'mammoth';
 // @ts-ignore
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
+import { MAX_FILES } from '../config/upload.js';
+
+interface ExtractedZipFiles {
+  htmlPaths: string[];
+  jsPaths: string[];
+  extractedCount: number;
+  tempDir: string;
+}
+
+function isSafeZipEntryPath(entryName: string): boolean {
+  if (!entryName) return false;
+  if (entryName.includes('..')) return false;
+  if (entryName.startsWith('/') || entryName.startsWith('\\')) return false;
+  if (/^[a-zA-Z]:/.test(entryName)) return false;
+  return true;
+}
+
+async function extractZipForAxure(zipFilePath: string, uploadOriginalName: string): Promise<ExtractedZipFiles> {
+  const zipBuffer = await fs.readFile(zipFilePath);
+  const zip = await JSZip.loadAsync(zipBuffer);
+  const tempDir = path.join(process.cwd(), 'uploads', 'axure', `unzipped-${Date.now()}-${uuidv4().slice(0, 8)}`);
+  await fs.mkdir(tempDir, { recursive: true });
+
+  const htmlPaths: string[] = [];
+  const jsPaths: string[] = [];
+  let extractedCount = 0;
+
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    if (!isSafeZipEntryPath(entry.name)) {
+      console.warn(`⚠️ 跳过不安全ZIP条目: ${entry.name}`);
+      continue;
+    }
+
+    const normalizedPath = entry.name.replace(/\\/g, '/');
+    const ext = path.extname(normalizedPath).toLowerCase();
+    if (ext !== '.html' && ext !== '.htm' && ext !== '.js') continue;
+
+    const outputPath = path.join(tempDir, normalizedPath);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    const content = await entry.async('nodebuffer');
+    await fs.writeFile(outputPath, content);
+
+    if (ext === '.js') {
+      jsPaths.push(outputPath);
+    } else {
+      htmlPaths.push(outputPath);
+    }
+    extractedCount += 1;
+  }
+
+  console.log(`📦 ZIP解压完成: ${uploadOriginalName}, 提取 ${extractedCount} 个可解析文件`);
+  return { htmlPaths, jsPaths, extractedCount, tempDir };
+}
 
 /**
  * 最终备用方案：从损坏的 DOCX 中尽力提取文本
@@ -284,7 +338,10 @@ export function createAxureRoutes(): Router {
    * POST /api/v1/axure/parse-multi
    * 上传并解析多个Axure文件（HTML + JS）
    */
-  router.post('/parse-multi', axureMultiUpload.array('files', 20), async (req: Request, res: Response) => {
+  router.post('/parse-multi', axureMultiUpload.array('files', MAX_FILES), async (req: Request, res: Response) => {
+    const tempFilesToDelete: string[] = [];
+    const tempDirsToDelete: string[] = [];
+
     try {
       if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
         return res.status(400).json({
@@ -301,6 +358,9 @@ export function createAxureRoutes(): Router {
       }
 
       console.log(`📤 收到多文件上传: ${req.files.length} 个文件`);
+      for (const file of req.files) {
+        tempFilesToDelete.push(file.path);
+      }
 
       // 获取页面名称
       const pageName = req.body.pageName || '';
@@ -308,24 +368,45 @@ export function createAxureRoutes(): Router {
         console.log(`📝 用户指定页面名称: "${pageName}"`);
       }
 
-      // 分类文件
-      const htmlFiles = req.files.filter(f => f.originalname.toLowerCase().endsWith('.html') || f.originalname.toLowerCase().endsWith('.htm'));
-      const jsFiles = req.files.filter(f => f.originalname.toLowerCase().endsWith('.js'));
+      // 分类文件（支持ZIP自动解压）
+      const directHtmlFiles = req.files.filter(f => f.originalname.toLowerCase().endsWith('.html') || f.originalname.toLowerCase().endsWith('.htm'));
+      const directJsFiles = req.files.filter(f => f.originalname.toLowerCase().endsWith('.js'));
+      const zipFiles = req.files.filter(f => f.originalname.toLowerCase().endsWith('.zip'));
 
-      if (htmlFiles.length === 0) {
+      const htmlFilePaths = directHtmlFiles.map(f => f.path);
+      const jsFilePaths = directJsFiles.map(f => f.path);
+
+      for (const zipFile of zipFiles) {
+        const extracted = await extractZipForAxure(zipFile.path, zipFile.originalname);
+        if (extracted.extractedCount > 0) {
+          tempDirsToDelete.push(extracted.tempDir);
+          htmlFilePaths.push(...extracted.htmlPaths);
+          jsFilePaths.push(...extracted.jsPaths);
+        }
+      }
+
+      const totalParsedFileCount = htmlFilePaths.length + jsFilePaths.length;
+      if (totalParsedFileCount > MAX_FILES) {
         return res.status(400).json({
           success: false,
-          error: '至少需要一个 HTML 文件'
+          error: `解压后可解析文件数量超限：${totalParsedFileCount}，最大支持 ${MAX_FILES} 个（HTML/JS）`
         });
       }
 
-      console.log(`  - HTML 文件: ${htmlFiles.length} 个`);
-      console.log(`  - JS 文件: ${jsFiles.length} 个`);
+      if (htmlFilePaths.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: '至少需要一个 HTML 文件（可直接上传或包含在 ZIP 中）'
+        });
+      }
+
+      console.log(`  - HTML 文件: ${htmlFilePaths.length} 个`);
+      console.log(`  - JS 文件: ${jsFilePaths.length} 个`);
 
       // 解析Axure文件
       const parseResult = await parseService.parseMultipleFiles(
-        htmlFiles.map(f => f.path),
-        jsFiles.map(f => f.path),
+        htmlFilePaths,
+        jsFilePaths,
         pageName // 传递页面名称
       );
 
@@ -335,19 +416,13 @@ export function createAxureRoutes(): Router {
         data: {
           id: parseResult.sessionId,
           user_id: req.user.id,
-          axure_filename: `${req.files.length} files (${htmlFiles.length} HTML, ${jsFiles.length} JS)`,
+          axure_filename: `${req.files.length} files (${htmlFilePaths.length} HTML, ${jsFilePaths.length} JS)`,
           axure_file_size: totalSize,
           page_count: parseResult.pageCount,
           element_count: parseResult.elementCount,
           interaction_count: parseResult.interactionCount
         }
       });
-
-      // 解析完成后删除临时文件
-      for (const file of req.files) {
-        await fs.unlink(file.path);
-      }
-      console.log(`🗑️  临时文件已删除`);
 
       res.json({
         success: true,
@@ -359,6 +434,22 @@ export function createAxureRoutes(): Router {
         success: false,
         error: error.message
       });
+    } finally {
+      // 无论成功或失败都清理上传临时文件和ZIP解压目录
+      for (const filePath of tempFilesToDelete) {
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          // ignore cleanup error
+        }
+      }
+      for (const dirPath of tempDirsToDelete) {
+        try {
+          await fs.rm(dirPath, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup error
+        }
+      }
     }
   });
 

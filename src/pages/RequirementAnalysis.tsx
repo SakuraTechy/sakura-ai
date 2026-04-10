@@ -16,6 +16,7 @@ import * as systemService from '../services/systemService';
 import { llmConfigManager } from '../services/llmConfigManager';
 import { showToast } from '../utils/toast';
 import { readFileContent, type FileReadResult } from '../utils/fileReader';
+import { sortFilesByAxurePriority } from '../utils/axureExportPrioritize';
 import { ProgressIndicator } from '../components/ai-generator/ProgressIndicator';
 import { MAX_FILE_SIZE, MAX_FILES } from '../config/upload';
 import { MultiFileUpload } from '../components/ai-generator/MultiFileUpload';
@@ -28,6 +29,13 @@ const REQUIREMENT_STEPS = [
   { name: 'AI 生成', description: '自动生成结构化需求' },
   { name: '保存', description: '编辑标题并保存文档' }
 ];
+
+const FINALIZING_MIN_MS_DEFAULT = 2000;
+const FINALIZING_MIN_MS = (() => {
+  const raw = Number(import.meta.env.VITE_REQUIREMENT_FINALIZING_MIN_MS);
+  if (!Number.isFinite(raw)) return FINALIZING_MIN_MS_DEFAULT;
+  return Math.max(400, Math.min(3000, Math.round(raw)));
+})();
 
 export function RequirementAnalysis() {
   const navigate = useNavigate();
@@ -54,6 +62,15 @@ export function RequirementAnalysis() {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [currentModelName, setCurrentModelName] = useState('');
+  const [generateProgress, setGenerateProgress] = useState<{
+    phase?: string;
+    current?: number;
+    total?: number;
+    message?: string;
+  }>({});
+  const [generateElapsedSec, setGenerateElapsedSec] = useState(0);
+  const generateStartRef = useRef<number | null>(null);
+  const generateAbortRef = useRef<AbortController | null>(null);
 
   // Step 3: 保存
   const [title, setTitle] = useState('');
@@ -121,11 +138,75 @@ export function RequirementAnalysis() {
       if (!llmConfigManager.isReady()) {
         await llmConfigManager.initialize();
       }
-      const summary = llmConfigManager.getConfigSummary();
-      setCurrentModelName(summary.modelName);
+      const config = llmConfigManager.getCurrentConfig();
+      setCurrentModelName(config.model || llmConfigManager.getConfigSummary().modelName);
     } catch {
       setCurrentModelName('未配置');
     }
+  };
+
+  useEffect(() => {
+    if (!generating) return;
+    generateStartRef.current = Date.now();
+    setGenerateElapsedSec(0);
+    const timer = window.setInterval(() => {
+      if (generateStartRef.current) {
+        setGenerateElapsedSec(Math.floor((Date.now() - generateStartRef.current) / 1000));
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [generating]);
+
+  const isChunkMergeProgress = (p: typeof generateProgress) => {
+    const phase = p.phase;
+    return (
+      (p.total ?? 0) > 0 ||
+      phase === 'chunking' ||
+      phase === 'chunk_progress' ||
+      phase === 'merging'
+    );
+  };
+
+  const getGeneratePercent = () => {
+    if (!generating) return 0;
+    if (generateProgress.phase === 'done') return 100;
+    if (generateProgress.phase === 'merging') return 92;
+    if (generateProgress.phase === 'finalizing') return 96;
+    if (generateProgress.phase === 'generating') return 52;
+    if (generateProgress.total && generateProgress.total > 0) {
+      const c = Math.max(0, Math.min(generateProgress.current || 0, generateProgress.total));
+      return Math.max(10, Math.min(90, Math.round((c / generateProgress.total) * 85)));
+    }
+    if (generateProgress.phase === 'chunking') return 12;
+    if (generateProgress.phase === 'preprocess') return 6;
+    return 3;
+  };
+
+  const getGenerateSubtitle = () => {
+    if (!generating) return '';
+    const elapsedText = `已耗时 ${generateElapsedSec} 秒`;
+    if (generateProgress.total && (generateProgress.current || 0) <= 0) {
+      return `${elapsedText}，预计剩余计算中...`;
+    }
+    if (generateProgress.total && (generateProgress.current || 0) > 0) {
+      const current = generateProgress.current || 0;
+      const total = generateProgress.total;
+      const avg = generateElapsedSec / Math.max(1, current);
+      const remain = Math.max(0, Math.round(avg * (total - current)));
+      return `${elapsedText}，预计剩余 ${remain} 秒`;
+    }
+    return elapsedText;
+  };
+
+  const getChunkProgressLabel = () => {
+    const p = generateProgress;
+    if (isChunkMergeProgress(p)) {
+      if (!p.total) return 'AI分片处理与合并（准备中...）';
+      return `AI分片处理与合并中 (${p.current || 0}/${p.total})`;
+    }
+    if (p.phase === 'generating') return 'AI生成结构化文档中';
+    if (p.phase === 'finalizing') return '结构化内容生成完成';
+    return 'AI 生成结构化需求文档';
   };
 
   const handleFileUpload = async (file: File) => {
@@ -152,16 +233,58 @@ export function RequirementAnalysis() {
     }
   };
 
-  // 选择文件后：自动读取“主文件”，填充输入文本（用于后续 AI 生成）
+  /** 多个主文件（含文件夹选择）时按路径排序后合并为一段输入，与 ZIP 解压合并行为一致 */
+  const handleMergedFileUpload = async (mainFiles: File[]) => {
+    const sorted = sortFilesByAxurePriority([...mainFiles]);
+
+    for (const file of sorted) {
+      if (file.size > MAX_FILE_SIZE) {
+        showToast.error(`文件过大（超过 10MB）：${file.name}`);
+        return;
+      }
+    }
+
+    if (sorted.length === 1) {
+      await handleFileUpload(sorted[0]);
+      return;
+    }
+
+    try {
+      const parts: string[] = [];
+      const allWarnings: string[] = [];
+      for (const file of sorted) {
+        const result = await readFileContent(file);
+        if (!result.success) {
+          throw new Error(`${file.name}：${result.error || '解析失败'}`);
+        }
+        const label = file.webkitRelativePath || file.name;
+        parts.push(`\n\n## 文件：${label}\n\n${result.content}`);
+        if (result.formatWarnings?.length) {
+          allWarnings.push(...result.formatWarnings.map(w => `${file.name}：${w}`));
+        }
+      }
+      setInputText(parts.join('\n'));
+      setUploadedFileName(`合并 ${sorted.length} 个文件`);
+
+      if (allWarnings.length > 0) {
+        showToast.warning(allWarnings[0]);
+      }
+      showToast.success(`已合并 ${sorted.length} 个文件`);
+    } catch (error: any) {
+      showToast.error(error.message || '文件解析失败');
+    }
+  };
+
+  // 选择文件后：自动读取主文件（多个时合并），填充输入文本（用于后续 AI 生成）
   const handleFilesChange = (files: File[]) => {
     setAxureFiles(files);
 
-    const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt'];
-    const mainFile = files.find(f =>
+    const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.doc', '.md', '.markdown', '.txt', '.zip'];
+    const mainFiles = files.filter(f =>
       supportedMainExt.some(ext => f.name.toLowerCase().endsWith(ext))
     );
 
-    if (!mainFile) {
+    if (mainFiles.length === 0) {
       setInputText('');
       setUploadedFileName('');
       setGeneratedContent('');
@@ -169,7 +292,7 @@ export function RequirementAnalysis() {
       return;
     }
 
-    void handleFileUpload(mainFile);
+    void handleMergedFileUpload(mainFiles);
   };
 
   const handleClearPreview = () => {
@@ -233,13 +356,15 @@ export function RequirementAnalysis() {
         return;
       }
 
-      const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.md', '.markdown', '.txt', '.doc'];
+      const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.md', '.markdown', '.txt', '.doc', '.zip'];
       targetFile = axureFiles.find(f =>
         supportedMainExt.some(ext => f.name.toLowerCase().endsWith(ext))
       );
 
       if (!targetFile) {
-        showToast.warning('文件格式不支持，请上传 HTML / PDF / DOCX / Markdown / TXT');
+        showToast.warning(
+          '文件格式不支持，请上传 HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP'
+        );
         return;
       }
     }
@@ -272,10 +397,22 @@ export function RequirementAnalysis() {
 
     setGenerating(true);
     setGeneratedContent('');
+    setGenerateProgress({ phase: 'start', message: '开始分析文本内容' });
+    generateAbortRef.current = new AbortController();
     try {
-      const content = await analysisService.generateRequirement(inputText);
+      const { content, inputTruncated } = await analysisService.generateRequirementStream(inputText, {
+        onProgress: (event) => setGenerateProgress(event),
+        signal: generateAbortRef.current.signal
+      });
+      setGenerateProgress({ phase: 'finalizing', message: '正在整理并输出文档' });
+      await new Promise((resolve) => window.setTimeout(resolve, FINALIZING_MIN_MS));
+      setGenerateProgress({ phase: 'done', message: '生成完成' });
       setGeneratedContent(content);
       setEditContent(content);
+
+      if (inputTruncated) {
+        showToast.warning('输入内容过长，已自动截断后再发送模型；建议减少文件或分批生成。');
+      }
 
       // 从生成内容提取标题
       const titleMatch = content.match(/^#\s+(.+)$/m);
@@ -285,10 +422,19 @@ export function RequirementAnalysis() {
 
       showToast.success('需求文档生成成功');
     } catch (error: any) {
-      showToast.error(error.message || 'AI 生成失败，请重试');
+      if (error?.name === 'AbortError') {
+        showToast.warning('已取消本次生成');
+      } else {
+        showToast.error(error.message || 'AI 生成失败，请重试');
+      }
     } finally {
+      generateAbortRef.current = null;
       setGenerating(false);
     }
+  };
+
+  const handleCancelGenerate = () => {
+    generateAbortRef.current?.abort();
   };
 
   const handleSave = async () => {
@@ -384,13 +530,7 @@ export function RequirementAnalysis() {
       </div>
 
       {/* Step 内容 */}
-      <motion.div
-        className="flex-1 min-h-0 max-h-full overflow-y-auto"
-        key={currentStep}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+      <div className="flex-1 min-h-0 max-h-full overflow-y-auto">
         {/* Step 1: 上传/输入 */}
         {currentStep === 0 && (
           <div className="h-full bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-6 flex flex-col overflow-y-auto">
@@ -684,36 +824,30 @@ export function RequirementAnalysis() {
 
         {/* Step 2: AI 生成 */}
         {currentStep === 1 && (
-          <div className="h-full bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3 space-y-2 flex flex-col">
-            {/* 右侧：当前模型 */}
-            <div className="w-full flex items-center justify-end">
-              <Tooltip title="在系统设置中更改 AI 模型">
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--color-bg-secondary)] text-xs text-[var(--color-text-secondary)] cursor-default"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  <span>当前模型: {currentModelName || '加载中...'}</span>
-                </div>
-              </Tooltip>
+          <div className="h-full min-h-0 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] flex flex-col overflow-hidden">
+            {/* 顶部：当前模型 */}
+            <div className="flex-shrink-0 px-3 pt-3 pb-2">
+              <div className="w-full flex items-center justify-end">
+                <Tooltip title="在系统设置中更改 AI 模型">
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--color-bg-secondary)] text-xs text-[var(--color-text-secondary)] cursor-default"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    <span>当前模型: {currentModelName || '加载中...'}</span>
+                  </div>
+                </Tooltip>
+              </div>
             </div>
 
-            {/* 生成进度 */}
-            {generating && (
-              <div className="mt-3">
-                <AIThinking
-                  title="AI 正在分析并生成需求文档"
-                  subtitle="预计需要 30-90 秒，请耐心等待..."
-                  progressItems={[
-                    { label: '读取原始文本内容', status: 'processing' },
-                    { label: 'AI分析结构和元素', status: 'pending' },
-                    { label: '生成结构化的文档', status: 'pending' }
-                  ]}
-                />
-              </div>
-            )}
-
-            {/* 生成结果 */}
-            {generatedContent && !generating && (
+            {/* 中间区域：空状态 / 生成中 AIThinking 垂直居中；有结果时占满 */}
+            <div
+              className={clsx(
+                'flex-1 min-h-0 flex flex-col px-3',
+                generating ? 'pb-0' : 'pb-3'
+              )}
+            >
+              {/* 生成结果 */}
+              {generatedContent && !generating && (
               <div className="flex-1 min-h-0 flex flex-col border border-[var(--color-border)] rounded-lg overflow-hidden">
                 {/* 右上角：预览/编辑切换 */}
                 <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]">
@@ -764,13 +898,88 @@ export function RequirementAnalysis() {
             )}
 
             {!generatedContent && !generating && (
-              <div className="flex flex-col items-center text-center py-20 text-[var(--color-text-secondary)]">
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-4 min-h-[12rem] text-[var(--color-text-secondary)]">
                 <Bot className="h-16 w-16 mx-auto mb-4 opacity-20" />
                 <p className="text-base mb-1">AI 将基于上一步输入的内容自动生成结构化需求文档</p>
-                {/* <p className="text-xs opacity-60">可在下方点击「生成需求文档」开始生成</p> */}
                 <p className="text-xs opacity-60 mt-2">
                   可在下方点击「生成需求文档」开始生成
                 </p>
+              </div>
+            )}
+
+            {generating && (
+              <div className="flex-1 flex flex-col items-center justify-center min-h-0 px-2 py-6 w-full max-w-lg mx-auto">
+                <AIThinking
+                  title="AI 正在分析并生成需求文档"
+                  subtitle={`${getGenerateSubtitle()}${generateProgress.message ? ` · ${generateProgress.message}` : ''}`}
+                  progressItems={(() => {
+                    const phase = generateProgress.phase;
+                    const chunkFlow = isChunkMergeProgress(generateProgress);
+                    const step1Done =
+                      phase === 'preprocess' ||
+                      phase === 'generating' ||
+                      phase === 'finalizing' ||
+                      phase === 'chunking' ||
+                      phase === 'chunk_progress' ||
+                      phase === 'merging' ||
+                      phase === 'done';
+                    const step2Status: 'completed' | 'processing' | 'pending' = chunkFlow
+                      ? phase === 'chunking' || phase === 'chunk_progress'
+                        ? 'processing'
+                        : phase === 'merging' || phase === 'done'
+                          ? 'completed'
+                          : 'pending'
+                      : phase === 'generating'
+                        ? 'processing'
+                        : phase === 'finalizing' || phase === 'done'
+                          ? 'completed'
+                          : 'pending';
+                    const step3Status: 'completed' | 'processing' | 'pending' = chunkFlow
+                      ? phase === 'merging'
+                        ? 'processing'
+                        : phase === 'done'
+                          ? 'completed'
+                          : 'pending'
+                      : phase === 'finalizing'
+                        ? 'processing'
+                        : phase === 'done'
+                        ? 'completed'
+                        : 'pending';
+                    return [
+                      {
+                        label: '读取并净化原始文本',
+                        status: step1Done ? 'completed' : 'processing'
+                      },
+                      {
+                        label: getChunkProgressLabel(),
+                        status: step2Status
+                      },
+                      {
+                        label: chunkFlow ? '合并结果并生成文档' : '整理并输出需求文档',
+                        status: step3Status
+                      }
+                    ];
+                  })()}
+                />
+              </div>
+            )}
+            </div>
+
+            {/* 底部：生成进度条，与卡片底边融合 */}
+            {generating && (
+              <div className="flex-shrink-0 w-full border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]/60">
+                <div className="px-3 pt-2.5 pb-2 relative">
+                  <div className="flex items-center justify-between text-xs text-[var(--color-text-secondary)] mb-2">
+                    <span>生成进度</span>
+                    <span>{getGeneratePercent()}%</span>
+                  </div>
+                  <div className="relative h-1 w-full rounded-full bg-[var(--color-border)] overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500"
+                      style={{ width: `${getGeneratePercent()}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -840,7 +1049,7 @@ export function RequirementAnalysis() {
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
 
       {/* 底部导航 */}
       <div className="flex-shrink-0 flex flex-wrap justify-between items-center gap-3 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)] p-3">
@@ -892,11 +1101,11 @@ export function RequirementAnalysis() {
 
                 {generating && (
                   <motion.button
-                    disabled
-                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg opacity-70 cursor-not-allowed"
+                    onClick={handleCancelGenerate}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                   >
-                    <Bot className="h-4 w-4" />
-                    生成中...
+                    <X className="h-4 w-4" />
+                    取消生成
                   </motion.button>
                 )}
               </>

@@ -1,6 +1,103 @@
 ﻿# Git 提交日志
 
+## 2026-04-10
+
+refactor(openclaw): 全面精简 workspace MD 文件，消除 prompt 膨胀与规则重复
+- 全局 `workspace/`：SOUL.md 从 36 行精简到 10 行，AGENTS.md 从 235 行精简到 15 行，删除已迁移的 MASTER_WORKFLOW.md 和 TASK_TEMPLATE.md
+- `workspace-main/`：SOUL.md 精简到 8 行；AGENTS.md 合并 workflow/ 中的交付物规则、输出模板、消息发送规则为唯一定义（~80 行）；workflow/ 从 6 个文件合并为 1 个 TASK_CONTRACT.md（~25 行）；TOOLS.md 合并预览链接规则；BOOTSTRAP.md 简化引用
+- 删除 workflow/ 中 5 个冗余文件（01-MASTER_WORKFLOW/02-TASK_TEMPLATE/03-PREVIEW_LINK_RULE/README/00-DELIVERABLE_JSON_CONTRACT）
+- 归档历史文档：04-SUBAGENT_MESSAGE_CONFIG_SUMMARY 和 05-WORKFLOW_UPDATE 移到 memory/archive/
+- 删除 memory/format-standards/deliverable-format.md（与 AGENTS.md 完全重复）
+- 10 个子角色 workspace：SOUL.md 精简为 3-5 行身份声明；AGENTS.md 重写为任务规则+输出格式+边界（~25 行）；删除各 4 个冗余文件（BOOTSTRAP/IDENTITY/TOOLS/USER）共 40 个
+- 文件总数从 95 个降至约 43 个，子 agent prompt 从 ~8000 token 降至 ~1500 token
+- 同一规则重复次数从 5-7 次降至 1 次（唯一定义在 AGENTS.md）
+- 新增统一的企业微信最终输出格式模板，确保交付物明细、关键指标、下一步行动、待确认问题的结构化输出
+
+fix(openclaw): 移除 `agents.list` 中 design 的非法 `subagents.runTimeoutSeconds`
+- OpenClaw 校验器仅接受 `agents.defaults.subagents` 下的 `runTimeoutSeconds`；per-agent `subagents` 不支持该键，会导致 “Unrecognized key”
+- 子 agent 运行超时继续由 `agents.defaults.subagents.runTimeoutSeconds`（7200）统一生效
+
+## 2026-04-08
+
+feat: 需求分析页新增百分比进度/取消生成/模型名与耗时预估展示
+- `RequirementAnalysis` 新增流式生成百分比进度条（0-100）与「取消生成」按钮，支持中断长时间生成任务
+- subtitle 改为动态展示已耗时与预计剩余时间（在已知分片进度时自动估算）
+- 当前模型展示优先使用实际生效模型 ID（如 `qwen3.5-122b-a10b`），不再只显示聚合名称
+- `analysisService.generateRequirementStream` 增加 `AbortSignal` 透传，前端可主动取消请求
+- 优化生成中 UI：分片进度未拿到 `current/total` 时显示“等待分片”并置为进行中；进度条上移并与内容区边框融合；底部主操作在生成中切换为「取消生成」（位于「下一步」前）
+- 修复分片合并后文档被截断：服务端记录并处理 `finish_reason=length`，自动续写补全；合并阶段改为多轮批次合并，避免单轮合并输入超出窗口导致内容丢失
+- 进一步修复“分片后内容不完整”：分片大小引入保守上限（默认约 90000 字/片，可用 `REQUIREMENT_DOC_CHUNK_PREFERRED_MAX_CHARS` 调整），减少单片过粗造成的信息压缩损失；合并与分片提示词强化“覆盖完整性优先”
+- 生成中进度条改为“贴底细线”样式，与中间区域边缘融合显示，减少悬浮块割裂感
+- 新增“最小分片数量保护”：超长输入（默认净化后 >=300000 字）若分片数不足 6，会自动对最长分片二次拆分至目标下限（受最小分片长度保护），并打印生效日志
+
+feat: 需求文档生成新增“自动分片生成并合并”，超长输入不再单次硬截断
+- `analysisService.generateRequirementDoc` 超出单次窗口时自动按 `maxInput` 分片，多轮生成分片草稿后再二次合并为最终文档
+- 保持原接口返回结构不变（`{ content, inputTruncated }`），其中分片模式下 `inputTruncated=true`
+- 新增分片与合并阶段日志（含分片进度、分片数），便于定位超长输入场景
+
+feat: 通用 inputLimits 接入设置页实时估算与前后端统一迁移
+- `Settings` 改为配置 `inputLimits`，新增实时估算提示：`contextWindow / maxTokens / maxInput`
+- `analysisService` 读取优先级统一为 `inputLimits > requirementDoc(兼容旧字段) > .env`
+- 前后端 `settingsService` 增加旧字段迁移逻辑（`requirementDoc -> inputLimits`），默认值补齐
+- `llmConfigManager.saveCurrentConfig` 持久化 `inputLimits`，避免回写丢失
+
 ## 2026-03-31
+
+fix: 统一「需求来源」支持格式文案（HTML/HTM/JS/PDF/DOC/DOCX/Markdown/TXT/ZIP）
+- `FunctionalTestCaseGenerator`：校验、预览、Modal 与步骤说明与 `MultiFileUpload` / `readFileContent` 一致
+- `RequirementAnalysis` 预览失败提示已含 ZIP/DOC/JS（若本地未保存则与本次一致）
+
+feat: Axure 导出 ZIP/文件夹自动识别主文件优先级（index、files/*/data.js、document.js 等）
+- 新增 `src/utils/axureExportPrioritize.ts`：路径评分、跳过 chrome.html/大型第三方 JS、合并顺序优先主内容
+- `readZipArchiveCombined` 对 ZIP 内 HTML/JS 先筛选再按优先级排序，再合并 md/txt/pdf/doc
+- 需求分析多文件合并改用 `sortFilesByAxurePriority` 替代纯路径排序
+
+fix: 需求分析生成接口输入超长时按模型上限截断并返回 inputTruncated
+- 服务端 `generateRequirementDoc` 在请求 LLM 前截断用户正文（`REQUIREMENT_DOC_MAX_INPUT_TOKENS` 默认 119000），返回 `{ content, inputTruncated }`
+- `POST /api/analysis/generate` 响应 `data.inputTruncated`；前端 `analysisService.generateRequirement` 同步；需求分析页截断时 Toast 提示
+- `marketInsightService` 两处调用改为解构 `content`
+- `MultiFileUpload` 文案补充：虚线区选文件、合并过长时 AI 可能截断
+
+fix: 需求文档输入截断上限改为按模型上下文动态计算（支持显式映射覆盖）
+- 新增 `REQUIREMENT_DOC_MODEL_CONTEXT_WINDOWS_JSON`：按模型名配置 context window（token）
+- 默认使用「context window - max_tokens - safety margin」估算 max input，避免换模型后无谓截断或超限
+- 保留 `REQUIREMENT_DOC_MAX_INPUT_TOKENS` 作为最高优先级手动覆盖
+
+feat: 系统设置页支持配置需求文档输入上限（按模型 context 映射 / safety margin / 强制覆盖）
+- `Settings` 新增「需求文档输入长度（高级）」配置，持久化到 settings（前后端通用）
+- 服务端生成需求文档时优先读取 settings 中的 requirementDoc 配置，不再只能依赖 `.env`
+
+fix: 选择文件夹优先使用 showDirectoryPicker（系统文件夹对话框），并说明虚线区为「选文件」
+- `MultiFileUpload`：Chrome/Edge 用 File System Access API 递归收集文件并设置 webkitRelativePath；失败或不支持时回退 webkitdirectory input
+- 文案区分：点击虚线区域为系统「选择文件」；整夹请点「选择文件夹」或拖拽
+
+fix: ZIP 解压乱码与 GBK/HTML charset 兼容；需求分析多文件/文件夹合并；上传区支持选择文件夹
+- `fileReader`：ZIP 内路径用字节还原 UTF-8/GB18030 显示；正文按 HTML meta charset、UTF-8/GB18030 启发式解码，替换原 `strFromU8` 单一 UTF-8
+- `RequirementAnalysis`：多个主文件（含文件夹内多文件）按 `webkitRelativePath` 排序后合并为输入，与 ZIP 合并策略一致
+- `MultiFileUpload`：增加「选择整个文件夹」隐藏 input（webkitdirectory）及说明文案
+
+fix: 需求分析等页面支持上传 ZIP 并解压合并为输入正文
+- `readFileContent` 增加 ZIP 分支：使用 `fflate` 解压并合并 HTML/HTM/JS/Markdown/TXT/PDF/Word 等文本（HTML+HTM+JS 数量受 `MAX_FILES` 限制）
+- 导出 `countZipHtmlJsFiles` 供上传组件展示 ZIP 内 HTML/JS 数量
+- `RequirementAnalysis` / `FunctionalTestCaseGenerator` 将 `.zip` 识别为主文件并触发读取
+- `MultiFileUpload` 异步统计 ZIP 内 HTML/JS 并计入顶部汇总，支持 ZIP 预览，主文件提示含 ZIP
+
+style: 多文件上传区补充 ZIP 解压与解析数量说明
+- `MultiFileUpload` 在拖拽区下方增加说明：ZIP 由服务端解压、仅提取 HTML/HTM/JS，解压后 HTML+JS 总数不超过配置上限
+
+feat: Axure 多文件上传支持 ZIP 自动解压并参与解析
+- 后端 `server/routes/axure.ts` 新增 ZIP 解压逻辑，自动提取压缩包中的 HTML/HTM/JS 文件参与 `parse-multi` 解析
+- 增加 ZIP 条目路径安全校验，跳过可疑路径（如 `..`、绝对路径、盘符路径）防止目录穿越
+- 解析前按“解压后 HTML+JS 总数”执行 `MAX_FILES` 校验，超限返回明确错误信息
+- `parse-multi` 临时文件清理改为 `finally` 统一处理，确保成功/失败都删除上传文件及解压目录
+- 无 HTML 文件时提示升级为“可直接上传或包含在 ZIP 中”
+
+fix: 上传配置支持 ZIP 并统一最大文件数为 50
+- 前端上传配置 `src/config/upload.ts` 新增 `.zip` 支持，`MAX_FILES` 调整为 50
+- 上传组件 `src/components/ai-generator/MultiFileUpload.tsx` 增加 ZIP 类型校验、accept 配置及展示文案
+- 后端上传配置 `server/config/upload.ts` 新增 `.zip` 支持，`MAX_FILES` 调整为 50
+- 后端上传中间件错误提示补充 ZIP 类型
+- Axure 多文件路由由写死 `20` 改为读取 `MAX_FILES` 配置，前后端限制保持一致
 
 style: 市场洞察报告列表改为行业资讯风格自定义表格，中间区域固定高度可滚动，底部独立分页
 - 替换 Ant Design Table 为自定义 table，与行业资讯页面风格一致
@@ -540,3 +637,19 @@ feat: 更新依赖和增强文件处理功能
 - refactor: 改进初始化脚本，仅在配置文件不存在时生成默认配置，避免覆盖用户自定义配置
 - fix: 清理 .env 文件中无效的 OpenClaw 配置项，移除硬编码的 Windows 路径，统一使用相对路径
 - fix: 修复 Docker Compose OpenClaw 服务依赖问题，添加正确的 profile 使用说明
+- fix: 修复需求文档分片合并在 length 截断后丢失尾部章节（8.交付计划与优先级/9.测试范围与回归建议）的问题
+- feat: 增加尾部章节完整性兜底，合并完成后自动检测并仅补齐缺失章节，避免重复改写前文
+- refactor: 增强截断续写提示词，在 merge/single 场景强制保持章节连续性并优先补全 8/9 章节
+- refactor: 需求分析步骤二布局：空状态与生成中 AIThinking 在中间区域垂直居中；生成进度条移至卡片底部并与底栏样式融合
+- fix: 需求分析单次直通（不分片）时服务端补充 generating/done 进度事件，前端区分分片与单次文案及三步骤状态，避免误显示「等待合并」与进度条长期停在预处理阶段
+- refactor: 优化 MultiFileUpload 底部提示文案，合并上传规则/ZIP 解析/Axure 合并与超长分片说明，减少重复并提升可读性
+- refactor: 将 MultiFileUpload 底部提示压缩为 4 句简洁文案，保留上传限制、ZIP 解析、Axure 合并与分片建议
+- feat: MultiFileUpload 文件列表支持文件名悬停显示完整名称，解决超长名称被截断后不可读问题
+- fix: 修复需求分析流式读取在 keep-alive 场景下等待连接关闭导致卡在 52% 的问题，收到 result 终态后立即返回并补充尾缓冲解析
+- fix: 前端流式解析在收到 result 时兜底派发 done 进度，避免阶段停留在 generating 导致第 3 步不完成
+- fix: 需求分析单次直通新增 finalizing 阶段映射（第3步处理中）并在成功回调统一切换 done，避免第2步直接跳完成
+- fix: 流式 progress 的 done 阶段前端映射为 finalizing，并在成功回调延迟切换 done，确保第3阶段有可见过渡
+- feat: 需求分析第3阶段最短展示时长改为可配置（VITE_REQUIREMENT_FINALIZING_MIN_MS，自动夹紧 400~800ms，默认 500ms）
+- feat(openclaw): 子角色交付物引入大文件混合模式，HTML原型/长代码直接write落盘避免Gateway超时截断，JSON标记WRITTEN_TO_DISK由Main验证
+- fix(openclaw): 大文件模式write路径改为绝对路径(/root/.openclaw/workspace-main/deliverables/)，解决子角色独立workspace导致文件写入错误位置、Main无法访问和预览链接失效的问题
+- chore(openclaw): 删除workspace-main/memory/archive/下2个已归档历史文档（规则已合并至AGENTS.md和TASK_CONTRACT.md），清理空目录

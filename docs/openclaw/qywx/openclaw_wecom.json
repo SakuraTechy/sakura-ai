@@ -1,0 +1,508 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.24",
+    "lastTouchedAt": "2026-04-02T02:30:29.282Z"
+  },
+  "env": {
+    "ZAI_API_KEY": "xxxx"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-30T08:57:59.000Z",
+    "lastRunVersion": "2026.3.24",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "models": {
+    "providers": {
+      "ankki": {
+        "baseUrl": "http://172.24.4.101:15421/v1",
+        "apiKey": "xxxx",
+        "api": "openai-completions",
+        "injectNumCtxForOpenAICompat": true,
+        "models": [
+          {
+            "id": "qwen3.5-122b-a10b",
+            "name": "Qwen-3.5",
+            "api": "openai-completions",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      },
+      "zcheap": {
+        "baseUrl": "https://zcheap.ai/v1",
+        "apiKey": "xxxx",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "glm-4-7-251222",
+            "name": "GLM-4.7",
+            "api": "openai-completions",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      },
+      "zai": {
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "apiKey": "xxxx",
+        "api": "openai-completions",
+        "injectNumCtxForOpenAICompat": true,
+        "models": [
+          {
+            "id": "glm-5",
+            "name": "GLM-5",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.7",
+            "name": "GLM-4.7",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "glm-4.6v",
+            "name": "GLM-4.6V",
+            "reasoning": true,
+            "input": [
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ankki/qwen3.5-122b-a10b",
+        "fallbacks": []
+      },
+      "imageModel": {
+        "primary": "zai/glm-4.6v",
+        "fallbacks": [
+          "zai/glm-4.6v-flash",
+          "zai/glm-4v-flash"
+        ]
+      },
+      "models": {
+        "zai/glm-5": {
+          "alias": "GLM-5"
+        },
+        "zai/glm-4.7": {
+          "alias": "GLM-4.7"
+        },
+        "zai/glm-4.6v": {
+          "alias": "GLM-4.6V"
+        },
+        "ankki/qwen3.5-122b-a10b": {
+          "alias": "Qwen-3.5"
+        }
+      },
+      "workspace": "/root/.openclaw/workspace",
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "1h"
+      },
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "heartbeat": {
+        "every": "30m"
+      },
+      "subagents": {
+        "maxConcurrent": 6,
+        "maxSpawnDepth": 1,
+        "maxChildrenPerAgent": 12,
+        "archiveAfterMinutes": 120,
+        "model": "ankki/qwen3.5-122b-a10b",
+        "runTimeoutSeconds": 0
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "主控",
+        "workspace": "/root/.openclaw/workspace-main",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {},
+        "subagents": {
+          "allowAgents": [
+            "product",
+            "design",
+            "develop",
+            "develop_front",
+            "develop_backend",
+            "test",
+            "ops",
+            "market",
+            "sales",
+            "techservice"
+          ]
+        }
+      },
+      {
+        "id": "product",
+        "name": "产品经理",
+        "workspace": "/root/.openclaw/workspace-product",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "design",
+        "name": "UI/UX 设计",
+        "workspace": "/root/.openclaw/workspace-design",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "develop",
+        "name": "开发工程师",
+        "workspace": "/root/.openclaw/workspace-develop",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "develop_front",
+        "name": "前端开发工程师",
+        "workspace": "/root/.openclaw/workspace-develop_front",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "develop_backend",
+        "name": "后端开发工程师",
+        "workspace": "/root/.openclaw/workspace-develop_backend",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "test",
+        "name": "测试",
+        "workspace": "/root/.openclaw/workspace-test",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "ops",
+        "name": "运维",
+        "workspace": "/root/.openclaw/workspace-ops",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "market",
+        "name": "市场",
+        "workspace": "/root/.openclaw/workspace-market",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "sales",
+        "name": "销售",
+        "workspace": "/root/.openclaw/workspace-sales",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      },
+      {
+        "id": "techservice",
+        "name": "技术支持",
+        "workspace": "/root/.openclaw/workspace-techservice",
+        "model": "ankki/qwen3.5-122b-a10b",
+        "heartbeat": {}
+      }
+    ]
+  },
+  "tools": {
+    "alsoAllow": [
+      "wecom_mcp"
+    ],
+    "sessions": {
+      "visibility": "tree"
+    },
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "main",
+        "product",
+        "design",
+        "develop",
+        "develop_front",
+        "develop_backend",
+        "test",
+        "ops",
+        "market",
+        "sales",
+        "techservice"
+      ]
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "wecom",
+        "accountId": "main"
+      }
+    },
+    {
+      "agentId": "product",
+      "match": {
+        "channel": "wecom",
+        "accountId": "product"
+      }
+    },
+    {
+      "agentId": "design",
+      "match": {
+        "channel": "wecom",
+        "accountId": "design"
+      }
+    },
+    {
+      "agentId": "develop",
+      "match": {
+        "channel": "wecom",
+        "accountId": "develop"
+      }
+    },
+    {
+      "agentId": "develop_front",
+      "match": {
+        "channel": "wecom",
+        "accountId": "develop_front"
+      }
+    },
+    {
+      "agentId": "develop_backend",
+      "match": {
+        "channel": "wecom",
+        "accountId": "develop_backend"
+      }
+    },
+    {
+      "agentId": "test",
+      "match": {
+        "channel": "wecom",
+        "accountId": "test"
+      }
+    },
+    {
+      "agentId": "ops",
+      "match": {
+        "channel": "wecom",
+        "accountId": "ops"
+      }
+    },
+    {
+      "agentId": "market",
+      "match": {
+        "channel": "wecom",
+        "accountId": "market"
+      }
+    },
+    {
+      "agentId": "sales",
+      "match": {
+        "channel": "wecom",
+        "accountId": "sales"
+      }
+    },
+    {
+      "agentId": "techservice",
+      "match": {
+        "channel": "wecom",
+        "accountId": "techservice"
+      }
+    },
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "wecom",
+        "accountId": "default"
+      }
+    }
+  ],
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "channels": {
+    "wecom": {
+      "enabled": true,
+      "welcomeMessage": "你好，我是 AI 助手。",
+      "sendThinkingMessage": false,
+      "dmPolicy": "pairing",
+      "allowFrom": [],
+      "groupPolicy": "open",
+      "groupAllowFrom": [],
+      "adminUsers": [
+        "admin-userid"
+      ],
+      "defaultAccount": "main",
+      "commands": {
+        "enabled": true,
+        "allowlist": [
+          "/new",
+          "/compact",
+          "/help",
+          "/status"
+        ]
+      },
+      "dynamicAgents": {
+        "enabled": true,
+        "adminBypass": false
+      },
+      "dm": {
+        "createAgentOnFirstMessage": true
+      },
+      "groupChat": {
+        "enabled": true,
+        "requireMention": true,
+        "mentionPatterns": [
+          "@"
+        ]
+      },
+      "workspaceTemplate": "/workspace-main",
+      "mediaLocalRoots": [
+        "~/.openclaw",
+        "~/.openclaw/workspace-main",
+        "/tmp/openclaw"
+      ],
+      "network": {
+        "apiBaseUrl": "https://qyapi.weixin.qq.com"
+      },
+      "preview": {
+        "enabled": true,
+        "baseUrl1": "auto",
+        "baseUrl": "http://172.19.1.111:8799",
+        "pathRule": "workspace-main-relative",
+        "signedLinks": true,
+        "defaultTtlSeconds": 7200
+      },
+      "main": {
+        "name": "主机器人(main)",
+        "botId": "xxxx",
+        "secret": "xxxx",
+        "agent": {
+          "corpId": "xxxx",
+          "corpSecret": "xxxx",
+          "agentId": 1000006
+        },
+        "webhooks": {
+          "ops": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx",
+          "dev": "yyy"
+        }
+      },
+      "product": {
+        "name": "产品机器人(product)",
+        "botId": "xxxx",
+        "secret": "xxxx",
+        "agent": {
+          "corpId": "xxxx",
+          "corpSecret": "W8pQvwpHU5Bw82Fo-xxxx",
+          "agentId": 1000004
+        },
+        "webhooks": {
+          "default": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx",
+          "dev": "yyy"
+        }
+      },
+      "design": {
+        "name": "设计师机器人(design)",
+        "botId": "aibIa2NriEOrGdKZ-xxxx",
+        "secret": "xxxx",
+        "agent": {
+          "corpId": "xxxx",
+          "corpSecret": "xxxx-rZ32-iRawnJAYg",
+          "agentId": 1000005
+        },
+        "webhooks": {
+          "default": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx",
+          "dev": "yyy"
+        }
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": ["*"],
+      "dangerouslyAllowHostHeaderOriginFallback": true,
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
+    }
+  },
+  "plugins": {
+    "allow": [
+      "wecom"
+    ],
+    "load": {
+      "paths": [
+        "/root/.openclaw/extensions"
+      ]
+    },
+    "entries": {
+      "wecom": {
+        "enabled": true
+      },
+      "zai": {
+        "enabled": true
+      }
+    }
+  }
+}

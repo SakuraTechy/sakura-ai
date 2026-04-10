@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Select } from 'antd';
 import {
@@ -59,6 +59,11 @@ export function Settings() {
     customConfig: {
       temperature: 0.3,
       maxTokens: 1500
+    },
+    inputLimits: {
+      maxInputTokensOverride: undefined,
+      modelContextWindowsJson: '',
+      inputSafetyMarginTokens: 1500,
     }
   });
   
@@ -240,6 +245,15 @@ export function Settings() {
         customConfig: {
           ...prev.customConfig,
           [configField]: value
+        }
+      }));
+    } else if (field.startsWith('inputLimits.')) {
+      const docField = field.replace('inputLimits.', '');
+      setFormData(prev => ({
+        ...prev,
+        inputLimits: {
+          ...prev.inputLimits,
+          [docField]: value
         }
       }));
     } else if (field.startsWith('timeout.')) {
@@ -584,6 +598,42 @@ export function Settings() {
     }
   };
 
+  const selectedModel = getSelectedModel();
+
+  const contextWindowEstimate = useMemo(() => {
+    const modelName = (formData.customModelName || selectedModel?.openRouterModel || '').toLowerCase();
+    const mappingRaw = formData.inputLimits?.modelContextWindowsJson?.trim();
+    if (mappingRaw) {
+      try {
+        const mapping = JSON.parse(mappingRaw) as Record<string, number>;
+        for (const [k, v] of Object.entries(mapping)) {
+          const kk = k.toLowerCase();
+          if (modelName === kk || modelName.endsWith(`/${kk}`) || modelName.includes(kk)) {
+            if (Number.isFinite(v) && v > 8000) return Math.floor(v);
+          }
+        }
+      } catch {
+        // ignore JSON parse error in realtime hint
+      }
+    }
+    const m = modelName.match(/(\d+(?:\.\d+)?)\s*(k|m)\b/);
+    if (m) {
+      const n = parseFloat(m[1]);
+      return m[2] === 'm' ? Math.round(n * 1_000_000) : Math.round(n * 1_000);
+    }
+    if (modelName.includes('claude') && (modelName.includes('opus') || modelName.includes('sonnet'))) return 200000;
+    if (modelName.includes('gemini') && (modelName.includes('1.5') || modelName.includes('2.5') || modelName.includes('3'))) return 1000000;
+    return 128000;
+  }, [formData.customModelName, formData.inputLimits?.modelContextWindowsJson, selectedModel?.openRouterModel]);
+
+  const maxInputEstimate = useMemo(() => {
+    const override = formData.inputLimits?.maxInputTokensOverride;
+    if (Number.isFinite(override) && (override as number) > 8000) return Math.floor(override as number);
+    const maxTokens = formData.customConfig?.maxTokens || 1500;
+    const margin = Math.max(200, formData.inputLimits?.inputSafetyMarginTokens || 1500);
+    return Math.max(8000, Math.floor(contextWindowEstimate - maxTokens - margin));
+  }, [contextWindowEstimate, formData.customConfig?.maxTokens, formData.inputLimits?.inputSafetyMarginTokens, formData.inputLimits?.maxInputTokensOverride]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -592,8 +642,6 @@ export function Settings() {
       </div>
     );
   }
-
-  const selectedModel = getSelectedModel();
 
   return (
     <div className="space-y-6">
@@ -987,6 +1035,77 @@ export function Settings() {
                 <p className="mt-1 text-sm text-red-600">{getFieldError('maxTokens')}</p>
               )}
               <p className="mt-1 text-sm text-gray-500">控制AI响应的最大长度</p>
+            </div>
+          </div>
+
+          {/* 通用输入长度（高级） */}
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center gap-2 mb-2">
+              <SettingsIcon className="h-4 w-4 text-gray-600" />
+              <h4 className="font-medium text-gray-900">通用输入长度策略（高级）</h4>
+              <span className="text-xs text-gray-500">所有 AI 调用可复用此策略（逐步接入）</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  最大输入 Tokens（强制覆盖，可选）
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={formData.inputLimits?.maxInputTokensOverride ?? 0}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value || '0', 10);
+                    handleFieldChange('inputLimits.maxInputTokensOverride', v > 0 ? v : undefined);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  0 表示不覆盖；覆盖后将优先于自动计算（不建议随意写死，除非你确定模型上限）。
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Safety Margin（tokens）
+                </label>
+                <input
+                  type="number"
+                  min="200"
+                  step="100"
+                  value={formData.inputLimits?.inputSafetyMarginTokens ?? 1500}
+                  onChange={(e) =>
+                    handleFieldChange('inputLimits.inputSafetyMarginTokens', parseInt(e.target.value || '1500', 10))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  自动计算输入上限时额外预留的 token 空间（用于不同提供商的计数偏差与包装）。
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                按模型 Context Window 映射（JSON，可选）
+              </label>
+              <textarea
+                value={formData.inputLimits?.modelContextWindowsJson || ''}
+                onChange={(e) => handleFieldChange('inputLimits.modelContextWindowsJson', e.target.value)}
+                rows={4}
+                placeholder='例如：{"qwen3.5-122b-a10b":131072,"openai/gpt-4o":128000,"anthropic/claude-sonnet-4.5":200000}'
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-xs rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                填写后会优先用于“按模型动态计算 max input”。key 支持完整模型名或简写匹配。
+              </p>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3">
+              实时估算：contextWindow≈<span className="font-medium">{contextWindowEstimate}</span>，
+              maxTokens=<span className="font-medium">{formData.customConfig?.maxTokens || 1500}</span>，
+              maxInput≈<span className="font-medium">{maxInputEstimate}</span>
             </div>
           </div>
 

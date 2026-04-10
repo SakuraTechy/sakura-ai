@@ -194,7 +194,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     }
   },
   "plugins": {
-    "allow": ["wecom-openclaw-plugin"],
+    "allow": [""],
     "load": {
       "paths": ["${OPENCLAW_HOME}/extensions"]
     }
@@ -227,11 +227,11 @@ else
         }
         cfg.plugins = cfg.plugins || {};
         const allow = cfg.plugins.allow || [];
-        if (!allow.includes('wecom-openclaw-plugin')) {
-          cfg.plugins.allow = [...allow, 'wecom-openclaw-plugin'];
-          changed = true;
-          console.log('已添加 plugins.allow: wecom-openclaw-plugin');
-        }
+        # if (!allow.includes('wecom-openclaw-plugin')) {
+        #   cfg.plugins.allow = [...allow, 'wecom-openclaw-plugin'];
+        #   changed = true;
+        #   console.log('已添加 plugins.allow: wecom-openclaw-plugin');
+        # }
         cfg.plugins.load = cfg.plugins.load || {};
         const loadPaths = cfg.plugins.load.paths || [];
         const extDir = '$OPENCLAW_HOME/extensions';
@@ -258,89 +258,89 @@ else
   fi
 fi
 
-WECOM_PLUGIN_DIR="$OPENCLAW_HOME/extensions/wecom-openclaw-plugin"
+# WECOM_PLUGIN_DIR="$OPENCLAW_HOME/extensions/wecom-openclaw-plugin"
 
-echo "检查 wecom 插件..."
-if [ -d "$WECOM_PLUGIN_DIR" ]; then
-  echo "wecom 插件已存在，跳过安装"
-else
-  echo "wecom 插件不存在，正在自动安装..."
-  TMPDIR=$(mktemp -d)
-  if [ ! -d "$TMPDIR" ]; then
-    echo "错误: 无法创建临时目录"
-    exit 1
-  fi
+# echo "检查 wecom 插件..."
+# if [ -d "$WECOM_PLUGIN_DIR" ]; then
+#   echo "wecom 插件已存在，跳过安装"
+# else
+#   echo "wecom 插件不存在，正在自动安装..."
+#   TMPDIR=$(mktemp -d)
+#   if [ ! -d "$TMPDIR" ]; then
+#     echo "错误: 无法创建临时目录"
+#     exit 1
+#   fi
 
-  cd "$TMPDIR" || { echo "错误: 无法进入临时目录"; exit 1; }
-  echo "正在下载 wecom 插件..."
-  npm pack @wecom/wecom-openclaw-plugin 2>&1 | tail -3
+#   cd "$TMPDIR" || { echo "错误: 无法进入临时目录"; exit 1; }
+#   echo "正在下载 wecom 插件..."
+#   npm pack @wecom/wecom-openclaw-plugin 2>&1 | tail -3
 
-  TARBALL=$(ls *.tgz 2>/dev/null | head -1)
-  if [ -z "$TARBALL" ]; then
-    echo "错误: wecom 插件下载失败，跳过安装"
-    rm -rf "$TMPDIR"
-  else
-    echo "正在解压插件: $TARBALL"
-    tar -xzf "$TARBALL" || { echo "错误: 解压失败"; rm -rf "$TMPDIR"; exit 1; }
+#   TARBALL=$(ls *.tgz 2>/dev/null | head -1)
+#   if [ -z "$TARBALL" ]; then
+#     echo "错误: wecom 插件下载失败，跳过安装"
+#     rm -rf "$TMPDIR"
+#   else
+#     echo "正在解压插件: $TARBALL"
+#     tar -xzf "$TARBALL" || { echo "错误: 解压失败"; rm -rf "$TMPDIR"; exit 1; }
 
-    mkdir -p "$WECOM_PLUGIN_DIR" || { echo "错误: 无法创建插件目录"; rm -rf "$TMPDIR"; exit 1; }
-    cp -r package/. "$WECOM_PLUGIN_DIR/" || { echo "错误: 复制文件失败"; rm -rf "$TMPDIR"; exit 1; }
+#     mkdir -p "$WECOM_PLUGIN_DIR" || { echo "错误: 无法创建插件目录"; rm -rf "$TMPDIR"; exit 1; }
+#     cp -r package/. "$WECOM_PLUGIN_DIR/" || { echo "错误: 复制文件失败"; rm -rf "$TMPDIR"; exit 1; }
 
-    echo "正在安装插件依赖..."
-    cd "$WECOM_PLUGIN_DIR" || { echo "错误: 无法进入插件目录"; exit 1; }
-    npm install --production --silent 2>&1 | tail -5
+#     echo "正在安装插件依赖..."
+#     cd "$WECOM_PLUGIN_DIR" || { echo "错误: 无法进入插件目录"; exit 1; }
+#     npm install --production --silent 2>&1 | tail -5
 
-    if [ $? -eq 0 ]; then
-      echo "wecom 插件安装完成: $WECOM_PLUGIN_DIR"
-    else
-      echo "警告: 插件依赖安装可能有问题，但继续执行"
-    fi
+#     if [ $? -eq 0 ]; then
+#       echo "wecom 插件安装完成: $WECOM_PLUGIN_DIR"
+#     else
+#       echo "警告: 插件依赖安装可能有问题，但继续执行"
+#     fi
 
-    rm -rf "$TMPDIR"
-  fi
-fi
+#     rm -rf "$TMPDIR"
+#   fi
+# fi
 
-echo "检查插件依赖软链接..."
-if [ -d "$WECOM_PLUGIN_DIR/node_modules" ]; then
-  LINKED_COUNT=0
-  for pkg_dir in "$WECOM_PLUGIN_DIR/node_modules"/*/; do
-    [ -d "$pkg_dir" ] || continue
-    pkg_name=$(basename "$pkg_dir")
-    [[ "$pkg_name" == @* ]] && continue
-    if [ ! -e "/app/node_modules/$pkg_name" ]; then
-      ln -sf "$pkg_dir" "/app/node_modules/$pkg_name" && ((LINKED_COUNT++))
-    fi
-  done
+# echo "检查插件依赖软链接..."
+# if [ -d "$WECOM_PLUGIN_DIR/node_modules" ]; then
+#   LINKED_COUNT=0
+#   for pkg_dir in "$WECOM_PLUGIN_DIR/node_modules"/*/; do
+#     [ -d "$pkg_dir" ] || continue
+#     pkg_name=$(basename "$pkg_dir")
+#     [[ "$pkg_name" == @* ]] && continue
+#     if [ ! -e "/app/node_modules/$pkg_name" ]; then
+#       ln -sf "$pkg_dir" "/app/node_modules/$pkg_name" && ((LINKED_COUNT++))
+#     fi
+#   done
 
-  for scope_dir in "$WECOM_PLUGIN_DIR/node_modules"/@*/; do
-    [ -d "$scope_dir" ] || continue
-    scope_name=$(basename "$scope_dir")
-    mkdir -p "/app/node_modules/$scope_name"
-    for scoped_pkg in "$scope_dir"*/; do
-      [ -d "$scoped_pkg" ] || continue
-      pkg_name=$(basename "$scoped_pkg")
-      if [ ! -e "/app/node_modules/$scope_name/$pkg_name" ]; then
-        ln -sf "$scoped_pkg" "/app/node_modules/$scope_name/$pkg_name" && ((LINKED_COUNT++))
-      fi
-    done
-  done
+#   for scope_dir in "$WECOM_PLUGIN_DIR/node_modules"/@*/; do
+#     [ -d "$scope_dir" ] || continue
+#     scope_name=$(basename "$scope_dir")
+#     mkdir -p "/app/node_modules/$scope_name"
+#     for scoped_pkg in "$scope_dir"*/; do
+#       [ -d "$scoped_pkg" ] || continue
+#       pkg_name=$(basename "$scoped_pkg")
+#       if [ ! -e "/app/node_modules/$scope_name/$pkg_name" ]; then
+#         ln -sf "$scoped_pkg" "/app/node_modules/$scope_name/$pkg_name" && ((LINKED_COUNT++))
+#       fi
+#     done
+#   done
 
-  if [ $LINKED_COUNT -gt 0 ]; then
-    echo "已链接 $LINKED_COUNT 个插件依赖到 /app/node_modules"
-  else
-    echo "所有插件依赖已存在，无需链接"
-  fi
-else
-  echo "警告: 插件 node_modules 目录不存在，跳过依赖链接"
-fi
+#   if [ $LINKED_COUNT -gt 0 ]; then
+#     echo "已链接 $LINKED_COUNT 个插件依赖到 /app/node_modules"
+#   else
+#     echo "所有插件依赖已存在，无需链接"
+#   fi
+# else
+#   echo "警告: 插件 node_modules 目录不存在，跳过依赖链接"
+# fi
 
-if [ -e "/app/node_modules/openclaw" ]; then
-  echo "openclaw 自引用软链接已存在，跳过"
-else
-  echo "正在创建 openclaw 自引用软链接..."
-  ln -sf /app /app/node_modules/openclaw || { echo "错误: 创建软链接失败"; exit 1; }
-  echo "已创建 openclaw 自引用软链接: /app/node_modules/openclaw -> /app"
-fi
+# if [ -e "/app/node_modules/openclaw" ]; then
+#   echo "openclaw 自引用软链接已存在，跳过"
+# else
+#   echo "正在创建 openclaw 自引用软链接..."
+#   ln -sf /app /app/node_modules/openclaw || { echo "错误: 创建软链接失败"; exit 1; }
+#   echo "已创建 openclaw 自引用软链接: /app/node_modules/openclaw -> /app"
+# fi
 
 echo "检查 provenance 警告文件..."
 PROVENANCE_WARN_MARKER="__openclawProvenanceWarnedPlugins"

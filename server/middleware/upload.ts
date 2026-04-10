@@ -30,7 +30,7 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   if (SUPPORTED_SINGLE_EXTENSIONS.includes(ext as any)) {
     cb(null, true);
   } else {
-    cb(new Error('只支持 HTML / PDF / DOCX / DOC / Markdown / TXT 文件'));
+    cb(new Error('只支持 HTML / PDF / DOCX / DOC / Markdown / TXT / ZIP 文件'));
   }
 };
 
@@ -41,7 +41,7 @@ const multiFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFil
   if (SUPPORTED_MULTI_EXTENSIONS.includes(ext as any)) {
     cb(null, true);
   } else {
-    cb(new Error('只支持 HTML / JS / PDF / DOCX / DOC / Markdown / TXT'));
+    cb(new Error('只支持 HTML / JS / PDF / DOCX / DOC / Markdown / TXT / ZIP'));
   }
 };
 

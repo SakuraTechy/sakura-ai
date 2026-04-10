@@ -563,7 +563,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page content */}
         <motion.main
-          className="flex-1 min-h-0 overflow-y-auto pl-6 pr-6 pt-6 pb-4"
+          className="flex-1 min-h-0 overflow-y-auto pl-6 pr-6 pt-6 pb-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}

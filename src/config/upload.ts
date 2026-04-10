@@ -10,7 +10,7 @@ export const UPLOAD_CONFIG = {
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB - AI 模型最佳处理大小
   
   // 最大文件数量
-  MAX_FILES: 20,
+  MAX_FILES: 50,
   
   // 支持的文件类型
   SUPPORTED_TYPES: {
@@ -19,7 +19,8 @@ export const UPLOAD_CONFIG = {
     PDF: ['.pdf'],
     WORD: ['.doc', '.docx'],
     MARKDOWN: ['.md', '.markdown'],
-    TEXT: ['.txt']
+    TEXT: ['.txt'],
+    ZIP: ['.zip']
   }
 } as const;
 

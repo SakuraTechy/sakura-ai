@@ -367,7 +367,8 @@ export function FunctionalTestCaseGenerator() {
       if (axureFiles.length === 0) {
         AntModal.warning({
           title: '请先上传文件',
-          content: '请上传至少一个支持的需求来源文件（HTML / PDF / DOCX / Markdown / TXT）',
+          content:
+            '请上传至少一个支持的需求来源文件（HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP）',
           centered: true,
           okText: '知道了'
         });
@@ -375,13 +376,25 @@ export function FunctionalTestCaseGenerator() {
       }
 
       // 验证至少有一个主文件
-      const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.md', '.markdown', '.txt'];
+      const supportedMainExt = [
+        '.html',
+        '.htm',
+        '.js',
+        '.pdf',
+        '.docx',
+        '.doc',
+        '.md',
+        '.markdown',
+        '.txt',
+        '.zip'
+      ];
       targetFile = axureFiles.find(f => supportedMainExt.some(ext => f.name.toLowerCase().endsWith(ext)));
       
       if (!targetFile) {
         AntModal.warning({
           title: '文件格式不支持',
-          content: '请至少上传一个支持的需求来源文件（HTML / PDF / DOCX / Markdown / TXT）',
+          content:
+            '请至少上传一个支持的需求来源文件（HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP）',
           centered: true,
           okText: '知道了'
         });
@@ -434,20 +447,33 @@ export function FunctionalTestCaseGenerator() {
       if (axureFiles.length === 0) {
         AntModal.warning({
           title: '请先上传文件',
-          content: '请上传至少一个支持的需求来源文件（HTML / PDF / DOCX / Markdown / TXT）',
+          content:
+            '请上传至少一个支持的需求来源文件（HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP）',
           centered: true,
           okText: '知道了'
         });
         return;
       }
 
-      // 验证至少有一个主文件（HTML / PDF / DOCX / Markdown / TXT）
-      const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.md', '.markdown', '.txt'];
+      // 验证至少有一个主文件（与 MultiFileUpload / readFileContent 一致）
+      const supportedMainExt = [
+        '.html',
+        '.htm',
+        '.js',
+        '.pdf',
+        '.docx',
+        '.doc',
+        '.md',
+        '.markdown',
+        '.txt',
+        '.zip'
+      ];
       const mainFile = axureFiles.find(f => supportedMainExt.some(ext => f.name.toLowerCase().endsWith(ext)));
       if (!mainFile) {
         AntModal.warning({
           title: '文件格式不支持',
-          content: '请至少上传一个支持的需求来源文件（HTML / PDF / DOCX / Markdown / TXT）',
+          content:
+            '请至少上传一个支持的需求来源文件（HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP）',
           centered: true,
           okText: '知道了'
         });
@@ -522,7 +548,18 @@ export function FunctionalTestCaseGenerator() {
       
       if (inputMethod === 'upload') {
         // 文件上传模式 - 🔧 先在前端读取并转换文件内容
-        const supportedMainExt = ['.html', '.htm', '.pdf', '.docx', '.md', '.markdown', '.txt'];
+        const supportedMainExt = [
+          '.html',
+          '.htm',
+          '.js',
+          '.pdf',
+          '.docx',
+          '.doc',
+          '.md',
+          '.markdown',
+          '.txt',
+          '.zip'
+        ];
         const mainFile = axureFiles.find(f => supportedMainExt.some(ext => f.name.toLowerCase().endsWith(ext)))!;
         
         console.log('📄 开始读取并转换文件内容:', mainFile.name);
@@ -2422,7 +2459,7 @@ export function FunctionalTestCaseGenerator() {
     <StepCard
       stepNumber={1}
       title="上传原型 / 需求文档"
-      description="AI 直接解析 HTML / PDF / DOCX / Markdown / TXT，或直接粘贴文本内容"
+      description="AI 直接解析 HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP，或直接粘贴文本内容"
       onNext={handleParse}
       nextButtonText={
         (parsing || generating) 
@@ -2506,7 +2543,7 @@ export function FunctionalTestCaseGenerator() {
 
             <p className="text-xs text-gray-600 mt-2.5 leading-relaxed">
               {inputMethod === 'upload' ? 
-                '📂 支持上传 HTML / PDF / DOCX / Markdown / TXT 文件' : 
+                '📂 支持上传 HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP 文件' : 
                 '📝 直接粘贴需求文档内容，无需上传文件（推荐用于文件损坏时）'}
             </p>
           </div>
@@ -4511,7 +4548,7 @@ export function FunctionalTestCaseGenerator() {
               </h1>
               <p className="text-xs text-gray-600 font-medium">
                 {generatorMode === 'requirement' 
-                  ? '从原型/业务文档生成结构化需求文档（HTML / PDF / DOCX / Markdown / TXT）'
+                  ? '从原型/业务文档生成结构化需求文档（HTML / HTM / JS / PDF / DOC / DOCX / Markdown / TXT / ZIP）'
                   : '基于需求文档批量生成测试用例'
                 }
               </p>
