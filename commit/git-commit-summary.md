@@ -1,8 +1,59 @@
 # Git 提交总结
 
+## 2026-06-23
+- feat(upload): 文件大小按类型分层上限，容器/二进制格式（docx/doc/pdf/zip）放宽至 100MB，纯文本类（html/js/md/txt）保持 10MB
+- fix(fileReader): DOCX 解析不再将图片内联为 base64，改为占位符仅提取文字，避免图多文档 token 超限/分片异常/浏览器卡死
+- fix(fileReader): 检测旧版 .doc 二进制（OLE 文件头 D0CF11E0），命中时提示「请另存为 .docx 再上传」
+- fix(RequirementAnalysis): 修复 handleFileUpload/handleMergedFileUpload 仍写死 10MB 校验导致大 Word 被拦截，改用 getMaxFileSizeForName 按类型取上限
+- refactor(MultiFileUpload): 大小校验按文件类型采用不同上限，更新超限弹窗与上传区提示文案，明确文本类与 Word/PDF/ZIP 不同限制及「图片不会被识别」说明
+- chore: 配置 shrimp-task-manager MCP 服务器路径和参数
+- chore: DEFAULT_MAX_TOKENS 从 4000 提升至 32768，添加需求文档大纲分块相关配置项
+- feat: functionalTestCaseAIService 的 analyzeTestScenarios/analyzeTestModules 接受 systemName 和 moduleName 参数
+- feat: FunctionalTestCaseGenerator 在测试场景分析和测试点生成期间传递项目信息
+- feat: 知识管理组件新增模型配置模式，支持知识项保存/测试/删除，增强元数据输入校验与 Tooltip 布局
+- feat: 知识服务新增获取/保存知识配置方法，settingsService 添加 KnowledgeSettings 和 EmbeddedProvider 类型定义
+
+## 2026-06-15
+- docs: 新增 AGENTS.md 文件，为 Codex 提供项目级指导
+- docs: 同步更新 CLAUDE.md，统一 AI 协作原则和项目说明
+- docs: 添加 Agent 入口约定，确保 Codex/Claude Code 等不同 AI 工具执行标准一致
+- docs: 包含完整项目概述、核心命令、架构概览和开发注意事项
+- docs: 集成 Karpathy Guidelines / AI 协作原则，规范 AI 开发行为
+
+## 2026-06-02
+- feat: 新增 requirementDocNavigation.ts，提供 scrollToRequirementSectionInContainer（HTML 内匹配标题滚动）和 inferModuleFromRequirementDoc（向上查找含「模块」的标题）
+- feat: TestCaseDetailModal 点击「关联需求」传入章节标签并滚动定位；编辑模式支持 module 输入，onSave 传递完整 editedCase，进入编辑/取消时合并 docModule
+- feat: FunctionalTestCaseGenerator 关联需求标签点击传入 section 滚动；生成用例时优先 AI/推断/项目模块填充 module，写入 requirementSource 便于详情展示
+- fix: generateTestCaseForTestPoint 移除写死「生成 1 个用例」，改为按 estimatedTestCases 动态推荐 1-3 条（默认 2 条）
+- fix: FunctionalTestCaseGenerator 放宽去重策略，名称一致后继续比较 caseType + testData + assertions，避免误删有效用例
+- fix: 新增 normalizeModuleName/pickBestModuleName 过滤 AI 占位模块（模块名/待补充/unknown 等）
+- fix: inferModuleFromRequirementDoc 兼容非 Markdown 标题（如 1.2 标题），找不到「模块」父标题时回退到命中章节标题
+- fix: TestCaseDetailModal normalizedTestCase.module 改为用例非空 module 优先，否则回退 docModule，避免 docModule 始终盖住已保存值
+- fix: FunctionalTestCases UI 自动化执行回调新增 saveExecutionResult 落库，收到 test_complete/test_error 后同步 pass/fail/block 及步骤统计、时长、引擎与 runId
+- fix: 执行开始时缓存 executingCase 避免异步回调状态丢失，增加终态事件幂等保护防止重复写库
+
+## 2026-04-14
+- feat: 新增 requirementDocNavigation 工具，关联需求文档滚动定位章节，生成用例时按章节推断所属模块
+- feat: 测试用例详情弹窗「所属模块」可编辑并保存，编辑/取消时合并需求文档模块
+- fix: 测试点生成用例数量与去重策略优化，模块识别过滤占位值并兼容多种标题格式
+- fix: 功能测试页 UI 自动化执行完成后同步落库执行结果（pass/fail/block），增加终态幂等保护
+
+## 2026-04-10
+- refactor(openclaw): 全面精简 workspace MD 文件，文件总数 95→43，子 agent prompt 从 ~8000 token 降至 ~1500 token，规则唯一定义在 AGENTS.md
+- fix(openclaw): 移除 design agent 中非法的 subagents.runTimeoutSeconds 配置键
+
+## 2026-04-08
+- feat: 需求分析页新增百分比进度条、取消生成按钮、动态耗时预估与实际模型 ID 展示
+- feat: 需求文档生成新增自动分片生成并合并，超长输入不再单次硬截断；修复 finish_reason=length 截断与分片内容不完整问题
+- feat: 通用 inputLimits 接入系统设置页，前后端统一迁移 requirementDoc 旧字段，支持按模型 context 动态计算输入上限
+
 ## 2026-03-31
-- fix: Dockerfile.debian 运行阶段 fonts-noto-cjk-extra 替换为 fonts-noto-cjk，修复阿里云镜像源下载超时导致构建失败
-- fix: sakura.sh docker build 新增 --load 参数，修复 BuildKit 构建后本地镜像不存在导致 push 失败
+- feat: 上传支持 ZIP 自动解压合并（前后端 MAX_FILES 统一为 50），Axure parse-multi 支持 ZIP 解压与安全路径校验
+- feat: 多文件/文件夹上传合并，Axure 导出主文件优先级识别（index、data.js 等），GBK/HTML charset 兼容
+- feat: 需求文档输入上限按模型 context 动态计算，系统设置页支持配置 inputLimits
+- fix: 需求分析生成接口超长截断并返回 inputTruncated，统一需求来源支持格式文案
+- style: 市场洞察报告列表改为行业资讯风格自定义表格，固定高度可滚动，底部独立分页
+- fix: 市场洞察分页重复请求；Docker 构建 fonts-noto-cjk 替换、build --load、pipefail 与 CACHE_BUST 缓存失效
 
 ## 2026-03-30
 - fix: sakura-ai 容器新增挂载+环境变量 OPENCLAW_CONFIG_DIR=/app/.openclaw，configPath 支持环境变量覆盖，修复读取 openclaw.json 报 ENOENT
@@ -116,3 +167,8 @@
 - refactor: 简化 OpenClaw 部署架构，将证书生成集成到主初始化脚本
 - refactor: 优化 OpenClaw 配置方式，采用混合方案（条件挂载+初始化脚本）
 - fix: 解决端口冲突问题，调整 Nginx 代理端口配置
+- fix: 需求文档分片合并 length 截断后丢失尾部章节，增加尾部章节完整性兜底
+- fix: 需求分析流式进度三步骤状态（generating/finalizing/done），修复 keep-alive 卡在 52% 与第 3 步不完成问题
+- feat: 需求分析第 3 阶段最短展示时长可配置（VITE_REQUIREMENT_FINALIZING_MIN_MS）
+- feat(openclaw): 子角色交付物大文件混合模式，HTML/长代码 write 落盘避免 Gateway 超时截断
+- feat(upload): 文件大小按类型分层（容器格式 100MB / 纯文本 10MB），DOCX 图片占位符与旧版 .doc 检测

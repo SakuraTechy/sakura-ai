@@ -1,5 +1,71 @@
 ﻿# Git 提交日志
 
+## 2026-06-23
+feat: 扩展文件上传限制和优化DOCX解析
+- 文件大小上限按类型分层，容器/二进制格式(docx/doc/pdf/zip)放宽至100MB
+- DOCX解析不再将图片内联为base64，改为占位符仅提取文字
+- 添加.doc旧版格式检测，提供友好的转换提示
+- 修复需求分析页大Word文档上传拦截问题
+
+chore: 更新MCP服务器配置和环境变量设置
+- 配置shrimp-task-manager MCP服务器路径和参数
+- 调整DEFAULT_MAX_TOKENS从4000提升至32768
+- 添加需求文档大纲分块相关配置项
+- 优化文件上传组件的大小校验逻辑
+
+feat:增强功能测试用例生成和知识管理
+-更新了analyzeTestScenarios和analyzeTestModules方法，以接受functionalTestCaseService中的systemName和moduleName参数。
+-修改了FunctionalTestCaseGenerator，以便在测试场景分析和测试点生成期间传递其他项目信息。
+-改进了具有新功能的知识管理组件：
+-为知识设置添加了模型配置模式。
+-实现了知识项的保存、测试和删除功能。
+-增强了元数据输入的错误处理和验证。
+-更新了UI元素以获得更好的用户体验，包括工具提示和改进的布局。
+-介绍了知识服务中获取和保存知识配置的新方法。
+-在settingsService中添加了KnowledgeSettings和EmbeddedProvider的类型定义。
+
+## 2026-06-15
+docs: 添加AGENTS.md指导文件并更新AI协作原则
+- 新增AGENTS.md文件，为Codex提供项目级指导
+- 同步更新CLAUDE.md，统一AI协作原则和项目说明
+- 添加Agent入口约定，确保不同AI工具执行标准一致
+- 包含完整的项目概述、核心命令、架构概览和开发注意事项
+- 集成Karpathy Guidelines/AI协作原则，规范AI开发行为
+
+## 2026-06-02
+feat: 测试用例详情弹窗支持模块编辑保存和需求文档滚动定位
+
+- 新增 src/utils/requirementDocNavigation.ts：提供 scrollToRequirementSectionInContainer
+  在已渲染 HTML 内匹配标题并滚动；inferModuleFromRequirementDoc 从 Markdown 正文向上查
+ 找含「模块」的标题作为模块名
+- TestCaseDetailModal：点击「关联需求」传入章节标签，需求弹窗加载后滚动到对应标
+  题；编辑模式下展示输入框，onSave 仍传递完整 editedCase（含 module），进入编
+ 辑/取消时合并需求文档模块 docModule
+- FunctionalTestCaseGenerator：场景下关联需求标签点击传入 section 以滚动；生成测
+  试用例时优先 AI/推断模块与项目模块填充 module，并写入 requirementSource 便于详
+  情展示
+
+fix: 修复测试点生成用例默认只出1条和模块识别问题
+
+- functionalTestCaseAIService.generateTestCaseForTestPoint：移除写死"生成1个用例"
+  的提示，改为按 testPoint.estimatedTestCases 动态推荐 1-3 条（默认 2 条）
+- FunctionalTestCaseGenerator：放宽去重策略，改为名称一致后继续比较 caseType +
+  testData + assertions，避免同名但不同数据的有效用例被误删
+- requirementDocNavigation：新增 normalizeModuleName/pickBestModuleName，过滤 AI
+  占位模块（如"模块名/待补充/unknown"等）
+- inferModuleFromRequirementDoc：兼容非 Markdown 标题（如 `1.2 标题`），并在找不
+ 到「模块」父标题时回退到命中章节标题
+
+fix: 修复详情弹窗模块显示和UI自动化执行结果同步问题
+- TestCaseDetailModal：normalizedTestCase.module 改为用例上非空 module 优先，否
+  则再回退 docModule，避免 docModule || testCase.module 始终盖住已保存值
+- FunctionalTestCases：UI 自动化执行回调新增结果落库逻辑，收到 test_complete/
+  test_error 后调用 functionalTestCaseService.saveExecutionResult
+- 执行结果映射：根据测试运行状态与失败步数将结果映射为 pass/fail/block，并写
+  入步骤统计、执行时长、引擎与 runId 元数据
+- 稳定性修复：执行开始时缓存 executingCase，避免异步回调读取到已清空状态；增
+  加终态事件幂等保护
+
 ## 2026-04-14
 
 fix: 测试点生成用例默认只出1条的问题修复
